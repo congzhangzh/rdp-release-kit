@@ -17,10 +17,11 @@ LIBDIR=$6
 TOP=$(mktemp -d)
 XORG_ABI_REQ=$(xserver-sdk-abi-requires videodrv)
 
-# files <root>: an rpm %files list of the tree, /etc as noreplace config
+# files <root>: an rpm %files list of the tree, /etc as noreplace config;
+# man pages end in * because rpmbuild compresses them after %install
 files() {
     (cd "$1" && find . \( -type f -o -type l \) | sed 's|^\.||' | sort |
-        sed 's|^/etc/.*|%config(noreplace) &|')
+        sed 's|^/etc/.*|%config(noreplace) &|; s|^/usr/share/man/.*|&*|')
 }
 
 cat > "$TOP/kit.spec" << EOF

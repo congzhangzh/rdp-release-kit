@@ -102,13 +102,16 @@ XORG_ABI=$(pkg-config --variable=abi_videodrv xorg-server | cut -d. -f1)
 ARCH_DEB=$(dpkg --print-architecture 2> /dev/null || true)
 REL=0kit1
 
+echo "== package"
 mkdir -p "$OUT/$DISTRO"
 if [ $FAMILY = deb ]; then
     "$KIT/build/package-deb.sh" "$STAGE" "$OUT/$DISTRO" "${VERSION[xrdp]}-$REL~$DISTRO" \
-        "${VERSION[xorgxrdp]}-$REL~$DISTRO" "$ARCH_DEB" "$XORG_ABI" "$LIBDIR/xrdp"
+        "${VERSION[xorgxrdp]}-$REL~$DISTRO" "$ARCH_DEB" "$XORG_ABI" "$LIBDIR/xrdp" \
+        > "$WORK/log/package.log" 2>&1
 else
+    # an rpm Release may not contain '-': Fedora's dist tag, as in .fc44
     "$KIT/build/package-rpm.sh" "$STAGE" "$OUT/$DISTRO" "${VERSION[xrdp]}" \
-        "${VERSION[xorgxrdp]}" "$REL.$DISTRO" "$LIBDIR"
+        "${VERSION[xorgxrdp]}" "$REL.fc$VERSION_ID" "$LIBDIR" > "$WORK/log/package.log" 2>&1
 fi
 licenses "$OUT/$DISTRO/licenses" xrdp xorgxrdp x264 opus
 (cd "$OUT/$DISTRO" && sha256sum ./*.deb ./*.rpm 2> /dev/null > SHA256SUMS || true)

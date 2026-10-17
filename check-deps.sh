@@ -46,11 +46,13 @@ if command -v apt-get > /dev/null; then
             awk '/^Reverse Provides:/ { f = 1; next } f && NF { print "via " $1 " " $2; exit }'
     }
     run_deps() { dpkg-deb -f "$1" Depends | tr ',' '\n' | sed 's/^ *//; s/ (.*//; s/ |.*//'; }
+    kit_provides() { for p in "$@"; do dpkg-deb -f "$p" Package; done; }
     family=deb
 else
     version() { dnf -q repoquery --latest-limit 1 --qf '%{version}-%{release}\n' "$1" 2> /dev/null | head -1; }
     provider() { dnf -q repoquery --latest-limit 1 --whatprovides "$1" --qf '%{name}-%{version}\n' 2> /dev/null | head -1; }
     run_deps() { rpm -qpR "$1" 2> /dev/null | grep -v -E '^(rpmlib|/)' | sed 's/ .*//'; }
+    kit_provides() { rpm -qp --provides "$@" 2> /dev/null | sed 's/ .*//'; }
     family=rpm
 fi
 
@@ -63,11 +65,17 @@ pkgs=$(ls /pkgs/*.deb /pkgs/*.rpm 2> /dev/null)
 if [ -z "$pkgs" ]; then
     echo "run      (no packages built for this release yet)"
 else
+    # what the kit's packages provide themselves (their own libraries,
+    # each other) needs nothing from the release
+    own=$(kit_provides $pkgs | sort -u)
     for p in $pkgs; do
         echo "run      ($(basename "$p"))"
         for dep in $(run_deps "$p" | sort -u); do
-            case "$dep" in xrdp | xorgxrdp) continue ;; esac
-            report "$dep" "$(provider "$dep")"
+            if grep -qxF "$dep" <<< "$own"; then
+                printf '  ok       %-28s %s\n' "$dep" "(from these packages)"
+            else
+                report "$dep" "$(provider "$dep")"
+            fi
         done
     done
 fi
