@@ -11,7 +11,11 @@ shift
 IMAGES=("$@")
 if [ ${#IMAGES[@]} = 0 ]; then
     IMAGES=(almalinux:9 rockylinux/rockylinux:10 debian:12 debian:13 ubuntu:22.04
-            ubuntu:24.04 fedora:43 opensuse/tumbleweed archlinux:latest)
+            ubuntu:24.04 fedora:43 opensuse/tumbleweed)
+    # Arch Linux publishes x86_64 images only
+    if [ "$(uname -m)" = x86_64 ]; then
+        IMAGES+=(archlinux:latest)
+    fi
 fi
 ENGINE=$(command -v podman || command -v docker)
 NAME=$(basename "$ARCHIVE" .tar.xz)

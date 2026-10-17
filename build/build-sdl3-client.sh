@@ -125,6 +125,9 @@ cmake_dep sdl3_ttf -DSDLTTF_VENDORED=OFF -DSDLTTF_HARFBUZZ=OFF -DSDLTTF_PLUTOSVG
 # RHEL 9 backports to glibc 2.34 but other glibc 2.34 systems lack.
 echo "== freerdp ${VERSION[freerdp]}"
 src=$(unpack freerdp)
+# always a fresh configure: a kept CMake cache would keep options that
+# were removed from this script, and the release must match a clean build
+rm -rf "$WORK/build/freerdp" "$STAGE"
 # PKG_CONFIG_LIBDIR: pkg-config sees /deps only, so FreeRDP does not find
 # the host's wayland-client either
 PKG_CONFIG_LIBDIR=$DEPS/lib/pkgconfig \
