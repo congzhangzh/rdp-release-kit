@@ -6,7 +6,7 @@
 #   test/xrdp-session.sh <image> [client archive]
 #
 # The client defaults to the newest dist/sdl3-freerdp-*-linux-<arch>.tar.xz.
-# Logs and a screenshot go to dist/xrdp/<release>/test/.
+# Logs and a screenshot go to dist/test/<release>/.
 set -uo pipefail
 
 KIT=$(cd "$(dirname "$0")/.." && pwd)
@@ -16,7 +16,8 @@ ENGINE=$(command -v podman || command -v docker)
 # shellcheck disable=SC2016 # expanded by the container shell
 DISTRO=$("$ENGINE" run --rm "$IMAGE" sh -c '. /etc/os-release; echo "$ID-${VERSION_ID:-$VERSION_CODENAME}"')
 PKGS=$KIT/dist/xrdp/$DISTRO
-OUT=$PKGS/test
+# outside the packages' directory, which the build container made
+OUT=$KIT/dist/test/$DISTRO
 rm -rf "$OUT"
 mkdir -p "$OUT"
 

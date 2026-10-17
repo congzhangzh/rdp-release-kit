@@ -80,6 +80,9 @@ jobs:
       - name: Check the dependencies
         run: ./check-deps.sh "${{ matrix.image }}"
 
+      - name: Who owns dist/
+        run: ls -la dist dist/xrdp dist/xrdp/*
+
       - name: Log in over RDP
         run: test/xrdp-session.sh "${{ matrix.image }}"
 
