@@ -81,6 +81,8 @@ check "the client shows more than one colour" \
     '[ "$(convert /out/screen.png -format "%k" info: 2> /dev/null)" -gt 2 ]'
 cp /home/tester/.local/share/xrdp/*.log /out/ 2> /dev/null
 cp /var/log/xrdp*.log /out/ 2> /dev/null
+# readable by the host user (some logs are written with mode 600)
+chmod -R a+rX /out
 echo "passed $pass, failed $fail"
 [ $fail = 0 ]
 EOF
