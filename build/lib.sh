@@ -31,27 +31,40 @@ JOBS=$(nproc)
 DEPS=$WORK/deps
 mkdir -p "$WORK/log" "$WORK/stamp" "$SOURCES"
 
-# fetch <name>: the verified source archive in $SOURCES, path on stdout
+# fetch <name>: the verified source archive in $SOURCES, path on stdout.
+# Every step is checked explicitly: fetch runs as "$(fetch) || return 1",
+# and bash ignores set -e inside a function called that way.
 fetch() {
-    local name=$1 url=${URL[$1]} file tmp
+    local name=$1 url=${URL[$1]} file tmp try
     if [[ $url == git+* ]]; then
         file=$SOURCES/$name-${SHA[$name]}.tar
         if [ ! -f "$file" ]; then
-            tmp=$(mktemp -d)
-            git -C "$tmp" init -q
-            git -C "$tmp" fetch -q --depth 1 "${url#git+}" "${SHA[$name]}"
-            [ "$(git -C "$tmp" rev-parse FETCH_HEAD)" = "${SHA[$name]}" ]
-            git -C "$tmp" archive --prefix="$name/" -o "$file.part" FETCH_HEAD
-            mv "$file.part" "$file"
+            tmp=$(mktemp -d) || return 1
+            git -C "$tmp" init -q || return 1
+            # git has no retry option; servers answer 5xx now and then
+            for try in 1 2 3 4 5; do
+                git -C "$tmp" fetch -q --depth 1 "${url#git+}" "${SHA[$name]}" && break
+                [ $try = 5 ] && { echo "$name: git fetch failed" >&2; return 1; }
+                sleep $((try * 10))
+            done
+            if [ "$(git -C "$tmp" rev-parse FETCH_HEAD)" != "${SHA[$name]}" ]; then
+                echo "$name: fetched commit is not ${SHA[$name]}" >&2
+                return 1
+            fi
+            git -C "$tmp" archive --prefix="$name/" -o "$file.part" FETCH_HEAD || return 1
+            mv "$file.part" "$file" || return 1
             rm -rf "$tmp"
         fi
     else
         file=$SOURCES/$(basename "$url")
         if [ ! -f "$file" ]; then
-            curl -fsSL --retry 5 --retry-all-errors -o "$file.part" "$url"
-            mv "$file.part" "$file"
+            curl -fsSL --retry 5 --retry-all-errors -o "$file.part" "$url" || return 1
+            mv "$file.part" "$file" || return 1
         fi
-        echo "${SHA[$name]}  $file" | sha256sum -c --quiet - >&2
+        if ! echo "${SHA[$name]}  $file" | sha256sum -c --quiet - >&2; then
+            echo "$name: $(basename "$file") does not match its SHA-256 in sources.lock" >&2
+            return 1
+        fi
         if [ -n "${SIGNER[$name]:-}" ]; then
             verify_signature "$name" "$file" || return 1
         fi
@@ -79,7 +92,7 @@ unpack() {
     file=$(fetch "$name") || return 1
     rm -rf "${WORK:?}/src/$name"
     mkdir -p "$WORK/src/$name"
-    tar -xf "$file" --strip-components=1 -C "$WORK/src/$name"
+    tar -xf "$file" --strip-components=1 -C "$WORK/src/$name" || return 1
     echo "$WORK/src/$name"
 }
 
