@@ -1,0 +1,14 @@
+# Every source the kit builds, pinned: name, version, URL, SHA-256.
+# FreeRDP's hash is the one upstream publishes next to its release
+# (freerdp-<version>.tar.gz.sha256). Bump a line, then run ./build.sh.
+#
+# name      version  url                                                                                      sha256
+freerdp     3.32.2   https://github.com/FreeRDP/FreeRDP/releases/download/3.32.2/freerdp-3.32.2.tar.gz            e95a505c0057e4d06a3b120477c421028769deba4db9c639ef3465d050f0955c
+sdl3        3.4.18   https://github.com/libsdl-org/SDL/releases/download/release-3.4.18/SDL3-3.4.18.tar.gz        9c75cf16330322c217dedd2e0609f1124f1b54b8633e763467b4684d0f4334a3
+sdl3_ttf    3.2.2    https://github.com/libsdl-org/SDL_ttf/releases/download/release-3.2.2/SDL3_ttf-3.2.2.tar.gz   63547d58d0185c833213885b635a2c0548201cc8f301e6587c0be1a67e1e045d
+freetype    2.14.3   https://download.savannah.gnu.org/releases/freetype/freetype-2.14.3.tar.xz                   36bc4f1cc413335368ee656c42afca65c5a3987e8768cc28cf11ba775e785a5f
+openssl     3.5.9    https://github.com/openssl/openssl/releases/download/openssl-3.5.9/openssl-3.5.9.tar.gz      603f5602e2eef00d77fbd429d34dcd5822bb301757a1bc9cdb24c670f1eb859a
+opus        1.5.2    https://github.com/xiph/opus/releases/download/v1.5.2/opus-1.5.2.tar.gz                      65c1d2f78b9f2fb20082c38cbe47c951ad5839345876e46941612ee87f9a7ce1
+dav1d       1.5.4    https://downloads.videolan.org/pub/videolan/dav1d/1.5.4/dav1d-1.5.4.tar.xz                   686616b7c69eb88d44459391ab25cac13b6647a3b288835c5784e71c1514a5c5
+zlib        1.3.2    https://github.com/madler/zlib/releases/download/v1.3.2/zlib-1.3.2.tar.gz                    bb329a0a2cd0274d05519d61c667c062e06990d72e125ee2dfa8de64f0119d16
+jansson     2.15.1   https://github.com/akheron/jansson/releases/download/v2.15.1/jansson-2.15.1.tar.gz           0c7114dc0b2d22a670724a1f95922029d7077c19dbf79a584cb8084d2f267f2f
