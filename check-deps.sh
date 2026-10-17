@@ -14,7 +14,8 @@
 set -uo pipefail
 
 KIT=$(cd "$(dirname "$0")" && pwd)
-ENGINE=$(command -v podman || command -v docker)
+# docker first: the builds are tested with it (podman: see README)
+ENGINE=${ENGINE:-$(command -v docker || command -v podman)}
 IMAGES=("$@")
 if [ ${#IMAGES[@]} = 0 ]; then
     mapfile -t IMAGES < <(grep -v -E '^\s*(#|$)' "$KIT/distros.list")

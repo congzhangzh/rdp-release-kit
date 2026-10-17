@@ -62,6 +62,13 @@ suffix, and take the place of the distribution's packages of the same
 name. Services are not started on install, and the host keys are made on
 install, never shipped.
 
+## Container engine
+
+The scripts use docker when it is installed, podman otherwise (or set
+`ENGINE`). Every result above was tested with docker. With rootless podman
+the builds work, but the xrdp login test fails on Fedora (no Xorg session
+starts); that is not solved yet.
+
 ## Performance on different hardware
 
 One build per CPU architecture is enough. The hot paths pick their code

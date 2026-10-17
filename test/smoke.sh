@@ -17,7 +17,8 @@ if [ ${#IMAGES[@]} = 0 ]; then
         IMAGES+=(archlinux:latest)
     fi
 fi
-ENGINE=$(command -v podman || command -v docker)
+# docker first: the builds are tested with it (podman: see README)
+ENGINE=${ENGINE:-$(command -v docker || command -v podman)}
 NAME=$(basename "$ARCHIVE" .tar.xz)
 
 # The one host library the client needs, as each family names it

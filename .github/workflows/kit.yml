@@ -74,21 +74,18 @@ jobs:
           name: sdl3-freerdp-ubuntu-24.04
           path: dist
 
+      - name: Name the artifact
+        id: name
+        run: echo "name=xrdp-$(echo '${{ matrix.image }}' | tr ':/' '--')" >> "$GITHUB_OUTPUT"
+
       - name: Build
         run: ./build-xrdp.sh "${{ matrix.image }}"
 
       - name: Check the dependencies
         run: ./check-deps.sh "${{ matrix.image }}"
 
-      - name: Who owns dist/
-        run: ls -la dist dist/xrdp dist/xrdp/*
-
       - name: Log in over RDP
         run: test/xrdp-session.sh "${{ matrix.image }}"
-
-      - name: Name the artifact
-        id: name
-        run: echo "name=xrdp-$(echo '${{ matrix.image }}' | tr ':/' '--')" >> "$GITHUB_OUTPUT"
 
       - uses: actions/upload-artifact@v7
         with:
@@ -97,6 +94,14 @@ jobs:
             dist/xrdp/*/*.deb
             dist/xrdp/*/*.rpm
           if-no-files-found: error
+
+      - name: Keep the login test's logs and screenshot
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-${{ steps.name.outputs.name }}
+          path: dist/test/
+          if-no-files-found: ignore
 
   release:
     if: startsWith(github.ref, 'refs/tags/v')

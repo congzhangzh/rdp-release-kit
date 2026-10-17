@@ -12,7 +12,8 @@ set -uo pipefail
 KIT=$(cd "$(dirname "$0")/.." && pwd)
 IMAGE=$1
 CLIENT=${2:-$(find "$KIT/dist" -maxdepth 1 -name "sdl3-freerdp-*-linux-$(uname -m).tar.xz" | sort -V | tail -1)}
-ENGINE=$(command -v podman || command -v docker)
+# docker first: the builds are tested with it (podman: see README)
+ENGINE=${ENGINE:-$(command -v docker || command -v podman)}
 # shellcheck disable=SC2016 # expanded by the container shell
 DISTRO=$("$ENGINE" run --rm "$IMAGE" sh -c '. /etc/os-release; echo "$ID-${VERSION_ID:-$VERSION_CODENAME}"')
 PKGS=$KIT/dist/xrdp/$DISTRO

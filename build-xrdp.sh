@@ -12,8 +12,13 @@ set -euo pipefail
 KIT=$(cd "$(dirname "$0")" && pwd)
 OUT=$KIT/dist/xrdp
 SOURCES=${SOURCES:-$HOME/.cache/rdp-release-kit/sources}
-ENGINE=$(command -v podman || command -v docker)
+# docker first: the builds are tested with it (podman: see README)
+ENGINE=${ENGINE:-$(command -v docker || command -v podman)}
 mkdir -p "$OUT" "$SOURCES"
+# who the files the container writes should belong to: docker runs it as
+# root, rootless podman already as this user (a chown would map the uid
+# through the user namespace and lock this user out)
+owner() { case "$ENGINE" in *docker) echo "$(id -u):$(id -g)" ;; esac; }
 
 IMAGES=("$@")
 if [ ${#IMAGES[@]} = 0 ]; then
@@ -28,9 +33,9 @@ for image in "${IMAGES[@]}"; do
     # the single quotes are for the container's shell
     # shellcheck disable=SC2016
     if ! "$ENGINE" run --rm -v "$KIT":/kit:ro -v "$SOURCES":/sources -v "$OUT":/out \
-            -v "$work":/work -e OWNER="$(id -u):$(id -g)" "$image" \
+            -v "$work":/work -e OWNER="$(owner)" "$image" \
             bash -c '/kit/build/build-xrdp-pkg.sh /kit /sources /out; rc=$?;
-                     chown -R "$OWNER" /out /work /sources; exit $rc'; then
+                     [ -z "$OWNER" ] || chown -R "$OWNER" /out /work /sources; exit $rc'; then
         echo "### $image: FAILED"
         status=1
     fi
