@@ -15,7 +15,9 @@ RUN dnf -y install dnf-plugins-core epel-release \
         gcc gcc-c++ make cmake ninja-build meson nasm pkgconf-pkg-config \
         perl-core python3 xz bzip2 file diffutils binutils \
         libX11-devel libXext-devel libXrandr-devel libXcursor-devel libXi-devel \
-        libXfixes-devel libXrender-devel libXScrnSaver-devel libxkbcommon-devel \
+        libXfixes-devel libXrender-devel libXScrnSaver-devel libXtst-devel \
+        libxkbcommon-devel ibus-devel systemd-devel libusb1-devel vulkan-headers \
+        mesa-libGLES-devel libstdc++-static \
         wayland-devel wayland-protocols-devel libdecor-devel \
         mesa-libGL-devel mesa-libEGL-devel libdrm-devel mesa-libgbm-devel \
         pulseaudio-libs-devel alsa-lib-devel pipewire-devel dbus-devel \

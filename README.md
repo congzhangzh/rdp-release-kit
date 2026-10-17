@@ -9,7 +9,7 @@ source.
 
 | Artifact | Status | Runs on |
 |---|---|---|
-| `sdl3-freerdp`, the FreeRDP SDL3 client, with AV1 (dav1d) and Opus | step 1 (this) | Linux x86_64 / aarch64 with glibc ≥ 2.34 and PulseAudio's `libpulse.so.0`: RHEL/Rocky/Alma 9, Debian 12, Ubuntu 22.04, Fedora 35 and newer |
+| `sdl-freerdp` (FreeRDP's SDL3 client), with AV1 (dav1d) and Opus | step 1 (this) | Linux x86_64 / aarch64 with glibc ≥ 2.34 and PulseAudio's `libpulse.so.0`: RHEL/Rocky/Alma 9, Debian 12, Ubuntu 22.04, Fedora 35 and newer |
 | FreeRDP WebAssembly client | planned | any current browser |
 | xrdp server packages per distribution | planned | — |
 
@@ -24,7 +24,7 @@ its release.
 ```
 
 The build runs in an AlmaLinux 9 container (glibc 2.34), and links every
-library statically except glibc and libpulse. SDL3 opens X11, Wayland and
+library statically except glibc, libgcc_s and libpulse. SDL3 opens X11, Wayland and
 its audio backends at runtime, so the same binary works in X11 and Wayland
 sessions. `build/check-portable.sh` fails the build if the client needs
 any other host library, needs a newer glibc, or exports library symbols.
@@ -62,7 +62,7 @@ port=tcp://.:3389          ; 127.0.0.1:3389 only
 ```sh
 # on the client
 ssh -N -L 3389:127.0.0.1:3389 user@server &
-sdl3-freerdp /v:127.0.0.1:3389 /u:user
+sdl-freerdp /v:127.0.0.1:3389 /u:user
 ```
 
 The same applies to gnome-remote-desktop and any other RDP server.

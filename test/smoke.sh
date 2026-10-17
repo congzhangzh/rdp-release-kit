@@ -30,7 +30,7 @@ elif command -v pacman > /dev/null; then
     pacman -Sy --noconfirm --needed libpulse xz > /dev/null
 fi
 tar -xJf /archive -C /tmp
-bin=$(ls /tmp/*/bin/sdl3-freerdp)
+bin=$(ls /tmp/*/bin/sdl-freerdp)
 if ldd "$bin" | grep -q "not found"; then
     ldd "$bin" | grep "not found"
     exit 1
@@ -41,9 +41,10 @@ EOF
 
 fail=0
 for image in "${IMAGES[@]}"; do
+    "$ENGINE" pull -q "$image" > /dev/null 2>&1 || true
     if out=$("$ENGINE" run --rm -v "$ARCHIVE":/archive:ro -v "$INSIDE":/smoke.sh:ro \
              "$image" bash /smoke.sh 2>&1); then
-        printf 'ok    %-26s %s\n' "$image" "$(tr '\n' ' ' <<< "$out")"
+        printf 'ok    %-26s %s\n' "$image" "$(tail -2 <<< "$out" | tr '\n' ' ')"
     else
         printf 'FAIL  %-26s %s\n' "$image" "$(tail -3 <<< "$out" | tr '\n' ' ')"
         fail=1
