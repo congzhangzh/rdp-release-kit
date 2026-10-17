@@ -11,7 +11,7 @@ source.
 |---|---|---|
 | `sdl-freerdp` (FreeRDP's SDL3 client), with AV1 (dav1d) and Opus | step 1 (this) | Linux x86_64 / aarch64 with glibc ≥ 2.34 and PulseAudio's `libpulse.so.0`: RHEL/Rocky/Alma 9, Debian 12, Ubuntu 22.04, Fedora 35 and newer |
 | FreeRDP WebAssembly client | planned | any current browser |
-| xrdp server packages per distribution | planned | — |
+| xrdp + xorgxrdp native packages (.deb / .rpm) | step 2 | Debian testing, 13, 12; Ubuntu 26.10, 26.04, 24.04; Fedora 45, 44, 43 |
 
 Every source is pinned in [`sources.lock`](sources.lock) with its SHA-256
 and is built from source. FreeRDP's hash is the one upstream publishes with
@@ -31,6 +31,36 @@ any other host library, needs a newer glibc, or exports library symbols.
 
 The archive contains the client, the licences of every component inside
 it, and a `MANIFEST` with the versions, hashes and build options.
+
+## xrdp packages
+
+```sh
+./check-deps.sh               # does each release have what the build needs?
+./build-xrdp.sh               # dist/xrdp/<release>/*.deb or *.rpm, for every release in distros.list
+./build-xrdp.sh debian:13     # or just one
+test/xrdp-session.sh debian:13   # install in a fresh container, log in over RDP, check the session
+```
+
+The packages are built in a stock container of each release, against that
+release's PAM, OpenSSL, X11 libraries and Xorg server (xorgxrdp is an Xorg
+driver and must match its server exactly). x264 (H.264) and Opus are built
+from `sources.lock` and linked statically, because not every release ships
+them (Fedora has no x264). The xrdp and xorgxrdp tarballs must carry a
+valid signature from xrdp's release key ([`signed.lock`](signed.lock),
+[`keys/`](keys)).
+
+What each release needs is in two plain lists, one package per line with
+the reason: [`deps/deb.txt`](deps/deb.txt) for Debian and Ubuntu,
+[`deps/rpm.txt`](deps/rpm.txt) for Fedora. `check-deps.sh` prints, for each
+release, every listed package with the version the release has, and every
+run-time dependency of the built packages with the version that would be
+installed, each line starting with `ok` or `MISSING`. Run it first when
+adding a release to [`distros.list`](distros.list).
+
+The packages are named `xrdp` and `xorgxrdp`, with a `0kit1` release
+suffix, and take the place of the distribution's packages of the same
+name. Services are not started on install, and the host keys are made on
+install, never shipped.
 
 ## Performance on different hardware
 

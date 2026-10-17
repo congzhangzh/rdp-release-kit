@@ -1,0 +1,39 @@
+# What it takes to build xrdp and xorgxrdp on Debian and Ubuntu.
+# One package per line, then why it is needed. build/build-xrdp-pkg.sh
+# installs these; ./check-deps.sh shows whether a release has them all.
+#
+# The packages' own run-time dependencies are not listed here: they are
+# read from the built binaries (dpkg-shlibdeps), and check-deps.sh shows
+# them too.
+
+# tools
+build-essential     C compiler and make
+autoconf            xrdp and xorgxrdp use autotools
+automake            xrdp and xorgxrdp use autotools
+libtool             xrdp and xorgxrdp use autotools
+pkg-config          finds the libraries below
+nasm                x264's assembly
+cmake               builds Opus
+ninja-build         builds Opus
+git                 fetches x264 (no release tarballs)
+curl                downloads the sources
+ca-certificates     for curl over https
+gnupg               checks the xrdp and xorgxrdp signatures
+xz-utils            unpacks .tar.xz sources
+file                used by the packaging step
+dpkg-dev            dpkg-shlibdeps, for the package dependencies
+
+# libraries xrdp uses from the distribution
+libssl-dev          TLS
+libpam0g-dev        logins (PAM)
+libx11-dev          xrdp-chansrv: clipboard and the X session
+libxfixes-dev       xrdp-chansrv: clipboard
+libxrandr-dev       xrdp-chansrv: screen layout
+libjpeg-dev         JPEG codec
+libfuse3-dev        file copy and drive redirection
+libpixman-1-dev     faster screen updates
+libfreetype-dev     fonts on the login screen
+libimlib2-dev       images on the login screen
+
+# xorgxrdp
+xserver-xorg-dev    the Xorg server xorgxrdp is a driver for

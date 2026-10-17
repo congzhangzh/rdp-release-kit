@@ -4,7 +4,7 @@
 #   build-sdl3-client.sh <kit dir> <sources dir> <output dir>
 #
 # Each source in sources.lock is checked against its SHA-256, built as a
-# static library into /deps, and FreeRDP's SDL3 client is linked against
+# static library into /work/deps, and FreeRDP's SDL3 client is linked against
 # them. The result is <output dir>/sdl3-freerdp-<version>-linux-<arch>.tar.xz
 # with the client, the licences of everything inside it and a manifest.
 set -Eeuo pipefail
@@ -13,70 +13,13 @@ KIT=$1
 SOURCES=$2
 OUT=$3
 WORK=/work
-# kept in the work tree: a dependency is rebuilt only when its source
-# changes (remove the work tree to force it)
-DEPS=$WORK/deps
 STAGE=$WORK/stage
-JOBS=$(nproc)
+# shellcheck source=build/lib.sh
+. "$KIT/build/lib.sh"
 export PKG_CONFIG_PATH=$DEPS/lib/pkgconfig:$DEPS/lib64/pkgconfig
 export CFLAGS="-O2 -fPIC"
 export CXXFLAGS="-O2 -fPIC"
-
-declare -A VERSION URL SHA
-while read -r name version url sha; do
-    VERSION[$name]=$version
-    URL[$name]=$url
-    SHA[$name]=$sha
-done < <(grep -v -E '^\s*(#|$)' "$KIT/sources.lock")
-
-# unpack <name>: checks the tarball, extracts it, prints the source dir
-unpack() {
-    local name=$1 file
-    file=$SOURCES/$(basename "${URL[$name]}")
-    if [ ! -f "$file" ]; then
-        curl -fsSL -o "$file.part" "${URL[$name]}"
-        mv "$file.part" "$file"
-    fi
-    echo "${SHA[$name]}  $file" | sha256sum -c --quiet - >&2
-    rm -rf "${WORK:?}/src/$name"
-    mkdir -p "$WORK/src/$name"
-    tar -xf "$file" --strip-components=1 -C "$WORK/src/$name"
-    echo "$WORK/src/$name"
-}
-
-# built <name>: true if <name> is already in /deps from the same source
-built() {
-    if [ "$(cat "$WORK/stamp/$1" 2> /dev/null)" = "${SHA[$1]}" ]; then
-        echo "== $1 ${VERSION[$1]} (built)"
-        return 0
-    fi
-    echo "== $1 ${VERSION[$1]}"
-    return 1
-}
-
-stamp() {
-    mkdir -p "$WORK/stamp"
-    echo "${SHA[$1]}" > "$WORK/stamp/$1"
-}
-
-# cmake_dep <name> [cmake options]: a CMake project, static, into /deps
-cmake_dep() {
-    local name=$1 src
-    shift
-    built "$name" && return 0
-    src=$(unpack "$name")
-    rm -rf "${WORK:?}/build/$name"
-    cmake -G Ninja -S "$src" -B "$WORK/build/$name" -DCMAKE_BUILD_TYPE=Release \
-        -DCMAKE_INSTALL_PREFIX=$DEPS -DCMAKE_INSTALL_LIBDIR=lib \
-        -DCMAKE_PREFIX_PATH=$DEPS -DBUILD_SHARED_LIBS=OFF \
-        -DCMAKE_POSITION_INDEPENDENT_CODE=ON "$@" > "$WORK/log/$name.log" 2>&1
-    cmake --build "$WORK/build/$name" >> "$WORK/log/$name.log" 2>&1
-    cmake --install "$WORK/build/$name" >> "$WORK/log/$name.log" 2>&1
-    stamp "$name"
-}
-
-mkdir -p "$WORK/log" "$OUT"
-trap 'echo "failed, the last log lines:" >&2; tail -20 "$(ls -t "$WORK"/log/*.log | head -1)" >&2' ERR
+mkdir -p "$OUT"
 
 if ! built zlib; then
     src=$(unpack zlib)
@@ -158,13 +101,7 @@ rm -rf "$WORK/pkg"
 mkdir -p "$PKG/bin" "$PKG/licenses"
 cp "$STAGE/opt/freerdp/bin/sdl-freerdp" "$PKG/bin/"
 strip --strip-debug "$PKG/bin/sdl-freerdp"
-for name in "${!VERSION[@]}"; do
-    dir=$WORK/src/$name
-    mkdir -p "$PKG/licenses/$name"
-    find "$dir" -maxdepth 2 -type f \( -iname 'LICENSE*' -o -iname 'COPYING*' \
-        -o -iname 'LICENCE*' -o -iname 'FTL.TXT' -o -iname 'GPLv2.TXT' \) \
-        -exec cp {} "$PKG/licenses/$name/" \;
-done
+licenses "$PKG/licenses" freerdp sdl3 sdl3_ttf freetype openssl opus dav1d zlib jansson
 {
     echo "sdl3-freerdp ${VERSION[freerdp]} for Linux $ARCH, built $(date -u +%F)"
     # shellcheck source=/dev/null

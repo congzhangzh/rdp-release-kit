@@ -1,0 +1,39 @@
+# What it takes to build xrdp and xorgxrdp on Fedora.
+# One package per line, then why it is needed. build/build-xrdp-pkg.sh
+# installs these; ./check-deps.sh shows whether a release has them all.
+#
+# The packages' own run-time dependencies are not listed here: rpmbuild
+# reads them from the built binaries, and check-deps.sh shows them too.
+
+# tools
+gcc                     C compiler
+make                    builds xrdp, xorgxrdp and x264
+autoconf                xrdp and xorgxrdp use autotools
+automake                xrdp and xorgxrdp use autotools
+libtool                 xrdp and xorgxrdp use autotools
+pkgconf-pkg-config      finds the libraries below
+nasm                    x264's assembly
+cmake                   builds Opus
+ninja-build             builds Opus
+git                     fetches x264 (no release tarballs)
+curl                    downloads the sources
+gnupg2                  checks the xrdp and xorgxrdp signatures
+xz                      unpacks .tar.xz sources
+file                    used by the packaging step
+diffutils               used by configure scripts
+rpm-build               rpmbuild, makes the packages
+
+# libraries xrdp uses from the distribution
+openssl-devel           TLS
+pam-devel               logins (PAM)
+libX11-devel            xrdp-chansrv: clipboard and the X session
+libXfixes-devel         xrdp-chansrv: clipboard
+libXrandr-devel         xrdp-chansrv: screen layout
+libjpeg-turbo-devel     JPEG codec
+fuse3-devel             file copy and drive redirection
+pixman-devel            faster screen updates
+freetype-devel          fonts on the login screen
+imlib2-devel            images on the login screen
+
+# xorgxrdp
+xorg-x11-server-devel   the Xorg server xorgxrdp is a driver for
