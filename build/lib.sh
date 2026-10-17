@@ -48,7 +48,7 @@ fetch() {
     else
         file=$SOURCES/$(basename "$url")
         if [ ! -f "$file" ]; then
-            curl -fsSL -o "$file.part" "$url"
+            curl -fsSL --retry 5 --retry-all-errors -o "$file.part" "$url"
             mv "$file.part" "$file"
         fi
         echo "${SHA[$name]}  $file" | sha256sum -c --quiet - >&2
@@ -62,7 +62,7 @@ fetch() {
 # verify_signature <name> <file>: <file>.asc is a good signature by SIGNER
 verify_signature() {
     local name=$1 file=$2 home status
-    [ -f "$file.asc" ] || curl -fsSL -o "$file.asc" "${URL[$name]}.asc"
+    [ -f "$file.asc" ] || curl -fsSL --retry 5 --retry-all-errors -o "$file.asc" "${URL[$name]}.asc"
     home=$(mktemp -d)
     gpg --homedir "$home" --batch --quiet --import "$KIT"/keys/*.asc 2> /dev/null
     status=$(gpg --homedir "$home" --batch --status-fd 1 --verify "$file.asc" "$file" 2> /dev/null)

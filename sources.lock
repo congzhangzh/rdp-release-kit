@@ -17,3 +17,8 @@ jansson     2.15.1   https://github.com/akheron/jansson/releases/download/v2.15.
 xrdp        0.10.6.1 https://github.com/neutrinolabs/xrdp/releases/download/v0.10.6.1/xrdp-0.10.6.1.tar.gz   2f7beb5a3b2529c8d72dc0df9b8cdca31ab0e0c14d1e3421210f5e6ec0ab3b75
 xorgxrdp    0.10.5   https://github.com/neutrinolabs/xorgxrdp/releases/download/v0.10.5/xorgxrdp-0.10.5.tar.gz a5d03435f0ef48bf3d5010e63d9264f2334e7063cba3ecd8d4c0a15616a4f712
 x264        b35605a  git+https://code.videolan.org/videolan/x264.git                                          b35605ace3ddf7c1a5d67a2eb553f034aef41d55
+# Windows client: LibreSSL as FreeRDP's own scripts/mingw.sh pins it (same
+# hash); the llvm-mingw toolchain publishes no checksums, so its hash is
+# the one of the copy downloaded on 2026-10-09 (trust on first use)
+libressl    4.3.3    https://ftp.openbsd.org/pub/OpenBSD/LibreSSL/libressl-4.3.3.tar.gz                         ff97c432457f349e6ba3d416ab903bc7468f1436f0f32efe5fff808de292c7b8
+llvm_mingw  20260922 https://github.com/mstorsjo/llvm-mingw/releases/download/20260922/llvm-mingw-20260922-ucrt-ubuntu-22.04-x86_64.tar.xz bb7bb7654b33d5aa8712acb837c963b2e0c56352560c76105270a3268c665c21

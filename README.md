@@ -10,7 +10,8 @@ source.
 | Artifact | Status | Runs on |
 |---|---|---|
 | `sdl-freerdp` (FreeRDP's SDL3 client), with AV1 (dav1d) and Opus | step 1 (this) | Linux x86_64 / aarch64 with glibc ≥ 2.34 and PulseAudio's `libpulse.so.0`: RHEL/Rocky/Alma 9, Debian 12, Ubuntu 22.04, Fedora 35 and newer |
-| FreeRDP WebAssembly client | planned | any current browser |
+| `sdl-freerdp.exe`, the same client for Windows, with AV1 and Opus | step 3 | Windows 10 and 11, x86_64 and ARM64 |
+| FreeRDP WebAssembly client | waiting for upstream: the Emscripten build is not in a FreeRDP release yet | any current browser |
 | xrdp + xorgxrdp native packages (.deb / .rpm) | step 2 | Debian testing, 13, 12; Ubuntu 26.10, 26.04, 24.04; Fedora 45, 44, 43 |
 
 Every source is pinned in [`sources.lock`](sources.lock) with its SHA-256
@@ -31,6 +32,22 @@ any other host library, needs a newer glibc, or exports library symbols.
 
 The archive contains the client, the licences of every component inside
 it, and a `MANIFEST` with the versions, hashes and build options.
+
+## Windows client
+
+```sh
+./build-windows.sh            # dist/sdl3-freerdp-<version>-windows-{x86_64,aarch64}.zip
+```
+
+Cross-compiled in a Debian container with
+[llvm-mingw](https://github.com/mstorsjo/llvm-mingw) (clang, libc++, UCRT),
+whose one toolchain covers x86_64 and native ARM64 Windows. Every library
+is linked statically, with libc++, so the zip holds one `.exe` that needs
+only Windows' own DLLs; `build/check-windows.sh` fails the build otherwise.
+TLS comes from LibreSSL, as in FreeRDP's own Windows builds. The deprecated
+3.x API is left out, as upstream's `scripts/mingw.sh` does.
+
+Wine can not run it: Wine has no `_aligned_recalloc` in its UCRT yet.
 
 ## xrdp packages
 

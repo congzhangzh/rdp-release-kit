@@ -1,7 +1,7 @@
 name: kit
 
-# Builds the portable SDL3 FreeRDP client on x86_64 and aarch64 and runs it
-# on the supported distributions; builds the xrdp packages for every
+# Builds the portable SDL3 FreeRDP client for Linux (x86_64, aarch64; run
+# on the supported distributions) and Windows (x86_64, aarch64); builds the xrdp packages for every
 # release in distros.list, checks their dependencies and logs in to each
 # over RDP with that client; publishes all of it on a v* tag.
 on:
@@ -40,6 +40,30 @@ jobs:
         with:
           name: sdl3-freerdp-${{ matrix.runner }}
           path: dist/*
+          if-no-files-found: error
+
+  windows:
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [x86_64, aarch64]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Cache sources
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/rdp-release-kit/sources
+          key: sources-${{ hashFiles('sources.lock') }}
+
+      - name: Build
+        run: ./build-windows.sh ${{ matrix.arch }}
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: sdl3-freerdp-windows-${{ matrix.arch }}
+          path: dist/*.zip
           if-no-files-found: error
 
   releases:
@@ -105,7 +129,7 @@ jobs:
 
   release:
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: [build, xrdp]
+    needs: [build, windows, xrdp]
     runs-on: ubuntu-24.04
     permissions:
       contents: write
@@ -122,6 +146,7 @@ jobs:
         with:
           subject-path: |
             dist/**/*.tar.xz
+            dist/**/*.zip
             dist/**/*.deb
             dist/**/*.rpm
 
@@ -129,7 +154,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          mapfile -t files < <(find dist -type f \( -name '*.tar.xz' -o -name '*.deb' -o -name '*.rpm' \))
+          mapfile -t files < <(find dist -type f \( -name '*.tar.xz' -o -name '*.zip' -o -name '*.deb' -o -name '*.rpm' \))
           (cd dist && sha256sum "${files[@]#dist/}") > SHA256SUMS
           gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" \
               --title "$GITHUB_REF_NAME" --notes "See MANIFEST in each client archive." \
