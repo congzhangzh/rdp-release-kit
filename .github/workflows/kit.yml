@@ -136,11 +136,9 @@ jobs:
           path: dist/test/
           if-no-files-found: ignore
 
-  wasm:
-    needs: [xrdp]
+  # The web client builds at once; only its login test waits for xrdp
+  wasm-build:
     runs-on: ubuntu-24.04
-    permissions:
-      contents: write   # the tested page goes to a pre-release, for freerdp-web
     steps:
       - uses: actions/checkout@v7
 
@@ -151,7 +149,30 @@ jobs:
           key: sources-${{ hashFiles('sources.lock') }}
 
       - name: Build
-        run: ./build-wasm.sh
+        run: |
+          ./build-wasm.sh
+          cp ~/.cache/rdp-release-kit/wasm/src/freerdp_web/rdp-gateway.sh dist/wasm/
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: wasm-build
+          path: dist/wasm/
+          if-no-files-found: error
+
+  wasm:
+    needs: [wasm-build, xrdp]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write   # the tested page goes to a pre-release, for freerdp-web
+    steps:
+      - uses: actions/checkout@v7
+
+      # artifacts keep no file modes
+      - uses: actions/download-artifact@v8
+        with:
+          name: wasm-build
+          path: dist/wasm
+      - run: chmod +x dist/wasm/rdp-gateway.sh
 
       # the artifact keeps its debian-13/ directory
       - name: The xrdp packages, for the login test's server
@@ -170,7 +191,7 @@ jobs:
       # The page from a static server without COOP/COEP (as Pages), the
       # gateway from the page's own rdp-gateway.sh, a login to xrdp
       - name: Log in from the browser
-        run: test/wasm-session.sh dist/wasm/web ~/.cache/rdp-release-kit/wasm/src/freerdp_web/rdp-gateway.sh
+        run: test/wasm-session.sh dist/wasm/web dist/wasm/rdp-gateway.sh
 
       # freerdp-web publishes the page; it builds nothing. The tested client
       # goes to a pre-release here, one per page commit, with the xrdp
