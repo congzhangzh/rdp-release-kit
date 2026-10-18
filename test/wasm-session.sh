@@ -10,6 +10,9 @@
 # Checks that the browser logs in: an Xorg session with an xterm starts for
 # the user on the server. Output in dist/test/wasm/.
 #
+# Ports: on the server, RDP 3389 and websockify 3390; on this side, the
+# page's gateway 127.0.0.1:13390 and, for a native client, 127.0.0.1:13389.
+#
 # PAGE_URL=<url> tests a published page instead (e.g. the GitHub Pages
 # site); the page dir is then not served.
 #
@@ -35,8 +38,9 @@ ssh-keygen -q -t ed25519 -N '' -f "$OUT/ssh/key" -C wasm-session-test
 # -F none: the test's ssh ignores the user's ~/.ssh/config, so nothing of
 # the user's (agent or X11 forwarding, other keys, proxies, shared
 # connections) reaches the throwaway server
-SSH_OPTS="-F none -p 2223 -i $OUT/ssh/key -o IdentitiesOnly=yes -o ForwardAgent=no -o ForwardX11=no -o UserKnownHostsFile=$OUT/ssh/known_hosts -o StrictHostKeyChecking=accept-new"
+SSH_OPTS="-F none -L 127.0.0.1:13389:127.0.0.1:3389 -p 2223 -i $OUT/ssh/key -o IdentitiesOnly=yes -o ForwardAgent=no -o ForwardX11=no -o UserKnownHostsFile=$OUT/ssh/known_hosts -o StrictHostKeyChecking=accept-new"
 export SSH_OPTS
+export WS_PORT=13390 SERVER_WS_PORT=3390   # rdp-gateway.sh: the page's port, websockify's on the server
 
 cleanup() {
     [ -n "${GW:-}" ] && kill "$GW" 2> /dev/null
@@ -90,13 +94,14 @@ sleep 6
 DRIVER=$KIT/test/wasm-session.mjs
 [ -z "${DEMO_VIDEO:-}" ] || DRIVER=$KIT/test/wasm-demo.mjs
 DRIVER=${WASM_DRIVER:-$DRIVER}   # another driver, e.g. while debugging
-node "$DRIVER" "${PAGE_URL:-http://127.0.0.1:8199/index.html}" 127.0.0.1:6080 \
+node "$DRIVER" "${PAGE_URL:-http://127.0.0.1:8199/index.html}" 127.0.0.1:13390 \
     tester kit-test-pw "$OUT" ${DEMO_VIDEO:+"$DEMO_VIDEO"}
 sleep 2
 pass=0; fail=0
 check() { if eval "$2"; then echo "PASS  $1"; pass=$((pass + 1)); else echo "FAIL  $1"; fail=$((fail + 1)); fi; }
 check "an Xorg session started for tester" \
     '"$ENGINE" exec "$NAME" pgrep -u tester -f "Xorg .*xrdp/xorg.conf" > /dev/null'
+check "RDP for a native client on 127.0.0.1:13389" 'timeout 3 bash -c "exec 3<> /dev/tcp/127.0.0.1/13389"'
 check "the session runs its $SHELL_PROC" '"$ENGINE" exec "$NAME" pgrep -u tester "$SHELL_PROC" > /dev/null'
 check "the screenshot shows more than one colour" \
     '[ "$(uvx -q --with pillow python -c "import sys; from PIL import Image; print(len(Image.open(sys.argv[1]).convert(\"RGB\").getcolors(1 << 24)))" "$OUT/wasm-session.png" 2> /dev/null || echo 0)" -gt 2 ]'
