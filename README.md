@@ -72,15 +72,20 @@ the server (nothing to install on your computer but ssh):
 ssh -t -L 127.0.0.1:6080:127.0.0.1:6080 user@server websockify 127.0.0.1:6080 127.0.0.1:3389
 ```
 
-then connect the page to `127.0.0.1:6080`. freerdp-web's `rdp-gateway.sh`
-runs that line; its README explains each part and the risks: this is a
-hobby project, and keeping your servers safe is up to you.
+then connect the page to `127.0.0.1:6080`. From the published page, Chrome
+asks whether the site may access other apps and services on this device:
+allow it, that is how the page reaches the gateway on 127.0.0.1 (Chrome's
+Local Network Access protection). freerdp-web's `rdp-gateway.sh` runs that
+line; its README explains each part and the risks: this is a hobby project,
+and keeping your servers safe is up to you.
 
 `test/wasm-session.sh` tests it the way a user runs it: the page from a
 plain static server without COOP/COEP, the gateway from `rdp-gateway.sh`,
 and an RDP server reachable only through SSH (the kit's xrdp in a
 disposable container); it passes when the browser's login starts an Xorg
-session on the server.
+session on the server. With `PAGE_URL=` it tests the published page
+instead, granting the local network permission as a user would; CI does
+that after every deploy.
 
 ## xrdp packages
 

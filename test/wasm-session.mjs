@@ -14,7 +14,8 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 const profile = mkdtempSync(join(tmpdir(), "wasm-session-"));
 const chrome = spawn("google-chrome", ["--headless=new", "--remote-debugging-port=9347",
   `--user-data-dir=${profile}`, "--no-first-run", "--window-size=1280,900",
-  "--enable-unsafe-swiftshader", "about:blank"], { stdio: "ignore" });
+  "--enable-unsafe-swiftshader", ...(process.env.CHROME_FLAGS ? process.env.CHROME_FLAGS.split(" ") : []),
+  "about:blank"], { stdio: "ignore" });
 // Chrome must be gone before its profile can be removed
 const done = code => {
   chrome.once("exit", () => { rmSync(profile, { recursive: true, force: true }); process.exit(code); });
@@ -33,11 +34,31 @@ ws.addEventListener("message", e => {
   const m = JSON.parse(e.data);
   if (m.id && pending.has(m.id)) { pending.get(m.id)(m.result); pending.delete(m.id); }
   if (m.method === "Runtime.consoleAPICalled") logs.push(m.params.args.map(a => a.value).join(" "));
+  // the browser's own messages (blocked requests, security checks)
+  if (m.method === "Log.entryAdded") logs.push(`[browser ${m.params.entry.source}] ${m.params.entry.text}`);
 });
 const send = (method, params = {}) => new Promise(r => { const i = ++id; pending.set(i, r); ws.send(JSON.stringify({ id: i, method, params })); });
 const ev = async expression => (await send("Runtime.evaluate", { expression, returnByValue: true, userGesture: true }))?.result?.value;
 
-await send("Runtime.enable"); await send("Page.enable");
+// A public page needs the user's permission to reach 127.0.0.1 (Chrome's
+// Local Network Access); grant it as a user clicking "Allow" would. The
+// permission's name changed between Chrome versions: grant all of them.
+if (!/^http:\/\/(127\.0\.0\.1|localhost)[:/]/.test(url)) {
+  const v = await (await fetch("http://127.0.0.1:9347/json/version")).json();
+  const bws = new WebSocket(v.webSocketDebuggerUrl);
+  await new Promise(r => bws.addEventListener("open", r));
+  let bid = 0;
+  const bsend = (method, params) => new Promise(r => {
+    const i = ++bid;
+    bws.addEventListener("message", e => { const m = JSON.parse(e.data); if (m.id === i) r(m); });
+    bws.send(JSON.stringify({ id: i, method, params }));
+  });
+  for (const name of ["local-network-access", "loopback-network", "local-network"])
+    await bsend("Browser.setPermission", { permission: { name }, setting: "granted", origin: new URL(url).origin });
+  console.log(`granted local network access to ${new URL(url).origin}`);
+}
+
+await send("Runtime.enable"); await send("Page.enable"); await send("Log.enable");
 await send("Page.navigate", { url });
 let isolated = false;
 for (let i = 0; i < 100 && !isolated; i++) { await sleep(300); isolated = await ev("self.crossOriginIsolated === true"); }

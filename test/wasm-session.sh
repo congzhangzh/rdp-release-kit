@@ -9,12 +9,17 @@
 #
 # Checks that the browser logs in: an Xorg session with an xterm starts for
 # the user on the server. Output in dist/test/wasm/.
+#
+# PAGE_URL=<url> tests a published page instead (e.g. the GitHub Pages
+# site); the page dir is then not served.
 # check() evaluates its second argument later, so it is single-quoted on purpose
 # shellcheck disable=SC2016
 set -uo pipefail
 
 KIT=$(cd "$(dirname "$0")/.." && pwd)
-PAGE=$(cd "$1" && pwd)
+# the page dir is served unless a published page is tested (PAGE_URL)
+PAGE=$1
+[ -n "${PAGE_URL:-}" ] || PAGE=$(cd "$PAGE" && pwd)
 GATEWAY=$(cd "$(dirname "$2")" && pwd)/$(basename "$2")
 PKGS=${3:-$KIT/dist/xrdp/debian-13}
 ENGINE=${ENGINE:-$(command -v docker || command -v podman)}
@@ -56,12 +61,17 @@ ls "$PKGS"/xrdp_*.deb "$PKGS"/xorgxrdp_*.deb > /dev/null || { echo "no xrdp pack
 echo "== gateway: rdp-gateway.sh tester@127.0.0.1 (one step)"
 script -q -c "$GATEWAY tester@127.0.0.1" /dev/null > "$OUT/gateway.log" 2>&1 &
 GW=$!
-echo "== page: plain static server, no COOP/COEP"
-(cd "$PAGE" && exec python3 -m http.server 8199 --bind 127.0.0.1) > "$OUT/http.log" 2>&1 &
-HTTP=$!
+if [ -n "${PAGE_URL:-}" ]; then
+    echo "== page: $PAGE_URL"
+else
+    echo "== page: plain static server, no COOP/COEP"
+    (cd "$PAGE" && exec python3 -m http.server 8199 --bind 127.0.0.1) > "$OUT/http.log" 2>&1 &
+    HTTP=$!
+fi
 sleep 6
 
-node "$KIT/test/wasm-session.mjs" http://127.0.0.1:8199/index.html 127.0.0.1:6080 tester kit-test-pw "$OUT"
+node "$KIT/test/wasm-session.mjs" "${PAGE_URL:-http://127.0.0.1:8199/index.html}" 127.0.0.1:6080 \
+    tester kit-test-pw "$OUT"
 sleep 2
 pass=0; fail=0
 check() { if eval "$2"; then echo "PASS  $1"; pass=$((pass + 1)); else echo "FAIL  $1"; fail=$((fail + 1)); fi; }
