@@ -53,9 +53,12 @@ if (!/^http:\/\/(127\.0\.0\.1|localhost)[:/]/.test(url)) {
     bws.addEventListener("message", e => { const m = JSON.parse(e.data); if (m.id === i) r(m); });
     bws.send(JSON.stringify({ id: i, method, params }));
   });
-  for (const name of ["local-network-access", "loopback-network", "local-network"])
-    await bsend("Browser.setPermission", { permission: { name }, setting: "granted", origin: new URL(url).origin });
-  console.log(`granted local network access to ${new URL(url).origin}`);
+  // for both schemes: a site may redirect http:// to https://
+  const host = new URL(url).host;
+  for (const origin of [`https://${host}`, `http://${host}`])
+    for (const name of ["local-network-access", "loopback-network", "local-network"])
+      await bsend("Browser.setPermission", { permission: { name }, setting: "granted", origin });
+  console.log(`granted local network access to ${host}`);
 }
 
 await send("Runtime.enable"); await send("Page.enable"); await send("Log.enable");

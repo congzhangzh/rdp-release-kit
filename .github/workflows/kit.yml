@@ -236,10 +236,11 @@ jobs:
           done
           echo "the new page did not appear at $URL" >&2; exit 1
 
+      # deploy-pages reports http://, the site redirects to https://
       - name: Log in from the published page
         env:
-          PAGE_URL: ${{ needs.pages.outputs.url }}index.html
-        run: test/wasm-session.sh - page/rdp-gateway.sh
+          URL: ${{ needs.pages.outputs.url }}
+        run: PAGE_URL="${URL/#http:/https:}index.html" test/wasm-session.sh - page/rdp-gateway.sh
 
       - name: Keep the logs and screenshot
         if: always()
