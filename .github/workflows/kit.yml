@@ -154,7 +154,8 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: 24
-      - uses: astral-sh/setup-uv@v10
+      # setup-uv publishes no vN alias any more: pinned by commit
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
 
       # The page from a static server without COOP/COEP (as Pages), the
       # gateway from the page's own rdp-gateway.sh, a login to xrdp
