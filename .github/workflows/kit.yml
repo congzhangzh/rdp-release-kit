@@ -177,9 +177,12 @@ jobs:
             dist/wasm/*.zip.sha256
           if-no-files-found: error
 
+      # .well-known/ holds the page's manifest (its version, the app's
+      # identity); the action leaves out hidden directories unless asked
       - uses: actions/upload-pages-artifact@v5
         with:
           path: dist/wasm/web
+          include-hidden-files: true
 
       - name: Keep the browser test's logs and screenshot
         if: always()
