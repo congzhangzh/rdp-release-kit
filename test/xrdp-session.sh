@@ -30,7 +30,8 @@ NO_SWAY=
 # Fedora's sway carries the file capability cap_sys_nice (to raise its
 # own priority); a container lacking it in its bounding set cannot exec it
 CAPS=()
-[ -n "$SUFFIX" ] && CAPS=(--cap-add SYS_NICE)
+# (NO_SYS_NICE=1 leaves it out, to see how sesman reports the failure)
+[ -n "$SUFFIX" ] && [ -z "${NO_SYS_NICE:-}" ] && CAPS=(--cap-add SYS_NICE)
 # FORCE_SWAY=1 tries it anyway (to see how the module reports the failure)
 [ -n "${FORCE_SWAY:-}" ] && NO_SWAY=
 # outside the packages' directory, which the build container made
