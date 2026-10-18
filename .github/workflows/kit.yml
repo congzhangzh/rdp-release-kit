@@ -139,6 +139,8 @@ jobs:
   wasm:
     needs: [xrdp]
     runs-on: ubuntu-24.04
+    permissions:
+      contents: write   # the tested page goes to a pre-release, for freerdp-web
     steps:
       - uses: actions/checkout@v7
 
@@ -169,6 +171,29 @@ jobs:
       # gateway from the page's own rdp-gateway.sh, a login to xrdp
       - name: Log in from the browser
         run: test/wasm-session.sh dist/wasm/web ~/.cache/rdp-release-kit/wasm/src/freerdp_web/rdp-gateway.sh
+
+      # freerdp-web publishes the page; it builds nothing. The tested client
+      # goes to a pre-release here, one per page commit, with the xrdp
+      # packages its check of the published site logs in to.
+      - name: Hand the tested page to freerdp-web
+        if: github.event_name != 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          page=$(awk '$1 == "freerdp_web" { print $4 }' sources.lock)
+          tag=web-${page:0:12}
+          mkdir -p dist/handoff
+          cp dist/wasm/freerdp-web-*.zip dist/handoff/freerdp-web-page.zip
+          echo "$GITHUB_SHA" > dist/handoff/KIT_COMMIT
+          (cd dist/handoff && sha256sum freerdp-web-page.zip > freerdp-web-page.zip.sha256)
+          notes="The web client for freerdp-web $page, built and tested (a browser login to xrdp over SSH) by rdp-release-kit $GITHUB_SHA. freerdp-web's workflow publishes it. Not a kit release."
+          if gh release view "$tag" > /dev/null 2>&1; then
+            gh release edit "$tag" --notes "$notes"
+          else
+            gh release create "$tag" --prerelease --latest=false --target "$GITHUB_SHA" \
+              --title "Web client for freerdp-web ${page:0:12}" --notes "$notes"
+          fi
+          gh release upload "$tag" --clobber dist/handoff/* dist/xrdp/debian-13/*.deb
 
       - uses: actions/upload-artifact@v7
         with:

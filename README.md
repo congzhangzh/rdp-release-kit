@@ -116,12 +116,14 @@ Podman, or more privileges than these containers get), and the next xrdp,
 with Xfce and with GNOME headless (gnome-shell without changes), next to
 today's gnome-remote-desktop baseline.
 
-The web client is published on freerdp-web's own GitHub Pages, by
-freerdp-web's workflow: it builds the page with this kit (at the commit in
-its `kit.lock`, with `PAGE_SRC` and `PAGE_REV`), tests it, and publishes
-only on purpose (a `v*` tag, or *Run workflow* with **publish**). This
-repository's Pages only redirect there, to the same origin, so saved hosts
-come along. A push to main or a pull request builds and tests only.
+The web client is published on freerdp-web's own GitHub Pages; this kit
+builds and tests it. On each push the wasm job hands the tested client of
+the pinned page over as a pre-release `web-<page commit>` (with the xrdp
+packages for the published site's login check); freerdp-web's workflow
+downloads it and publishes it, only on purpose (a `v*` tag there, or *Run
+workflow* with **publish**). This repository's Pages only redirect there, to
+the same origin, so saved hosts come along. A pull request builds and tests
+only.
 
 ## xrdp packages
 
