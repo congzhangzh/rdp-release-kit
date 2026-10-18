@@ -69,7 +69,7 @@ through a WebSocket gateway, best in one step over SSH with websockify on
 the server (nothing to install on your computer but ssh):
 
 ```sh
-ssh -t -L 127.0.0.1:3390:127.0.0.1:3390 user@server websockify 127.0.0.1:3390 127.0.0.1:3389
+ssh -tt -L 127.0.0.1:3390:127.0.0.1:3390 user@server websockify 127.0.0.1:3390 127.0.0.1:3389
 ```
 
 then connect the page to `127.0.0.1:3390`. From the published page, Chrome
