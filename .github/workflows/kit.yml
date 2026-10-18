@@ -4,14 +4,20 @@ name: kit
 # on the supported distributions) and Windows (x86_64, aarch64); builds the
 # xrdp packages for every release in distros.list, checks their
 # dependencies and logs in to each over RDP with that client; builds the web
-# client and logs in from a browser. main's tested page goes to GitHub
-# Pages; a v* tag publishes everything as a release.
+# client and logs in from a browser. A v* tag publishes everything as a
+# release and the tested page on GitHub Pages; a push to main only builds and
+# tests. The page can also be published by hand: Run workflow, with "publish".
 on:
   push:
     branches: [main]
     tags: ['v*']
   pull_request:
   workflow_dispatch:
+    inputs:
+      publish:
+        description: Publish the tested page on GitHub Pages
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -183,9 +189,10 @@ jobs:
           path: dist/test/
           if-no-files-found: ignore
 
-  # The tested page of the newest main goes to GitHub Pages
+  # The tested page goes to GitHub Pages only on purpose: from a v* tag, or
+  # from a run started by hand with "publish" (the branch or tag it runs on)
   pages:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.publish)
     needs: [wasm]
     runs-on: ubuntu-24.04
     permissions:
