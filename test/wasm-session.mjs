@@ -68,9 +68,8 @@ for (let i = 0; i < 100 && !isolated; i++) { await sleep(300); isolated = await 
 console.log(`cross-origin isolated: ${isolated}`);
 if (!isolated) done(1);
 
-// fill the form, wait until the WASM runtime is ready, then connect
-await ev(`document.getElementById('host').value = ${JSON.stringify(gateway)};
-          document.getElementById('user').value = ${JSON.stringify(user)}; true`);
+// wait until the WASM runtime is ready, then fill the form and connect: filled any earlier,
+// the page's own start (loading the remembered settings) can overwrite the fields
 let ready = false;
 for (let i = 0; i < 200 && !ready; i++) {
   await sleep(300);
@@ -78,7 +77,9 @@ for (let i = 0; i < 200 && !ready; i++) {
 }
 console.log(`client ready: ${ready}`);
 if (!ready) done(1);
-await ev(`document.getElementById('pass').value = ${JSON.stringify(password)}; document.getElementById('go').click(); true`);
+await ev(`document.getElementById('host').value = ${JSON.stringify(gateway)};
+          document.getElementById('user').value = ${JSON.stringify(user)};
+          document.getElementById('pass').value = ${JSON.stringify(password)}; document.getElementById('go').click(); true`);
 await sleep(25000);
 const shot = await send("Page.captureScreenshot", { format: "png" });
 writeFileSync(join(out, "wasm-session.png"), Buffer.from(shot.data, "base64"));
