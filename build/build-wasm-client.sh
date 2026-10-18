@@ -95,7 +95,7 @@ cmake --build "$WORK/build/freerdp" --target sdl3-freerdp >> "$WORK/log/freerdp.
 # --- the page: freerdp-web's web/ plus the client
 if [ -n "${PAGE_SRC:-}" ]; then
     page=$PAGE_SRC
-    page_rev="local checkout (not pinned)"
+    page_rev=${PAGE_REV:-"local checkout (not pinned)"}
 else
     page=$(unpack freerdp_web)
     page_rev=${SHA[freerdp_web]}

@@ -4,7 +4,8 @@
 #
 #   ./build-wasm.sh              dist/wasm/web/ (serve it) and dist/wasm/freerdp-web-<version>.zip
 #
-# PAGE_SRC=<dir> uses a local freerdp-web checkout for the page (not for
+# PAGE_SRC=<dir> uses a local freerdp-web checkout for the page (PAGE_REV=<commit>
+# names it in the MANIFEST; freerdp-web's own Pages build does that) (not for
 # releases). The work tree is kept in ~/.cache/rdp-release-kit/wasm.
 set -euo pipefail
 
@@ -23,7 +24,7 @@ owner() { case "$ENGINE" in *docker) echo "$(id -u):$(id -g)" ;; esac; }
 
 PAGE=()
 if [ -n "${PAGE_SRC:-}" ]; then
-    PAGE=(-v "$(cd "$PAGE_SRC" && pwd)":/page:ro -e PAGE_SRC=/page)
+    PAGE=(-v "$(cd "$PAGE_SRC" && pwd)":/page:ro -e PAGE_SRC=/page -e PAGE_REV="${PAGE_REV:-}")
 fi
 # the single quotes are for the container's shell
 # shellcheck disable=SC2016

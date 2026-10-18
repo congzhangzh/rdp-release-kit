@@ -5,8 +5,9 @@ name: kit
 # xrdp packages for every release in distros.list, checks their
 # dependencies and logs in to each over RDP with that client; builds the web
 # client and logs in from a browser. A v* tag publishes everything as a
-# release and the tested page on GitHub Pages; a push to main only builds and
-# tests. The page can also be published by hand: Run workflow, with "publish".
+# release; a push to main only builds and tests. The web client itself is
+# published on freerdp-web's own Pages; this repository's Pages only redirect
+# there (with a v* tag, or Run workflow with "publish").
 on:
   push:
     branches: [main]
@@ -15,7 +16,7 @@ on:
   workflow_dispatch:
     inputs:
       publish:
-        description: Publish the tested page on GitHub Pages
+        description: Publish the Pages redirect to freerdp-web's site
         type: boolean
         default: false
 
@@ -177,12 +178,17 @@ jobs:
             dist/wasm/*.zip.sha256
           if-no-files-found: error
 
-      # .well-known/ holds the page's manifest (its version, the app's
-      # identity); the action leaves out hidden directories unless asked
+      # The web client is published on freerdp-web's own Pages; this site
+      # only sends its visitors there (same origin: their hosts come along)
+      - name: The redirect to freerdp-web's site
+        run: |
+          mkdir -p dist/pages
+          for f in index.html install.html safety.html keyboard.html; do
+            cp test/pages-redirect.html "dist/pages/$f"
+          done
       - uses: actions/upload-pages-artifact@v5
         with:
-          path: dist/wasm/web
-          include-hidden-files: true
+          path: dist/pages
 
       - name: Keep the browser test's logs and screenshot
         if: always()
@@ -210,55 +216,20 @@ jobs:
     outputs:
       url: ${{ steps.deploy.outputs.page_url }}
 
-  # Logs in from the published page, as a user would (granting Chrome's
-  # local network permission), once the new page is being served
+  # The published redirect points to freerdp-web's site
   pages-check:
     needs: [pages]
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v7
-
-      - uses: actions/download-artifact@v8
-        with:
-          name: xrdp-debian-13
-          path: dist/xrdp
-
-      - uses: actions/setup-node@v7
-        with:
-          node-version: 24
-      # setup-uv publishes no vN alias any more: pinned by commit
-      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
-
-      - name: The page's rdp-gateway.sh, at the pinned commit
-        run: |
-          sha=$(awk '$1 == "freerdp_web" { print $4 }' sources.lock)
-          git clone -q https://github.com/congzhangzh/freerdp-web.git page
-          git -C page -c advice.detachedHead=false checkout -q "$sha"
-
-      - name: Wait until the new page is served
+      - name: The redirect is served
         env:
           URL: ${{ needs.pages.outputs.url }}
         run: |
-          sha=$(awk '$1 == "freerdp_web" { print $4 }' sources.lock)
-          for i in $(seq 60); do
-            curl -fsSL "${URL}MANIFEST" 2> /dev/null | grep -q "$sha" && exit 0
+          for i in $(seq 30); do
+            curl -fsSL "${URL}index.html" 2> /dev/null | grep -q 'freerdp-web/' && exit 0
             sleep 10
           done
-          echo "the new page did not appear at $URL" >&2; exit 1
-
-      # deploy-pages reports http://, the site redirects to https://
-      - name: Log in from the published page
-        env:
-          URL: ${{ needs.pages.outputs.url }}
-        run: PAGE_URL="${URL/#http:/https:}index.html" test/wasm-session.sh - page/rdp-gateway.sh
-
-      - name: Keep the logs and screenshot
-        if: always()
-        uses: actions/upload-artifact@v7
-        with:
-          name: test-pages
-          path: dist/test/
-          if-no-files-found: ignore
+          echo "the redirect did not appear at $URL" >&2; exit 1
 
   release:
     if: startsWith(github.ref, 'refs/tags/v')
