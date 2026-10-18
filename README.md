@@ -109,6 +109,11 @@ into the repository. Everything else is synthetic: the user, the password,
 the throwaway server. Chrome runs muted, so nothing plays on this
 computer's speakers; `KEEP=1` leaves the server running to look inside.
 
+Demos to come: xrdp with GNOME on Xorg (its session needs systemd as PID 1:
+Podman, or more privileges than these containers get), and the next xrdp,
+with Xfce and with GNOME headless (gnome-shell without changes), next to
+today's gnome-remote-desktop baseline.
+
 The page is published on GitHub Pages only on purpose: with a `v*` tag
 (together with the release), or with *Run workflow* and **publish**
 ticked. A push to main or a pull request builds and tests it only.
