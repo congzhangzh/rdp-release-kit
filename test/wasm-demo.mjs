@@ -8,21 +8,32 @@
 //
 // The visit: the page and its safety notice, the one-line SSH command, the
 // form, the session settings, Connect, typing in a terminal on the remote
-// desktop, the Info panel, Disconnect. No clipboard permission is granted, so
-// the page never touches a real clipboard.
+// desktop, then, in Firefox there, web video with sound (Big Buck Bunny) next
+// to a WebGL scene (the WebGL Aquarium), started by typing "webdemo", the Info
+// panel, Disconnect. On GNOME, GNOME Console is started from the search, as a
+// user would. DEMO_LABEL names the remote desktop in a corner label.
+//
+// Sound: the page plays the session's sound with Web Audio; for the recording
+// only, everything it sends to the speakers is also copied to a MediaRecorder,
+// and that track joins the video at its measured offset. No clipboard
+// permission is granted, so the page never touches a real clipboard.
 import { spawn, spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 
 const [url, gateway, user, password, out, video] = process.argv.slice(2);
-const W = 1280, H = 720;
+const W = 1920, H = 1080;
+const GNOME = process.env.SERVER === "gnome";   // wasm-session.sh's server: GNOME or xrdp
+const LABEL = process.env.DEMO_LABEL ||
+  (GNOME ? "gnome-remote-desktop + GNOME Wayland" : "xrdp + Xfce");
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const profile = mkdtempSync(join(tmpdir(), "wasm-demo-"));
 const frames = join(out, "demo-frames");
 rmSync(frames, { recursive: true, force: true }); mkdirSync(frames, { recursive: true });
 const chrome = spawn("google-chrome", ["--headless=new", "--remote-debugging-port=9348",
   `--user-data-dir=${profile}`, "--no-first-run", `--window-size=${W},${H}`, "--hide-scrollbars",
+  "--mute-audio",   // the session's sound stays in the recording, off this computer's speakers
   "--enable-unsafe-swiftshader", "about:blank"], { stdio: "ignore" });
 const done = code => {
   chrome.once("exit", () => { rmSync(profile, { recursive: true, force: true }); process.exit(code); });
@@ -64,8 +75,13 @@ const OVERLAY = `(() => {
   const cap = document.createElement("div"); cap.id = "demoCaption";
   cap.style.cssText = "position:fixed;left:50%;bottom:28px;transform:translateX(-50%);z-index:2147483646;pointer-events:none;" +
     "max-width:80vw;padding:10px 18px;border-radius:8px;background:rgba(15,22,30,.88);color:#fff;" +
-    "font:500 19px/1.35 system-ui,sans-serif;text-align:center;transition:opacity .25s;opacity:0";
+    "font:500 24px/1.35 system-ui,sans-serif;text-align:center;transition:opacity .25s;opacity:0";
   document.body.append(cap);
+  const tag = document.createElement("div"); tag.id = "demoLabel";
+  tag.style.cssText = "position:fixed;right:18px;bottom:18px;z-index:2147483646;pointer-events:none;padding:6px 12px;" +
+    "border-radius:6px;background:rgba(47,111,222,.92);color:#fff;font:600 16px/1.3 system-ui,sans-serif";
+  tag.textContent = ${JSON.stringify(LABEL)};
+  document.body.append(tag);
   const xy = window.__demoXY ||= { x: innerWidth * 0.62, y: innerHeight * 0.55 };
   svg.style.transform = "translate(" + xy.x + "px," + xy.y + "px)";
   window.__demoMove = (x, y, ms) => new Promise(done => {
@@ -80,6 +96,34 @@ const OVERLAY = `(() => {
   });
   window.__demoCaption = text => { cap.textContent = text; cap.style.opacity = text ? "1" : "0"; return true; };
   return true;
+})()`;
+// the recording's sound: a copy of everything the page plays (installed before the page's
+// scripts run); __demoRecord starts it once the session's AudioContext exists
+const AUDIO_TAP = `(() => {
+  const AC = window.AudioContext; if (!AC) return;
+  const connect = AudioNode.prototype.connect;
+  window.AudioContext = class extends AC {
+    constructor(...a) { super(...a); this.__demoTap = this.createMediaStreamDestination(); window.__demoCtx = this; }
+  };
+  AudioNode.prototype.connect = function (dest, ...rest) {
+    const r = connect.call(this, dest, ...rest);
+    if (dest instanceof AudioDestinationNode && dest.context.__demoTap) connect.call(this, dest.context.__demoTap, ...rest);
+    return r;
+  };
+  window.__demoRecord = () => {
+    const ctx = window.__demoCtx; if (!ctx) return 0;
+    const rec = new MediaRecorder(ctx.__demoTap.stream, { mimeType: "audio/webm;codecs=opus", audioBitsPerSecond: 128000 });
+    const chunks = []; rec.ondataavailable = e => chunks.push(e.data); rec.start(1000);
+    window.__demoStop = () => new Promise(done => {
+      rec.onstop = async () => {
+        const b = new Uint8Array(await new Blob(chunks).arrayBuffer()); let s = "";
+        for (let i = 0; i < b.length; i += 0x8000) s += String.fromCharCode(...b.subarray(i, i + 0x8000));
+        done(btoa(s));
+      };
+      rec.stop();
+    });
+    return Date.now();
+  };
 })()`;
 const caption = text => ev(`window.__demoCaption(${JSON.stringify(text)})`);
 const center = async sel => ev(`(() => { const r = document.querySelector(${JSON.stringify(sel)}).getBoundingClientRect();
@@ -98,6 +142,7 @@ async function typeInPage(text, ms = 85) {   // into the focused form field
 }
 // into the remote desktop: real key events, which the client reads by their code
 function key(ch) {
+  if (ch === "\u2318") return { key: "Meta", code: "MetaLeft", vk: 91 };   // Super: GNOME's overview
   if (ch === "\n") return { key: "Enter", code: "Enter", vk: 13, text: "\r" };
   if (ch === " ") return { key: " ", code: "Space", vk: 32, text: " " };
   if (/[a-z]/.test(ch)) return { key: ch, code: "Key" + ch.toUpperCase(), vk: ch.toUpperCase().charCodeAt(0), text: ch };
@@ -107,7 +152,7 @@ function key(ch) {
 async function typeRemote(text, ms = 110) {
   for (const ch of text) {
     const k = key(ch);
-    await send("Input.dispatchKeyEvent", { type: "keyDown", key: k.key, code: k.code, windowsVirtualKeyCode: k.vk, text: k.text });
+    await send("Input.dispatchKeyEvent", { type: k.text ? "keyDown" : "rawKeyDown", key: k.key, code: k.code, windowsVirtualKeyCode: k.vk, text: k.text });
     await send("Input.dispatchKeyEvent", { type: "keyUp", key: k.key, code: k.code, windowsVirtualKeyCode: k.vk });
     await sleep(ms);
   }
@@ -123,6 +168,7 @@ async function load() {   // (re)loaded page: wait for isolation and the client,
 const record = () => send("Page.startScreencast", { format: "jpeg", quality: 88, maxWidth: W, maxHeight: H, everyNthFrame: 1 });
 
 await send("Runtime.enable"); await send("Page.enable");
+await send("Page.addScriptToEvaluateOnNewDocument", { source: AUDIO_TAP });
 await send("Emulation.setDeviceMetricsOverride", { width: W, height: H, deviceScaleFactor: 1, mobile: false });
 await send("Page.navigate", { url });
 if (!await load()) { console.log("the page did not get ready"); done(1); }
@@ -160,6 +206,7 @@ await sleep(600);
 // 4. connect
 await caption("Connect");
 await clickOn("#go");
+const audioStart = await ev("window.__demoRecord ? window.__demoRecord() : 0");   // epoch ms, 0: no sound
 let rx = 0;
 for (let i = 0; i < 80 && rx < 300000; i++) { await sleep(500); rx = await ev("window.freerdpNet?.rx ?? 0"); }
 await caption("The remote Linux desktop, over WebSocket and SSH");
@@ -167,7 +214,15 @@ await sleep(7000);   // the desktop starts, then its terminal
 
 // 5. use it
 const canvas = await ev(`(() => { const r = document.getElementById('canvas').getBoundingClientRect(); return { x: r.left, y: r.top }; })()`);
-await click(Math.round(canvas.x + 300), Math.round(canvas.y + 200));
+if (GNOME) {   // GNOME starts in the overview: typing searches, Enter starts the app
+  await ev("document.getElementById('canvas').focus(), true");
+  await caption("GNOME on Wayland: type to search, Enter to start");
+  await sleep(1500);
+  await typeRemote("console\n");   // GNOME starts in the overview: typing goes to its search
+  await sleep(4000);
+} else {
+  await click(Math.round(canvas.x + 300), Math.round(canvas.y + 200));
+}
 await caption("Keyboard and mouse go to the remote desktop");
 await sleep(600);
 await typeRemote("echo hello from the browser\n");
@@ -179,11 +234,23 @@ await sleep(2400);
 const shot = await send("Page.captureScreenshot", { format: "png" });   // for wasm-session.sh's check
 writeFileSync(join(out, "wasm-session.png"), Buffer.from(shot.data, "base64"));
 
-// 6. info, then disconnect
+// 6. web video with sound and WebGL, in Firefox on the server, started by typing "webdemo"
+await caption("Web video with sound, and WebGL: Firefox on the server");
+await typeRemote("webdemo\n");
+await sleep(14000);
+await caption("Big Buck Bunny, © Blender Foundation, CC BY 3.0 · WebGL Aquarium, © Google, BSD");
+await sleep(8000);
+await caption("Drawn on the server, streamed to this browser, sound included");
+await sleep(6000);
+
+// 7. info, then disconnect
 await clickOn("#tbInfo");
-await caption("Info: codec, frame rate, bandwidth");
-await sleep(4200);
+await caption("Info: codecs, frame rate, bandwidth, sound");
+await sleep(4500);
+const infoText = await ev("document.getElementById('infoTable').innerText");
+console.log("info at the end:\n" + infoText.split("\n").filter(l => /Video|Audio|AV1 frames|Network in/.test(l)).join("\n"));
 await clickOn("#tbInfo");
+const audio = audioStart ? await ev("window.__demoStop ? window.__demoStop() : ''") : "";
 await caption("Disconnect ends the session. Then stop the gateway with Ctrl-C.");
 await sleep(1600);
 await clickOn("#tbQuit");
@@ -197,9 +264,17 @@ await send("Page.stopScreencast");
 const list = shots.map((s, i) => `file '${s.file}'\nduration ${((shots[i + 1]?.t ?? s.t + 1) - s.t).toFixed(3)}`).join("\n")
   + `\nfile '${shots.at(-1).file}'\n`;
 writeFileSync(join(frames, "list.txt"), list);
+// the sound joins at the time it started, relative to the first frame
+const sound = [];
+if (audio) {
+  writeFileSync(join(frames, "sound.webm"), Buffer.from(audio, "base64"));
+  sound.push("-itsoffset", (audioStart / 1000 - shots[0].t).toFixed(3), "-i", join(frames, "sound.webm"));
+}
 const ff = spawnSync("ffmpeg", ["-y", "-loglevel", "error", "-f", "concat", "-safe", "0", "-i", join(frames, "list.txt"),
+  ...sound, "-map", "0:v", ...(audio ? ["-map", "1:a", "-c:a", "aac", "-b:a", "160k"] : []),
   "-vf", `fps=30,scale=${W}:${H}:flags=lanczos,format=yuv420p`, "-c:v", "libx264", "-crf", "22", "-preset", "slow",
   "-movflags", "+faststart", video], { stdio: "inherit" });
-console.log(`demo: ${shots.length} frames, ${(shots.at(-1).t - shots[0].t).toFixed(1)} s -> ${video} (ffmpeg ${ff.status})`);
+console.log(`demo: ${shots.length} frames, ${(shots.at(-1).t - shots[0].t).toFixed(1)} s, ` +
+  `sound ${audio ? Math.round(audio.length * 0.75 / 1024) + " KB" : "none"} -> ${video} (ffmpeg ${ff.status})`);
 rmSync(frames, { recursive: true, force: true });
 done(ff.status === 0 ? 0 : 1);

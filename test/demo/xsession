@@ -1,0 +1,15 @@
+#!/bin/sh
+# The demo's desktop session on the throwaway server. There is no logind or
+# systemd there, so the session starts its own bus and PipeWire, loads
+# PipeWire's xrdp module (it plays the sound on the client), then Xfce with
+# a terminal.
+XDG_RUNTIME_DIR=/tmp/runtime-$(id -u); export XDG_RUNTIME_DIR
+mkdir -p "$XDG_RUNTIME_DIR" && chmod 700 "$XDG_RUNTIME_DIR"
+eval "$(dbus-launch --sh-syntax)"
+pipewire &
+sleep 1
+wireplumber &
+pipewire-pulse &
+(sleep 3; exec /usr/libexec/pipewire-module-xrdp/load_pw_modules.sh) &
+(sleep 5; exec xfce4-terminal --geometry=78x16+60+60) &
+exec startxfce4

@@ -1,0 +1,14 @@
+#!/bin/sh
+# The container's entry: sshd (the only way in), then tester's GNOME session
+mkdir -p /run/sshd && /usr/sbin/sshd
+# Xwayland's socket directory, as an init system would make it
+mkdir -p /tmp/.X11-unix && chmod 1777 /tmp/.X11-unix
+# a system bus, as an init system would start it; and no stale systemd state in /run, so
+# GNOME Shell does not look for logind (it checks /run/systemd/seats)
+rm -rf /run/systemd
+mkdir -p /run/dbus && dbus-daemon --system --fork
+runuser -u tester -- /usr/local/bin/session &
+# stay up when the session ends, so its logs (/tmp/*.log) can still be read
+wait
+echo "the session ended" > /tmp/session-ended
+exec sleep infinity

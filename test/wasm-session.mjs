@@ -13,7 +13,7 @@ const [url, gateway, user, password, out] = process.argv.slice(2);
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const profile = mkdtempSync(join(tmpdir(), "wasm-session-"));
 const chrome = spawn("google-chrome", ["--headless=new", "--remote-debugging-port=9347",
-  `--user-data-dir=${profile}`, "--no-first-run", "--window-size=1280,900",
+  `--user-data-dir=${profile}`, "--no-first-run", "--window-size=1280,900", "--mute-audio",
   "--enable-unsafe-swiftshader", ...(process.env.CHROME_FLAGS ? process.env.CHROME_FLAGS.split(" ") : []),
   "about:blank"], { stdio: "ignore" });
 // Chrome must be gone before its profile can be removed

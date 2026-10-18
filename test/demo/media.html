@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Web video and WebGL</title>
+<!-- the demo's page on the remote desktop: an HTML5 video with sound next to a WebGL scene -->
+<style>
+  body { margin:0; height:100vh; display:grid; grid-template-columns:1fr 1fr; gap:10px; padding:10px;
+         box-sizing:border-box; background:#15191e; color:#cfd6dd; font:15px/1.4 sans-serif; }
+  figure { margin:0; display:flex; flex-direction:column; min-height:0; }
+  video, iframe { flex:1; min-height:0; width:100%; border:0; background:#000; }
+  figcaption { padding:6px 2px 0; }
+</style>
+</head>
+<body>
+<figure>
+  <video src="bunny.webm" autoplay loop></video>
+  <figcaption>Web video (VP9, Opus): Big Buck Bunny, © Blender Foundation, CC BY 3.0</figcaption>
+</figure>
+<figure>
+  <iframe src="webgl/aquarium/aquarium.html?numFish=100"></iframe>
+  <figcaption>WebGL: the WebGL Aquarium, © Google, BSD license</figcaption>
+</figure>
+</body>
+</html>

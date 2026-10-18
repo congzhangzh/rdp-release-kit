@@ -1,0 +1,16 @@
+#!/bin/sh
+# tester's session: a bus, PipeWire (GRD sends its sound to the client),
+# GNOME Shell headless on Wayland (no monitor of its own: the one gnome-remote-desktop
+# makes for the client is the only, primary one, with the top bar), then
+# gnome-remote-desktop on the same bus
+XDG_RUNTIME_DIR=/tmp/runtime-$(id -u); export XDG_RUNTIME_DIR
+mkdir -p "$XDG_RUNTIME_DIR" && chmod 700 "$XDG_RUNTIME_DIR"
+cd "$HOME" || exit 1
+# shellcheck disable=SC2016 # for the inner shell
+exec dbus-run-session -- sh -c '
+    pipewire & sleep 1; wireplumber & pipewire-pulse &
+    gnome-shell --headless --wayland > /tmp/gnome-shell.log 2>&1 &
+    sleep 6
+    # what gnome-session does: apps started over D-Bus (GNOME Console) get the displays
+    dbus-update-activation-environment WAYLAND_DISPLAY=wayland-0 DISPLAY=:0 XDG_SESSION_TYPE=wayland
+    exec /usr/libexec/gnome-remote-desktop-daemon --headless > /tmp/grd.log 2>&1'

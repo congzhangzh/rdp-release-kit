@@ -88,12 +88,26 @@ instead, granting the local network permission as a user would; CI does
 that after every deploy. The test's ssh ignores your `~/.ssh/config`, so
 nothing of yours (agent, keys, proxies) reaches the throwaway server.
 
-`DEMO_VIDEO=demo.mp4 test/wasm-session.sh …` records a demo instead: the
-server gets an Xfce desktop, and `test/wasm-demo.mjs` plays a visit (the
-page, the SSH line, the form, the settings, a session with typing, Info,
-Disconnect) with a pointer and captions, captured by Chrome's screencast
-and encoded by ffmpeg. Everything in it is synthetic: the user, the
-password, the throwaway server.
+`SERVER=gnome test/wasm-session.sh …` logs in to GNOME on Wayland instead:
+gnome-shell headless with gnome-remote-desktop, in an unprivileged container
+(`test/gnome/`; no systemd: the session starts its own bus and PipeWire). Its
+client connects without the clipboard channel, because gnome-remote-desktop
+aborts when it cannot mount its FUSE clipboard, and a container has no
+`/dev/fuse`.
+
+`DEMO_VIDEO=demo.mp4 test/wasm-session.sh …` (with or without `SERVER=gnome`)
+records a demo instead, at 1920 × 1080 with sound: `test/wasm-demo.mjs`
+plays a visit (the page, the SSH line, the form, the settings, a session,
+typing in a terminal, then `webdemo`: Firefox on the server with web video
+next to WebGL, Info, Disconnect), with a pointer, captions and a corner label
+(`xrdp + Xfce`, `gnome-remote-desktop + GNOME Wayland`). Chrome's screencast
+records the picture; a copy of the page's Web Audio output records the
+sound; ffmpeg joins them. The media, Big Buck Bunny (© Blender Foundation,
+CC BY 3.0) and the WebGL Aquarium (© Google, BSD), are fetched once by
+`test/demo-assets.sh` into `~/.cache/rdp-release-kit/demo`, pinned, never
+into the repository. Everything else is synthetic: the user, the password,
+the throwaway server. Chrome runs muted, so nothing plays on this
+computer's speakers; `KEEP=1` leaves the server running to look inside.
 
 The page is published on GitHub Pages only on purpose: with a `v*` tag
 (together with the release), or with *Run workflow* and **publish**
