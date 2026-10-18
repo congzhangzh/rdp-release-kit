@@ -85,7 +85,19 @@ and an RDP server reachable only through SSH (the kit's xrdp in a
 disposable container); it passes when the browser's login starts an Xorg
 session on the server. With `PAGE_URL=` it tests the published page
 instead, granting the local network permission as a user would; CI does
-that after every deploy.
+that after every deploy. The test's ssh ignores your `~/.ssh/config`, so
+nothing of yours (agent, keys, proxies) reaches the throwaway server.
+
+`DEMO_VIDEO=demo.mp4 test/wasm-session.sh …` records a demo instead: the
+server gets an Xfce desktop, and `test/wasm-demo.mjs` plays a visit (the
+page, the SSH line, the form, the settings, a session with typing, Info,
+Disconnect) with a pointer and captions, captured by Chrome's screencast
+and encoded by ffmpeg. Everything in it is synthetic: the user, the
+password, the throwaway server.
+
+The page is published on GitHub Pages only on purpose: with a `v*` tag
+(together with the release), or with *Run workflow* and **publish**
+ticked. A push to main or a pull request builds and tests it only.
 
 ## xrdp packages
 
