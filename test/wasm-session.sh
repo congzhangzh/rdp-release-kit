@@ -37,10 +37,13 @@ echo "== server: sshd + xrdp on 127.0.0.1 only"
 "$ENGINE" rm -f "$NAME" > /dev/null 2>&1
 "$ENGINE" run -d --name "$NAME" -p 127.0.0.1:2223:22 -v "$OUT/ssh/key.pub":/key.pub:ro \
     -v "$PKGS":/pkgs:ro debian:13 sleep 3600 > /dev/null
+ls "$PKGS"/xrdp_*.deb "$PKGS"/xorgxrdp_*.deb > /dev/null || { echo "no xrdp packages in $PKGS" >&2; exit 1; }
 "$ENGINE" exec "$NAME" bash -c '
+    set -e
     export DEBIAN_FRONTEND=noninteractive
     apt-get update -qq > /dev/null
-    apt-get install -y -qq openssh-server websockify xterm /pkgs/*.deb > /dev/null 2>&1
+    apt-get install -y -qq openssh-server websockify xterm /pkgs/*.deb > /tmp/apt.log 2>&1 ||
+        { tail -20 /tmp/apt.log; exit 1; }
     useradd -m -s /bin/bash tester && echo tester:kit-test-pw | chpasswd
     install -d -m 700 -o tester -g tester /home/tester/.ssh
     install -m 600 -o tester -g tester /key.pub /home/tester/.ssh/authorized_keys
@@ -48,7 +51,7 @@ echo "== server: sshd + xrdp on 127.0.0.1 only"
     sed -i "/^\[Globals\]/,/^\[/ s|^port=.*|port=tcp://.:3389|" /etc/xrdp/xrdp.ini
     mkdir -p /run/sshd && /usr/sbin/sshd
     (xrdp-sesman --nodaemon > /tmp/sesman.out 2>&1 &); (xrdp --nodaemon > /tmp/xrdp.out 2>&1 &)
-    sleep 3'
+    sleep 3' || { echo "the test server could not be set up" >&2; exit 1; }
 
 echo "== gateway: rdp-gateway.sh tester@127.0.0.1 (one step)"
 script -q -c "$GATEWAY tester@127.0.0.1" /dev/null > "$OUT/gateway.log" 2>&1 &

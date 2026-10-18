@@ -144,11 +144,12 @@ jobs:
       - name: Build
         run: ./build-wasm.sh
 
+      # the artifact keeps its debian-13/ directory
       - name: The xrdp packages, for the login test's server
         uses: actions/download-artifact@v8
         with:
           name: xrdp-debian-13
-          path: dist/xrdp/debian-13
+          path: dist/xrdp
 
       # the test driver uses Node's WebSocket (Node 22+); its checks use uvx
       - uses: actions/setup-node@v7
