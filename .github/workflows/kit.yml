@@ -1,9 +1,11 @@
 name: kit
 
 # Builds the portable SDL3 FreeRDP client for Linux (x86_64, aarch64; run
-# on the supported distributions) and Windows (x86_64, aarch64); builds the xrdp packages for every
-# release in distros.list, checks their dependencies and logs in to each
-# over RDP with that client; publishes all of it on a v* tag.
+# on the supported distributions) and Windows (x86_64, aarch64); builds the
+# xrdp packages for every release in distros.list, checks their
+# dependencies and logs in to each over RDP with that client; builds the web
+# client and logs in from a browser. main's tested page goes to GitHub
+# Pages; a v* tag publishes everything as a release.
 on:
   push:
     branches: [main]
@@ -127,9 +129,76 @@ jobs:
           path: dist/test/
           if-no-files-found: ignore
 
+  wasm:
+    needs: [xrdp]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Cache sources
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/rdp-release-kit/sources
+          key: sources-${{ hashFiles('sources.lock') }}
+
+      - name: Build
+        run: ./build-wasm.sh
+
+      - name: The xrdp packages, for the login test's server
+        uses: actions/download-artifact@v8
+        with:
+          name: xrdp-debian-13
+          path: dist/xrdp/debian-13
+
+      # the test driver uses Node's WebSocket (Node 22+); its checks use uvx
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - uses: astral-sh/setup-uv@v10
+
+      # The page from a static server without COOP/COEP (as Pages), the
+      # gateway from the page's own rdp-gateway.sh, a login to xrdp
+      - name: Log in from the browser
+        run: test/wasm-session.sh dist/wasm/web ~/.cache/rdp-release-kit/wasm/src/freerdp_web/rdp-gateway.sh
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: freerdp-web
+          path: |
+            dist/wasm/*.zip
+            dist/wasm/*.zip.sha256
+          if-no-files-found: error
+
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: dist/wasm/web
+
+      - name: Keep the browser test's logs and screenshot
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-wasm
+          path: dist/test/
+          if-no-files-found: ignore
+
+  # The tested page of the newest main goes to GitHub Pages
+  pages:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [wasm]
+    runs-on: ubuntu-24.04
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - id: deploy
+        uses: actions/deploy-pages@v5
+
   release:
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: [build, windows, xrdp]
+    needs: [build, windows, xrdp, wasm]
     runs-on: ubuntu-24.04
     permissions:
       contents: write
