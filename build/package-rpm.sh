@@ -7,6 +7,14 @@
 # requires the Xorg video driver ABI it was built for. Host keys are made
 # in %post.
 set -euo pipefail
+# what the packages are built from (FLAVOUR is set by build-xrdp-pkg.sh)
+if [ "${FLAVOUR:-stable}" = preview ]; then
+    FROM="as a PREVIEW of its development branch, not a release"
+    EXTRAS=" Wayland sessions (sway, GNOME) and AV1."
+else
+    FROM="from the upstream release"
+    EXTRAS=
+fi
 
 STAGE=$1
 OUT=$2
@@ -37,7 +45,7 @@ Requires: openssl
 Recommends: xorgxrdp
 
 %description
-xrdp from the upstream release, with H.264 (x264) and Opus built in.
+xrdp $FROM, with H.264 (x264) and Opus built in.$EXTRAS
 Services are not started on install. Keep it off the network: listen on
 127.0.0.1 (port=tcp://.:3389 in /etc/xrdp/xrdp.ini) and connect through
 an SSH tunnel.
@@ -49,7 +57,7 @@ License: MIT
 Requires: xrdp, xorg-x11-server-Xorg, $XORG_ABI_REQ
 
 %description -n xorgxrdp
-xorgxrdp from the upstream release, built for this distribution's Xorg
+xorgxrdp $FROM, built for this distribution's Xorg
 server ($XORG_ABI_REQ).
 
 %install

@@ -10,6 +10,14 @@
 # distributions (x264 is not in Fedora, for one) are built from
 # sources.lock and linked statically, so every package has the same
 # features. The result is <output dir>/<distro>/ with .deb or .rpm files.
+#
+# FLAVOUR=preview builds the xrdp preview instead: xrdp and xorgxrdp from
+# the development commits pinned as xrdp_preview / xorgxrdp_preview, with
+# the Wayland sessions (wlup) and AV1. Its version says so:
+# 0.10.80~preview.<preview number>.<commit>, which sorts before the release
+# 0.10.80. The preview number is the version column of the pin in
+# sources.lock (20261018.1, ...): raise it with every new pin, so newer
+# previews sort higher (a commit's date cannot: rebuilt stacks keep them).
 set -Eeuo pipefail
 
 KIT=$1
@@ -28,7 +36,10 @@ case " $ID ${ID_LIKE:-} " in
     *) echo "unsupported distribution: $PRETTY_NAME" >&2; exit 1 ;;
 esac
 # the build dependencies: the first word of each line in deps/<family>.txt
-mapfile -t BUILD_DEPS < <(grep -v -E '^\s*(#|$)' "$KIT/deps/$FAMILY.txt" | awk '{print $1}')
+export FLAVOUR=${FLAVOUR:-stable}
+DEPLISTS=("$KIT/deps/$FAMILY.txt")
+[ "$FLAVOUR" = preview ] && DEPLISTS+=("$KIT/deps/$FAMILY-preview.txt")
+mapfile -t BUILD_DEPS < <(grep -h -v -E '^\s*(#|$)' "${DEPLISTS[@]}" | awk '{print $1}')
 
 echo "== build dependencies ($PRETTY_NAME)"
 if [ $FAMILY = deb ]; then
@@ -71,21 +82,55 @@ else
     XORG=/usr/libexec/Xorg
 fi
 
-echo "== xrdp ${VERSION[xrdp]}"
-src=$(unpack xrdp)
+if [ "$FLAVOUR" = preview ]; then
+    XRDP=xrdp_preview
+    XORGXRDP=xorgxrdp_preview
+    # a git commit, not a release tarball: the submodules come separately
+    # and the configure scripts are generated
+    src=$(unpack $XRDP)
+    for sub in librfxcodec libpainter; do
+        rm -rf "${src:?}/$sub"
+        cp -a "$(unpack $sub)" "$src/$sub"
+    done
+    (cd "$src" && ./bootstrap) > "$WORK/log/bootstrap.log" 2>&1
+    base=$(sed -n 's/^AC_INIT(\[xrdp\], \[\([^]]*\)\].*/\1/p' "$src/configure.ac")
+    XRDP_VERSION=$base~preview.${VERSION[$XRDP]}.${SHA[$XRDP]:0:8}
+    EXTRA=(--enable-wlup --enable-av1)
+    # the GNOME backend needs libei and PipeWire (GNOME 46 and newer)
+    if pkg-config --exists libei-1.0 libpipewire-0.3 libsystemd; then
+        EXTRA+=(--enable-wlup-mutter)
+    fi
+    # an old warning in xrdp_mm.c, an error with -O2 on devel
+    CFLAGS="$CFLAGS -Wno-error=nonnull"
+else
+    XRDP=xrdp
+    XORGXRDP=xorgxrdp
+    src=$(unpack $XRDP)
+    XRDP_VERSION=${VERSION[xrdp]}
+    EXTRA=()
+fi
+
+echo "== $XRDP $XRDP_VERSION"
 rm -rf "$STAGE"
 (cd "$src" &&
  ./configure --prefix=/usr --sysconfdir=/etc --localstatedir=/var --libdir=$LIBDIR \
      --with-systemdsystemunitdir=/usr/lib/systemd/system --enable-pam-config=$PAM_CONFIG \
      --enable-fuse --enable-pixman --enable-jpeg --enable-opus --enable-x264 \
-     --enable-ipv6 --enable-vsock &&
+     --enable-ipv6 --enable-vsock "${EXTRA[@]}" &&
  make -j"$JOBS" && make install DESTDIR="$STAGE/xrdp") > "$WORK/log/xrdp.log" 2>&1
 grep -q -E "x264 +yes" "$WORK/log/xrdp.log"
 
 # xorgxrdp builds against the xrdp just staged: a copy of its .pc file
 # that points into the staging tree
-echo "== xorgxrdp ${VERSION[xorgxrdp]}"
-src=$(unpack xorgxrdp)
+src=$(unpack $XORGXRDP)
+if [ "$FLAVOUR" = preview ]; then
+    (cd "$src" && ./bootstrap) >> "$WORK/log/bootstrap.log" 2>&1
+    XORGXRDP_VERSION=$(sed -n 's/^AC_INIT(\[xorgxrdp\], \[\([^]]*\)\].*/\1/p' "$src/configure.ac")
+    XORGXRDP_VERSION=$XORGXRDP_VERSION~preview.${VERSION[$XORGXRDP]}.${SHA[$XORGXRDP]:0:8}
+else
+    XORGXRDP_VERSION=${VERSION[xorgxrdp]}
+fi
+echo "== $XORGXRDP $XORGXRDP_VERSION"
 mkdir -p "$WORK/pc"
 sed "s|^prefix=.*|prefix=$STAGE/xrdp/usr|" "$STAGE/xrdp$LIBDIR/pkgconfig/xrdp.pc" > "$WORK/pc/xrdp.pc"
 (cd "$src" &&
@@ -103,17 +148,19 @@ ARCH_DEB=$(dpkg --print-architecture 2> /dev/null || true)
 REL=0kit1
 
 echo "== package"
+# only this build's packages: an old build's would be installed with them
+rm -rf "${OUT:?}/$DISTRO"
 mkdir -p "$OUT/$DISTRO"
 if [ $FAMILY = deb ]; then
-    "$KIT/build/package-deb.sh" "$STAGE" "$OUT/$DISTRO" "${VERSION[xrdp]}-$REL~$DISTRO" \
-        "${VERSION[xorgxrdp]}-$REL~$DISTRO" "$ARCH_DEB" "$XORG_ABI" "$LIBDIR/xrdp" \
+    "$KIT/build/package-deb.sh" "$STAGE" "$OUT/$DISTRO" "$XRDP_VERSION-$REL~$DISTRO" \
+        "$XORGXRDP_VERSION-$REL~$DISTRO" "$ARCH_DEB" "$XORG_ABI" "$LIBDIR/xrdp" \
         > "$WORK/log/package.log" 2>&1
 else
     # an rpm Release may not contain '-': Fedora's dist tag, as in .fc44
-    "$KIT/build/package-rpm.sh" "$STAGE" "$OUT/$DISTRO" "${VERSION[xrdp]}" \
-        "${VERSION[xorgxrdp]}" "$REL.fc$VERSION_ID" "$LIBDIR" > "$WORK/log/package.log" 2>&1
+    "$KIT/build/package-rpm.sh" "$STAGE" "$OUT/$DISTRO" "$XRDP_VERSION" \
+        "$XORGXRDP_VERSION" "$REL.fc$VERSION_ID" "$LIBDIR" > "$WORK/log/package.log" 2>&1
 fi
-licenses "$OUT/$DISTRO/licenses" xrdp xorgxrdp x264 opus
+licenses "$OUT/$DISTRO/licenses" $XRDP $XORGXRDP x264 opus
 (cd "$OUT/$DISTRO" && sha256sum ./*.deb ./*.rpm 2> /dev/null > SHA256SUMS || true)
 echo "== done: $OUT/$DISTRO"
 ls "$OUT/$DISTRO"

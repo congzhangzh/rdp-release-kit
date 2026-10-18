@@ -1,0 +1,12 @@
+# What the xrdp preview needs on Fedora on top of rpm.txt: its Wayland
+# sessions (the wlup module: sway, and GNOME through Mutter's remote
+# desktop API) and AV1. Same format as rpm.txt.
+
+wayland-devel           wlup: Wayland client
+wayland-protocols-devel wlup: protocol definitions
+libxkbcommon-devel      wlup: keyboard layouts
+libxkbfile-devel        keyboard rules (configure checks it on devel)
+systemd-devel           wlup GNOME backend: the session's bus
+pipewire-devel          wlup GNOME backend: screen capture
+libei-devel             wlup GNOME backend: input (Mutter's ConnectToEIS)
+libaom-devel            AV1 encoder (FreeRDP's GFX AV1 extension)

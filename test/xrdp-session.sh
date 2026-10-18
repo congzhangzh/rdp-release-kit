@@ -3,22 +3,38 @@
 # logs in through RDP with the kit's portable client, and checks that an
 # Xorg session (xorgxrdp) with an xterm comes up:
 #
-#   test/xrdp-session.sh <image> [client archive]
+#   test/xrdp-session.sh [--preview] <image> [client archive]
 #
+# --preview tests the xrdp preview packages (dist/xrdp-preview/) instead.
 # The client defaults to the newest dist/sdl3-freerdp-*-linux-<arch>.tar.xz.
 # Logs and a screenshot go to dist/test/<release>/.
 set -uo pipefail
 
 KIT=$(cd "$(dirname "$0")/.." && pwd)
+SUFFIX=
+if [ "${1:-}" = --preview ]; then
+    shift
+    SUFFIX=-preview
+fi
 IMAGE=$1
 CLIENT=${2:-$(find "$KIT/dist" -maxdepth 1 -name "sdl3-freerdp-*-linux-$(uname -m).tar.xz" | sort -V | tail -1)}
 # docker first: the builds are tested with it (podman: see README)
 ENGINE=${ENGINE:-$(command -v docker || command -v podman)}
 # shellcheck disable=SC2016 # expanded by the container shell
 DISTRO=$("$ENGINE" run --rm "$IMAGE" sh -c '. /etc/os-release; echo "$ID-${VERSION_ID:-$VERSION_CODENAME}"')
-PKGS=$KIT/dist/xrdp/$DISTRO
+PKGS=$KIT/dist/xrdp$SUFFIX/$DISTRO
+# a release marked no-sway in distros-preview.list: skip the sway login
+NO_SWAY=
+[ -n "$SUFFIX" ] && awk -v i="$IMAGE" '$1 == i && $2 == "no-sway" { f = 1 } END { exit !f }' \
+    "$KIT/distros-preview.list" && NO_SWAY=1
+# Fedora's sway carries the file capability cap_sys_nice (to raise its
+# own priority); a container lacking it in its bounding set cannot exec it
+CAPS=()
+[ -n "$SUFFIX" ] && CAPS=(--cap-add SYS_NICE)
+# FORCE_SWAY=1 tries it anyway (to see how the module reports the failure)
+[ -n "${FORCE_SWAY:-}" ] && NO_SWAY=
 # outside the packages' directory, which the build container made
-OUT=$KIT/dist/test/$DISTRO
+OUT=$KIT/dist/test/$DISTRO$SUFFIX
 rm -rf "$OUT"
 mkdir -p "$OUT"
 
@@ -79,6 +95,43 @@ check "Xorg loaded the xorgxrdp drivers" \
 check "the session runs its xterm" 'pgrep -u tester xterm > /dev/null'
 check "the client shows more than one colour" \
     '[ "$(convert /out/screen.png -format "%k" info: 2> /dev/null)" -gt 2 ]'
+
+# The preview's Wayland session (wlup): sway, headless, for a second user,
+# picked with autorun; /bpp:24, because at 32 xrdp sends planar, which
+# FreeRDP cannot resize
+if [ -n "$NO_SWAY" ]; then
+    echo "SKIP  the Wayland (sway) login: this release's sway is older than 1.11"
+elif ls /usr/lib*/xrdp/libwlup.so > /dev/null 2>&1; then
+    echo "== Wayland session (sway)"
+    kill $CLIENT 2> /dev/null
+    if command -v apt-get > /dev/null; then
+        apt-get install -y -qq sway foot > /out/install-sway.log 2>&1
+    else
+        dnf -y -q install sway foot > /out/install-sway.log 2>&1
+    fi
+    useradd -m wayuser
+    echo 'wayuser:kit-test-pw' | chpasswd
+    mkdir -p /home/wayuser/.config/sway
+    printf 'exec foot\n' > /home/wayuser/.config/sway/config
+    chown -R wayuser: /home/wayuser/.config
+    printf '\n[Wayland]\nname=Wayland\nlib=libwlup.so\nusername=ask\npassword=ask\nport=-1\ncode=30\nxkb_layout=us\n' \
+        >> /etc/xrdp/xrdp.ini
+    sed -i '/^\[Globals\]/,/^\[/ s|^#\?autorun=.*|autorun=Wayland|' /etc/xrdp/xrdp.ini
+    pkill -x xrdp; sleep 1
+    xrdp --nodaemon > /out/xrdp-wayland.out 2>&1 &
+    sleep 3
+    DISPLAY=:9 "$client" /v:127.0.0.1 /u:wayuser /p:kit-test-pw /cert:ignore /size:1024x768 \
+        /bpp:24 > /out/client-wayland.log 2>&1 &
+    CLIENT=$!
+    sleep 20
+    DISPLAY=:9 import -window root /out/screen-wayland.png 2> /dev/null
+    check "the Wayland client is still connected" 'kill -0 $CLIENT'
+    check "sesman started sway for wayuser" 'pgrep -u wayuser -x sway > /dev/null'
+    check "wlup captures sway's output at the client's 1024x768" \
+        'grep -q "wlup: capture buffer 1024x768" /var/log/xrdp.log'
+    check "the session runs its foot terminal" 'pgrep -u wayuser -x foot > /dev/null'
+fi
+
 cp /home/tester/.local/share/xrdp/*.log /out/ 2> /dev/null
 cp /var/log/xrdp*.log /out/ 2> /dev/null
 # readable by the host user (some logs are written with mode 600)
@@ -87,7 +140,7 @@ echo "passed $pass, failed $fail"
 [ $fail = 0 ]
 EOF
 
-"$ENGINE" run --rm -v "$PKGS":/pkgs:ro -v "$CLIENT":/client:ro -v "$OUT":/out \
+"$ENGINE" run --rm "${CAPS[@]}" -e NO_SWAY="$NO_SWAY" -v "$PKGS":/pkgs:ro -v "$CLIENT":/client:ro -v "$OUT":/out \
     -v "$INSIDE":/test.sh:ro "$IMAGE" bash /test.sh
 status=$?
 rm -f "$INSIDE"

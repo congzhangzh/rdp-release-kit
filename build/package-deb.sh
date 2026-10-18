@@ -7,6 +7,14 @@
 # Dependencies come from dpkg-shlibdeps; xorgxrdp also depends on the
 # Xorg video driver ABI it was built for. Host keys are made in postinst.
 set -euo pipefail
+# what the packages are built from (FLAVOUR is set by build-xrdp-pkg.sh)
+if [ "${FLAVOUR:-stable}" = preview ]; then
+    FROM="as a PREVIEW of its development branch, not a release"
+    EXTRAS=" Wayland sessions (sway, GNOME) and AV1."
+else
+    FROM="from the upstream release"
+    EXTRAS=
+fi
 
 STAGE=$1
 OUT=$2
@@ -46,7 +54,7 @@ Priority: optional
 Installed-Size: $(du -sk --exclude=DEBIAN "$ROOT" | cut -f1)
 Homepage: https://www.xrdp.org/
 Description: Remote Desktop Protocol (RDP) server (rdp-release-kit build)
- xrdp from the upstream release, with H.264 (x264) and Opus built in.
+ xrdp $FROM, with H.264 (x264) and Opus built in.$EXTRAS
  Services are not started on install. Keep it off the network: listen on
  127.0.0.1 (port=tcp://.:3389 in /etc/xrdp/xrdp.ini) and connect through
  an SSH tunnel.
@@ -108,7 +116,7 @@ Priority: optional
 Installed-Size: $(du -sk --exclude=DEBIAN "$ROOT" | cut -f1)
 Homepage: https://www.xrdp.org/
 Description: Xorg drivers for xrdp (rdp-release-kit build)
- xorgxrdp from the upstream release, built for this distribution's Xorg
+ xorgxrdp $FROM, built for this distribution's Xorg
  server (video driver ABI $XORG_ABI).
 EOF
 dpkg-deb --root-owner-group -Zxz --build "$ROOT" \

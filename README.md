@@ -160,6 +160,40 @@ suffix, and take the place of the distribution's packages of the same
 name. Services are not started on install, and the host keys are made on
 install, never shipped.
 
+### Preview: the next xrdp
+
+```sh
+./build-xrdp.sh --preview debian:testing          # dist/xrdp-preview/<release>/
+test/xrdp-session.sh --preview debian:testing     # the Xorg login above, then a Wayland one
+```
+
+The preview packages xrdp's development branch with the work that is on
+its way upstream: Wayland sessions (the wlup module: sway, and GNOME
+through Mutter's remote desktop API), AV1 (FreeRDP's GFX extension, with
+4:4:4), smoother video on slow links (the encoder is paced by the client's
+frame acknowledgements), Opus sound fixes. It is built from one fixed
+commit (`xrdp_preview` in `sources.lock`, with its two submodules) and
+xorgxrdp's development branch, whose module interface it needs. The
+version says what it is, `0.10.80~preview.<preview number>.<commit>`
+(the number is the pin's version column in `sources.lock`, raised with
+every new pin, so newer previews upgrade older ones), and sorts before the
+release, which replaces it. It is a preview: test it, don't run it
+where a broken session costs you. The releases are in
+[`distros-preview.list`](distros-preview.list) (GNOME's backend needs
+GNOME 46 or newer, so not Debian 12); the extra build dependencies are in
+`deps/deb-preview.txt` and `deps/rpm-preview.txt`.
+
+`test/xrdp-session.sh --preview` logs in twice: to an Xorg session as for
+the release, then to a Wayland one (sway, headless, with a terminal),
+checking that sesman starts sway for the user and that the module
+captures its output at the client's size.
+
+Sway sessions need sway 1.11 or newer (wlroots 0.19): the module captures
+the screen through the `ext-image-copy-capture` protocols, which older
+wlroots lack. Debian 13 (sway 1.10) and Ubuntu 24.04 (sway 1.9) get the
+preview for Xorg sessions; they are marked `no-sway` in the list, and the
+test skips their sway login.
+
 ## Container engine
 
 The scripts use docker when it is installed, podman otherwise (or set

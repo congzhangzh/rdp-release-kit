@@ -1,0 +1,14 @@
+# Distributions to build the xrdp preview for (./build-xrdp.sh --preview).
+# The GNOME backend needs libei and Mutter's ConnectToEIS (GNOME 46 and
+# newer), so Debian 12 (GNOME 43) is not here.
+# "no-sway": the release's sway is older than 1.11 (wlroots 0.19), whose
+# screen capture protocols (ext-image-copy-capture) the wlroots backend
+# needs; its packages work for Xorg sessions, and the test skips sway.
+debian:testing
+debian:13       no-sway   sway 1.10
+ubuntu:26.10
+ubuntu:26.04
+ubuntu:24.04    no-sway   sway 1.9
+fedora:45
+fedora:44
+fedora:43

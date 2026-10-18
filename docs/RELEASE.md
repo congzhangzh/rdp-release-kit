@@ -13,7 +13,7 @@ verify them; they never compile.
 | `sdl-freerdp.exe`, Windows x86_64 / ARM64 | FreeRDP release tag | stable | `v<YYYY>.<MM>.<N>` |
 | xrdp + xorgxrdp, `.deb` / `.rpm` for every release in `distros.list` | xrdp, xorgxrdp signed release tags | stable | `v<YYYY>.<MM>.<N>` |
 | Web client (WebAssembly) + the freerdp-web page | FreeRDP master + open pull requests, frozen on a fork branch; the page by commit | preview | `web-<page commit, 12>` on every push to main; also inside `v*` |
-| xrdp preview packages (planned) | a frozen xrdp development branch | preview | `xrdp-preview-<commit, 12>` |
+| xrdp preview packages: Wayland sessions, AV1, pacing | a frozen xrdp development commit + xorgxrdp devel | preview | `xrdp-preview-<commit, 12>` |
 | Demo videos (planned) | recorded by `test/wasm-session.sh` | with the web client | `web-<page commit, 12>` |
 
 **Stable** means: upstream release tags only, hashes (and signatures where
@@ -38,7 +38,9 @@ list them. Packages keep the upstream version with a `0kit<N>` suffix.
   (Emscripten).
 
 A change to an input is one commit, whose message names what moved and
-why (`xrdp 0.10.6.1 → 0.10.7`). A preview source moves only to a new frozen
+why (`xrdp 0.10.6.1 → 0.10.7`). A preview pin's version column is a preview
+number (`20261018.1`), raised with every new pin: package versions are
+ordered by it, never by a commit hash or date. A preview source moves only to a new frozen
 commit; the old one stays reachable, so every old build can be rebuilt.
 
 ## Gates
@@ -52,6 +54,7 @@ Nothing is uploaded unless every gate of its product passes in CI.
 | Windows client | only Windows' own DLLs and the UCRT | `build/check-windows.sh` |
 | xrdp packages | every build and run-time dependency available on the release | `check-deps.sh` |
 | | install in a fresh container, log in over RDP with the kit's client, an Xorg session and its xterm run | `test/xrdp-session.sh` |
+| xrdp preview | the same, then a Wayland login: sway starts for the user, wlup captures it at the client's size | `test/xrdp-session.sh --preview` |
 | Web client | page served without COOP/COEP, gateway over SSH, browser login starts a session | `test/wasm-session.sh` |
 | Published page | the same login from the live site | freerdp-web's `check` job |
 | Every push | no private details in the history | `privacy-scan` (pre-push hook) |
