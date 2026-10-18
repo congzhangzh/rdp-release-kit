@@ -1,0 +1,40 @@
+name: upstream
+
+# Once a day, compares every pinned upstream source with upstream's newest
+# release (check-upstream.sh) and opens one issue per update found. It
+# changes nothing: a person bumps sources.lock in a pull request.
+on:
+  schedule:
+    - cron: '17 5 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Compare with upstream
+        run: ./check-upstream.sh | tee upstream.txt
+
+      - name: One issue per update
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          awk '$4 == "update" { print $1, $2, $3 }' upstream.txt | while read -r name have latest; do
+            title="Update available: $name $have → $latest"
+            if gh issue list --state all --search "in:title \"$title\"" --json title -q '.[].title' | grep -qxF "$title"; then
+              echo "known: $title"
+              continue
+            fi
+            gh issue create --title "$title" --label enhancement --body "upstream has $name $latest; sources.lock pins $have.
+
+          To update: change its line in sources.lock (version, URL, SHA-256 from upstream's published checksum where it has one), then open a pull request; CI builds and tests every product with it.
+
+          Found by the daily upstream check (check-upstream.sh)."
+            echo "opened: $title"
+          done
