@@ -18,6 +18,9 @@ no upstream source.
 Every source is pinned in [`sources.lock`](sources.lock) with its SHA-256
 and is built from source. FreeRDP's hash is the one upstream publishes with
 its release.
+`./check-upstream.sh` lists the sources upstream has released newer
+versions of (a daily job opens an issue for each). How a change becomes a
+release, and what each release guarantees: [`docs/RELEASE.md`](docs/RELEASE.md).
 
 ## Build
 
