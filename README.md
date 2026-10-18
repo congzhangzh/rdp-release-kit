@@ -69,10 +69,10 @@ through a WebSocket gateway, best in one step over SSH with websockify on
 the server (nothing to install on your computer but ssh):
 
 ```sh
-ssh -t -L 127.0.0.1:6080:127.0.0.1:6080 user@server websockify 127.0.0.1:6080 127.0.0.1:3389
+ssh -t -L 127.0.0.1:3390:127.0.0.1:3390 user@server websockify 127.0.0.1:3390 127.0.0.1:3389
 ```
 
-then connect the page to `127.0.0.1:6080`. From the published page, Chrome
+then connect the page to `127.0.0.1:3390`. From the published page, Chrome
 asks whether the site may access other apps and services on this device:
 allow it, that is how the page reaches the gateway on 127.0.0.1 (Chrome's
 Local Network Access protection). freerdp-web's `rdp-gateway.sh` runs that
@@ -111,7 +111,9 @@ computer's speakers; `KEEP=1` leaves the server running to look inside.
 
 To come: `test/fetch-release.sh <tag>`, fetching a release's web client and
 xrdp packages (checked against `SHA256SUMS`), so the tests and the demos
-run on released builds as easily as on local ones. Demos to come: xrdp with GNOME on Xorg (its session needs systemd as PID 1:
+run on released builds as easily as on local ones; and the demo videos as a
+kit product, recorded here and handed to freerdp-web with the client (until
+then freerdp-web pins its own copies, in its `demo-media-1` release). Demos to come: xrdp with GNOME on Xorg (its session needs systemd as PID 1:
 Podman, or more privileges than these containers get), and the next xrdp,
 with Xfce and with GNOME headless (gnome-shell without changes), next to
 today's gnome-remote-desktop baseline.
