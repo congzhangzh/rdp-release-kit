@@ -42,6 +42,11 @@ why (`xrdp 0.10.6.1 → 0.10.7`). A preview pin's version column is a preview
 number (`20261018.1`), raised with every new pin: package versions are
 ordered by it, never by a commit hash or date. A preview source moves only to a new frozen
 commit; the old one stays reachable, so every old build can be rebuilt.
+That includes our own repositories the kit pins (freerdp-web, the fork
+branches): never rewrite their history. A rewrite orphans every pin of
+them; freerdp-web's of October 2026 left the kit's older pins and its
+`web-*` pre-releases before `web-ea48a1f73d0b` pointing at commits no
+branch holds.
 
 ## Gates
 
