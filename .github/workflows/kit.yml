@@ -208,9 +208,14 @@ jobs:
         run: |
           sha=$(awk '$1 == "xrdp_preview" { print $4 }' sources.lock)
           tag=xrdp-preview-${sha:0:12}
-          mapfile -t files < <(find dist/xrdp-preview -type f \( -name '*.deb' -o -name '*.rpm' \))
-          (cd dist/xrdp-preview && find . -type f \( -name '*.deb' -o -name '*.rpm' \) -exec sha256sum {} + |
-              sed 's|  \./[^ ]*/|  |') > SHA256SUMS
+          # release assets are flat, and GitHub turns '~' in their names
+          # into '.': give the files those names first, so SHA256SUMS
+          # matches what is downloaded
+          mkdir -p upload
+          find dist/xrdp-preview -type f \( -name '*.deb' -o -name '*.rpm' \) | while read -r f; do
+            cp "$f" "upload/$(basename "$f" | tr '~' '.')"
+          done
+          (cd upload && sha256sum -- *.deb *.rpm > SHA256SUMS)
           notes="A PREVIEW of the next xrdp: xrdp $sha (its development branch with Wayland sessions, AV1 and pacing) and xorgxrdp's development branch, built and tested (an Xorg and a Wayland login) by rdp-release-kit $GITHUB_SHA. Not an xrdp release."
           if gh release view "$tag" > /dev/null 2>&1; then
             gh release edit "$tag" --notes "$notes"
@@ -218,7 +223,7 @@ jobs:
             gh release create "$tag" --prerelease --latest=false --target "$GITHUB_SHA" \
               --title "xrdp preview ${sha:0:12}" --notes "$notes"
           fi
-          gh release upload "$tag" --clobber "${files[@]}" SHA256SUMS
+          gh release upload "$tag" --clobber upload/*
 
   # The web client builds at once; only its login test waits for xrdp
   wasm-build:
@@ -389,10 +394,15 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          # the xrdp preview has its own pre-release, never a kit release
-          mapfile -t files < <(find dist -type f \( -name '*.tar.xz' -o -name '*.zip' -o -name '*.deb' -o -name '*.rpm' \) \
-              ! -name '*~preview*')
-          (cd dist && sha256sum "${files[@]#dist/}") > SHA256SUMS
+          # the xrdp preview has its own pre-release, never a kit release;
+          # assets are flat and GitHub turns '~' into '.': name the files
+          # so first, so SHA256SUMS matches what is downloaded
+          mkdir -p upload
+          find dist -type f \( -name '*.tar.xz' -o -name '*.zip' -o -name '*.deb' -o -name '*.rpm' \) \
+              ! -name '*~preview*' | while read -r f; do
+            cp "$f" "upload/$(basename "$f" | tr '~' '.')"
+          done
+          (cd upload && sha256sum -- * > ../SHA256SUMS) && mv SHA256SUMS upload/
           gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" \
               --title "$GITHUB_REF_NAME" --notes "See MANIFEST in each client archive." \
-              "${files[@]}" SHA256SUMS
+              upload/*
