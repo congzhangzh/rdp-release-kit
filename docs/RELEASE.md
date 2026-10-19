@@ -82,6 +82,8 @@ upstream tag / frozen branch
   `web-<page commit>`; freerdp-web publishes either that exact build (always
   for a freerdp-web `v*` tag; the client's `MANIFEST` must name the page
   commit) or, for page-only changes, its page over the newest tested client.
+  A tag publishes its own commit's page: tag only a commit at or ahead of
+  what the site serves, or the tag rolls the site back.
 - **Pages**: the kit's own Pages only redirect to the freerdp-web site and
   are published by hand.
 - **Releases are never automatic**: a push builds and tests; publishing
