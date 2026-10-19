@@ -14,8 +14,8 @@ OUT=$KIT/dist/wasm
 SOURCES=${SOURCES:-$HOME/.cache/rdp-release-kit/sources}
 # docker first: the builds are tested with it (podman: see README)
 ENGINE=${ENGINE:-$(command -v docker || command -v podman)}
-# Emscripten 6.0.11, as FreeRDP's Emscripten CI job uses it
-IMAGE=emscripten/emsdk:6.0.11@sha256:cdefec943f04fd4b2b2fe23b0a1a346be9fc560ef5784a83faa27dd351381372
+# Emscripten 6.0.12, as FreeRDP's Emscripten CI job uses it (#13728)
+IMAGE=emscripten/emsdk:6.0.12@sha256:77638e6c215a65f25a704c0c831d5c2463a8c0468a58c6cb82489dbe621dfa05
 WORK=$HOME/.cache/rdp-release-kit/wasm
 mkdir -p "$OUT" "$SOURCES" "$WORK"
 # who the files the container writes should belong to: docker runs it as

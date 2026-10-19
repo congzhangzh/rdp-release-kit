@@ -60,7 +60,7 @@ Wine can not run it: Wine has no `_aligned_recalloc` in its UCRT yet.
 test/wasm-session.sh dist/wasm/web <freerdp-web>/rdp-gateway.sh   # log in from a browser
 ```
 
-FreeRDP's SDL3 client compiled with Emscripten (6.0.11, pinned by digest),
+FreeRDP's SDL3 client compiled with Emscripten (6.0.12, pinned by digest),
 with the [freerdp-web](https://github.com/congzhangzh/freerdp-web) page and
 its passkey vault for saved hosts, both pinned by commit in `sources.lock`.
 AV1 is decoded with the browser's WebCodecs, dav1d where those cannot. The
@@ -193,6 +193,14 @@ the screen through the `ext-image-copy-capture` protocols, which older
 wlroots lack. Debian 13 (sway 1.10) and Ubuntu 24.04 (sway 1.9) get the
 preview for Xorg sessions; they are marked `no-sway` in the list, and the
 test skips their sway login.
+
+AV1 needs libaom 3.0 or newer from the release. Every release in the list
+has it today (Debian 13: 3.12, Ubuntu 24.04: 3.8, Fedora 43: 3.13). Before
+adding a release, run `./check-deps.sh --preview <image>`: if libaom is
+MISSING, mark the release `no-av1` in the list. Its preview is then built
+without AV1 (no libaom build or run-time dependency, and the package
+description leaves AV1 out), and clients fall back to H.264. Marks go
+after the image, as many as needed: `debian:13  no-sway no-av1  <note>`.
 
 ## Container engine
 

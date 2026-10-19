@@ -96,11 +96,24 @@ unpack() {
     echo "$WORK/src/$name"
 }
 
-# built <name>: true if <name> is already in $DEPS from the same source;
-# a dependency is rebuilt only when its source changes (remove the work
-# tree to force it)
+# toolchain_id: what compiles the dependencies, the first line of its
+# --version (emcc, else $CC or cc); a script whose compiler sits behind a
+# CMake toolchain file sets TOOLCHAIN_ID itself
+toolchain_id() {
+    if [ -n "${TOOLCHAIN_ID:-}" ]; then
+        echo "$TOOLCHAIN_ID"
+    elif command -v emcc > /dev/null; then
+        emcc --version | head -1
+    else
+        "${CC:-cc}" --version 2> /dev/null | head -1
+    fi
+}
+
+# built <name>: true if <name> is already in $DEPS from the same source and
+# the same compiler; a dependency is rebuilt when either changes (remove
+# the work tree to force it)
 built() {
-    if [ "$(cat "$WORK/stamp/$1" 2> /dev/null)" = "${SHA[$1]}" ]; then
+    if [ "$(cat "$WORK/stamp/$1" 2> /dev/null)" = "${SHA[$1]} $(toolchain_id)" ]; then
         echo "== $1 ${VERSION[$1]} (built)"
         return 0
     fi
@@ -109,7 +122,7 @@ built() {
 }
 
 stamp() {
-    echo "${SHA[$1]}" > "$WORK/stamp/$1"
+    echo "${SHA[$1]} $(toolchain_id)" > "$WORK/stamp/$1"
 }
 
 # cmake_dep <name> [cmake options]: a CMake project, static, into $DEPS

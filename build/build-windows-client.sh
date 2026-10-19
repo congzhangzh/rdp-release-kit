@@ -26,6 +26,8 @@ apt-get install -y -qq --no-install-recommends cmake ninja-build meson nasm pkg-
 
 # shellcheck source=build/lib.sh
 . "$KIT/build/lib.sh"
+# the compiler is behind the CMake toolchain file: name it for the stamps
+TOOLCHAIN_ID="llvm-mingw ${VERSION[llvm_mingw]}"
 mkdir -p "$OUT"
 
 if ! built llvm_mingw; then
