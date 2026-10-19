@@ -25,7 +25,8 @@ DISTRO=$("$ENGINE" run --rm "$IMAGE" sh -c '. /etc/os-release; echo "$ID-${VERSI
 PKGS=$KIT/dist/xrdp$SUFFIX/$DISTRO
 # a release marked no-sway in distros-preview.list: skip the sway login
 NO_SWAY=
-[ -n "$SUFFIX" ] && awk -v i="$IMAGE" '$1 == i && $2 == "no-sway" { f = 1 } END { exit !f }' \
+[ -n "$SUFFIX" ] && awk -v i="$IMAGE" \
+    '$1 == i { for (k = 2; k <= NF; k++) if ($k == "no-sway") f = 1 } END { exit !f }' \
     "$KIT/distros-preview.list" && NO_SWAY=1
 # Fedora's sway carries the file capability cap_sys_nice (to raise its
 # own priority); a container lacking it in its bounding set cannot exec it

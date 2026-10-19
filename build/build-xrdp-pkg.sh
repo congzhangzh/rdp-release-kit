@@ -18,6 +18,8 @@
 # 0.10.80. The preview number is the version column of the pin in
 # sources.lock (20261018.1, ...): raise it with every new pin, so newer
 # previews sort higher (a commit's date cannot: rebuilt stacks keep them).
+# NO_AV1=1 (a release marked no-av1 in distros-preview.list) leaves AV1
+# and libaom out.
 set -Eeuo pipefail
 
 KIT=$1
@@ -36,10 +38,11 @@ case " $ID ${ID_LIKE:-} " in
     *) echo "unsupported distribution: $PRETTY_NAME" >&2; exit 1 ;;
 esac
 # the build dependencies: the first word of each line in deps/<family>.txt
-export FLAVOUR=${FLAVOUR:-stable}
+export FLAVOUR=${FLAVOUR:-stable} NO_AV1=${NO_AV1:-}
 DEPLISTS=("$KIT/deps/$FAMILY.txt")
 [ "$FLAVOUR" = preview ] && DEPLISTS+=("$KIT/deps/$FAMILY-preview.txt")
-mapfile -t BUILD_DEPS < <(grep -h -v -E '^\s*(#|$)' "${DEPLISTS[@]}" | awk '{print $1}')
+mapfile -t BUILD_DEPS < <(grep -h -v -E '^\s*(#|$)' "${DEPLISTS[@]}" | awk '{print $1}' |
+    if [ -n "$NO_AV1" ]; then grep -v '^libaom-'; else cat; fi)
 
 echo "== build dependencies ($PRETTY_NAME)"
 if [ $FAMILY = deb ]; then
@@ -95,7 +98,8 @@ if [ "$FLAVOUR" = preview ]; then
     (cd "$src" && ./bootstrap) > "$WORK/log/bootstrap.log" 2>&1
     base=$(sed -n 's/^AC_INIT(\[xrdp\], \[\([^]]*\)\].*/\1/p' "$src/configure.ac")
     XRDP_VERSION=$base~preview.${VERSION[$XRDP]}.${SHA[$XRDP]:0:8}
-    EXTRA=(--enable-wlup --enable-av1)
+    EXTRA=(--enable-wlup)
+    [ -z "$NO_AV1" ] && EXTRA+=(--enable-av1)
     # the GNOME backend needs libei and PipeWire (GNOME 46 and newer)
     if pkg-config --exists libei-1.0 libpipewire-0.3 libsystemd; then
         EXTRA+=(--enable-wlup-mutter)
@@ -119,6 +123,10 @@ rm -rf "$STAGE"
      --enable-ipv6 --enable-vsock "${EXTRA[@]}" &&
  make -j"$JOBS" && make install DESTDIR="$STAGE/xrdp") > "$WORK/log/xrdp.log" 2>&1
 grep -q -E "x264 +yes" "$WORK/log/xrdp.log"
+# AV1 is in a preview unless the release is marked no-av1
+if [ "$FLAVOUR" = preview ] && [ -z "$NO_AV1" ]; then
+    grep -q -E "av1 \(libaom\) +yes" "$WORK/log/xrdp.log"
+fi
 
 # xorgxrdp builds against the xrdp just staged: a copy of its .pc file
 # that points into the staging tree

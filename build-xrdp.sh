@@ -36,11 +36,16 @@ status=0
 for image in "${IMAGES[@]}"; do
     work=$HOME/.cache/rdp-release-kit/xrdp$SUFFIX-${image//[\/:]/-}
     mkdir -p "$work"
-    echo "### $image"
+    # the release's marks in distros-preview.list (see there)
+    NO_AV1=
+    [ $FLAVOUR = preview ] && awk -v i="$image" \
+        '$1 == i { for (k = 2; k <= NF; k++) if ($k == "no-av1") f = 1 } END { exit !f }' \
+        "$KIT/$LIST" && NO_AV1=1
+    echo "### $image${NO_AV1:+ (no AV1)}"
     # the single quotes are for the container's shell
     # shellcheck disable=SC2016
     if ! "$ENGINE" run --rm -v "$KIT":/kit:ro -v "$SOURCES":/sources -v "$OUT":/out \
-            -v "$work":/work -e OWNER="$(owner)" -e FLAVOUR="$FLAVOUR" "$image" \
+            -v "$work":/work -e OWNER="$(owner)" -e FLAVOUR="$FLAVOUR" -e NO_AV1="$NO_AV1" "$image" \
             bash -c '/kit/build/build-xrdp-pkg.sh /kit /sources /out; rc=$?;
                      [ -z "$OWNER" ] || chown -R "$OWNER" /out /work /sources; exit $rc'; then
         echo "### $image: FAILED"

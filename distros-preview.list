@@ -1,9 +1,14 @@
 # Distributions to build the xrdp preview for (./build-xrdp.sh --preview).
 # The GNOME backend needs libei and Mutter's ConnectToEIS (GNOME 46 and
 # newer), so Debian 12 (GNOME 43) is not here.
+# Marks after the image (any number, then a note) leave out a feature the
+# release cannot give the preview:
 # "no-sway": the release's sway is older than 1.11 (wlroots 0.19), whose
 # screen capture protocols (ext-image-copy-capture) the wlroots backend
 # needs; its packages work for Xorg sessions, and the test skips sway.
+# "no-av1": the release has no libaom 3.0 or newer (deps/*-preview.txt),
+# which xrdp's AV1 encoder needs; it is built without AV1, and clients
+# get H.264 instead. ./check-deps.sh --preview shows which release needs it.
 debian:testing
 debian:13       no-sway   sway 1.10
 ubuntu:26.10

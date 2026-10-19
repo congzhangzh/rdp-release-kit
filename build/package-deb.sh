@@ -11,6 +11,7 @@ set -euo pipefail
 if [ "${FLAVOUR:-stable}" = preview ]; then
     FROM="as a PREVIEW of its development branch, not a release"
     EXTRAS=" Wayland sessions (sway, GNOME) and AV1."
+    [ -n "${NO_AV1:-}" ] && EXTRAS=" Wayland sessions (sway, GNOME)."
 else
     FROM="from the upstream release"
     EXTRAS=
