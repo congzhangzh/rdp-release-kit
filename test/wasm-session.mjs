@@ -77,9 +77,24 @@ for (let i = 0; i < 200 && !ready; i++) {
 }
 console.log(`client ready: ${ready}`);
 if (!ready) done(1);
-await ev(`document.getElementById('host').value = ${JSON.stringify(gateway)};
-          document.getElementById('user').value = ${JSON.stringify(user)};
-          document.getElementById('pass').value = ${JSON.stringify(password)}; document.getElementById('go').click(); true`);
+// even after ready, a late start step could still overwrite them: fill, give the page a
+// second, read the fields back, and connect only once they hold (an empty user leaves xrdp
+// waiting at its login screen, which once failed CI runs at random)
+const fill = `document.getElementById('host').value = ${JSON.stringify(gateway)};
+              document.getElementById('user').value = ${JSON.stringify(user)};
+              document.getElementById('pass').value = ${JSON.stringify(password)}; true`;
+const held = `document.getElementById('host').value === ${JSON.stringify(gateway)} &&
+              document.getElementById('user').value === ${JSON.stringify(user)} &&
+              document.getElementById('pass').value === ${JSON.stringify(password)}`;
+let filled = false;
+for (let i = 1; i <= 5 && !filled; i++) {
+  await ev(fill);
+  await sleep(1000);
+  filled = await ev(held);
+  console.log(`form filled (attempt ${i}): ${filled}`);
+}
+if (!filled) done(1);
+await ev("document.getElementById('go').click(); true");
 await sleep(25000);
 const shot = await send("Page.captureScreenshot", { format: "png" });
 writeFileSync(join(out, "wasm-session.png"), Buffer.from(shot.data, "base64"));

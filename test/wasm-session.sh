@@ -46,6 +46,20 @@ SSH_OPTS="-F none -L 127.0.0.1:13389:127.0.0.1:3389 -p 2223 -i $OUT/ssh/key -o I
 export SSH_OPTS
 export WS_PORT=13390 SERVER_WS_PORT=3390   # rdp-gateway.sh: the page's port, websockify's on the server
 
+# This test listens on fixed local ports; if anything else holds one, the
+# page would reach that instead and the checks would fail for no visible
+# reason. Stop first, saying which port.
+"$ENGINE" rm -f "$NAME" > /dev/null 2>&1   # this test's own server from a kept run
+ports=(2223 13389 13390)
+[ -n "${PAGE_URL:-}" ] || ports+=(8199)
+for port in "${ports[@]}"; do
+    if ss -Hltn "sport = :$port" | grep -q .; then
+        echo "port 127.0.0.1:$port is already in use (by: $("$ENGINE" ps --filter "publish=$port" \
+            --format '{{.Names}}' 2> /dev/null | head -1)); this test needs it free" >&2
+        exit 1
+    fi
+done
+
 cleanup() {
     [ -n "${GW:-}" ] && kill "$GW" 2> /dev/null
     [ -n "${HTTP:-}" ] && kill "$HTTP" 2> /dev/null
@@ -138,6 +152,7 @@ node "$DRIVER" "${PAGE_URL:-http://127.0.0.1:8199/index.html}$QUERY" 127.0.0.1:1
 sleep 2
 pass=0; fail=0
 check() { if eval "$2"; then echo "PASS  $1"; pass=$((pass + 1)); else echo "FAIL  $1"; fail=$((fail + 1)); fi; }
+check "the page started the client as tester" 'grep -q -- " /u:tester " "$OUT/page.log"'
 if [ "$SERVER" = gnome ]; then
 check "GNOME Shell runs headless for tester" '"$ENGINE" exec "$NAME" pgrep -u tester -f "gnome-shell --headless" > /dev/null'
 check "gnome-remote-desktop runs for tester" '"$ENGINE" exec "$NAME" pgrep -u tester -f "gnome-remote-desktop-daemon --headless" > /dev/null'
