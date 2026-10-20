@@ -13,6 +13,19 @@
 # in the MANIFEST and "-local" in the archive name. CI and v* tags refuse
 # any override.
 
+# git_files <checkout>: the files git knows there, tracked or new, and
+# those of its submodules (git lists a submodule as one entry, its folder)
+git_files() {
+    local links
+    links=$(git -C "$1" ls-files --stage | awk '$1 == 160000 { print $4 }')
+    git -C "$1" -c core.quotepath=off ls-files --cached --others --exclude-standard |
+        grep -v -x -F -e "$links" || true
+    # shellcheck disable=SC2016
+    git -C "$1" submodule --quiet foreach --recursive \
+        'git -c core.quotepath=off ls-files --cached --others --exclude-standard |
+             sed "s|^|$displaypath/|"'
+}
+
 # overrides <work dir>: sets OVERRIDE to the container options (mounts and
 # environment) for every overridden source and OVERRIDDEN to their names
 # (" a b "), and writes each one's file list to
@@ -62,8 +75,7 @@ overrides() {
         # dirty: changed or new files (describe --dirty misses new ones)
         if desc=$(git -C "$path" rev-parse --short=12 HEAD 2> /dev/null); then
             [ -z "$(git -C "$path" status --porcelain)" ] || desc+=-dirty
-            git -C "$path" -c core.quotepath=off ls-files --cached --others --exclude-standard \
-                > "$work/override/$name.list"
+            git_files "$path" > "$work/override/$name.list"
         else
             desc="not a git checkout"
             (cd "$path" && find . \( -type f -o -type l \) ! -path './.git/*' | sed 's|^\./||') \

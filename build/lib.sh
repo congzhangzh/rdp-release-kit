@@ -138,9 +138,12 @@ overridden() {
 
 # sync_override <name>: $WORK/src/<name> becomes the files listed in
 # $WORK/override/<name>.list, copied by content: a file whose content did
-# not change keeps its time stamp and Ninja leaves it alone. Copying the
-# time stamps instead (rsync -t, cp -p) would break that: going back to an
-# older commit gives a changed file an older time, and it looks built.
+# not change keeps its time stamp and Ninja or make leaves it alone.
+# Copying the time stamps instead (rsync -t, cp -p) would break that: going
+# back to an older commit gives a changed file an older time, and it looks
+# built. The marker .override holds the list of the last sync: only those
+# files are deleted when the checkout drops them, so what a build makes in
+# the tree (an autotools build in place) stays.
 sync_override() {
     local name=$1 dst=$WORK/src/$1 list=$WORK/override/$1.list
     # last unpacked from sources.lock: start over
@@ -150,11 +153,11 @@ sync_override() {
         touch "$dst/.override"
     fi
     # a tracked file deleted in the checkout is still listed: skip it
-    rsync -rlp --checksum --ignore-missing-args --files-from="$list" "/override/$name/" "$dst/" \
-        || return 1
-    # files no longer in the checkout
-    comm -23 <(cd "$dst" && find . \( -type f -o -type l \) ! -name .override | sed 's|^\./||' | sort) \
-        <(sort "$list") | (cd "$dst" && xargs -r -d '\n' rm -f --)
+    rsync -rlp --checksum --ignore-missing-args --files-from="$list" \
+        "${OVERRIDE_ROOT:-/override}/$name/" "$dst/" || return 1
+    # files the last sync brought that the checkout no longer has
+    comm -23 <(sort "$dst/.override") <(sort "$list") | (cd "$dst" && xargs -r -d '\n' rm -f --)
+    cp "$list" "$dst/.override"
 }
 
 # override_manifest: one line per overridden source, for the MANIFEST
@@ -205,15 +208,18 @@ stamp() {
     fi
 }
 
-# configure <build dir> <command...>: runs a CMake configure command, but
-# not again for a build tree already configured by the same command (a
-# local source keeps its tree; Ninja itself reruns CMake when a CMake file
-# of the project changes). Under Emscripten a configure takes 17 s.
+# configure <build dir> <command...>: runs a configure command (CMake, or
+# an autotools ./configure in <build dir>), but not again for a build tree
+# already configured by the same command (a local source keeps its tree;
+# Ninja reruns CMake when a CMake file of the project changes, and make
+# reruns automake and config.status when a Makefile.am or configure.ac
+# does). Under Emscripten a configure takes 17 s, xrdp's about 10 s.
 configure() {
     local dir=$1 sum
     shift
     sum=$(printf '%s\n' "$@" | sha256sum | cut -d' ' -f1)
-    if [ -f "$dir/build.ninja" ] && [ "$(cat "$dir/.configured" 2> /dev/null)" = "$sum" ]; then
+    if [ -f "$dir/build.ninja" ] || [ -f "$dir/config.status" ] &&
+        [ "$(cat "$dir/.configured" 2> /dev/null)" = "$sum" ]; then
         echo "== configuration kept (same options)"
         return 0
     fi

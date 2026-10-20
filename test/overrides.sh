@@ -64,6 +64,44 @@ echo "freerdp git $src" > "$TMP/kit/sources.local"
 check "sources.local: a kind other than dir is refused" '! run > /dev/null 2>&1'
 rm "$TMP/kit/sources.local"
 
+# a checkout with a submodule: its files are listed, not the submodule entry
+sub=$TMP/sub
+git init -q "$sub"
+echo 'int s;' > "$sub/s.c"
+git -C "$sub" add -A
+git -C "$sub" -c user.name=t -c user.email=t@example.com commit -q -m sub
+git -C "$src" -c protocol.file.allow=always submodule add -q "$sub" librfxcodec 2> /dev/null
+out=$(run SRC_freerdp="$src" 2>&1)
+check "a submodule's files are listed, the submodule entry is not" \
+    'grep -qx librfxcodec/s.c "$TMP/work/override/freerdp.list" &&
+     ! grep -qx librfxcodec "$TMP/work/override/freerdp.list"'
+
+# sync_override (build/lib.sh, in the container): run with /override
+# replaced by the checkouts' parent folder
+sync() {
+    env -i PATH="$PATH" KIT="$TMP/kit" SOURCES="$TMP/sources" WORK="$TMP/work" \
+        OVERRIDES=freerdp OVERRIDE_ROOT="$TMP/root" bash -c \
+        '. "$1"; sync_override freerdp' _ "$KIT/build/lib.sh"
+}
+mkdir -p "$TMP/root"
+ln -s "$src" "$TMP/root/freerdp"
+dst=$TMP/work/src/freerdp
+sync
+check "sync: the checkout's files arrive, its build tree does not" \
+    '[ -f "$dst/libfreerdp/b.c" ] && [ -f "$dst/librfxcodec/s.c" ] && [ ! -e "$dst/build" ]'
+touch -d '2000-01-01' "$dst/libfreerdp/a.c"
+echo built > "$dst/a.o"
+rm "$src/libfreerdp/b.c"
+run SRC_freerdp="$src" > /dev/null 2>&1
+sync
+check "sync: an unchanged file keeps its time stamp" \
+    '[ "$(stat -c %Y "$dst/libfreerdp/a.c")" = "$(date -d 2000-01-01 +%s)" ]'
+check "sync: a file deleted in the checkout goes" '[ ! -e "$dst/libfreerdp/b.c" ]'
+check "sync: a file the build made in the tree stays" '[ -f "$dst/a.o" ]'
+echo 'int a2;' > "$src/libfreerdp/a.c"
+sync
+check "sync: a changed file is copied" 'grep -q a2 "$dst/libfreerdp/a.c"'
+
 # the guards: an override must never reach CI or a release
 check "CI=true refuses an override" '! run CI=true SRC_freerdp="$src" > /dev/null 2>&1'
 check "a v* tag refuses an override" \

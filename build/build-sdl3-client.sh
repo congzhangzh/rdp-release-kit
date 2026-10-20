@@ -74,10 +74,16 @@ src=$(unpack freerdp)
 rm -rf "$STAGE"
 overridden freerdp || rm -rf "$WORK/build/freerdp"
 # LTO=off (a local FreeRDP only): no link-time optimisation, whose code
-# generation at the link ccache cannot keep, for the quickest rebuild
+# generation at the link ccache cannot keep, for the quickest rebuild.
+# The kept build tree remembers that: without LTO=off the setting is
+# dropped again (-U), and FreeRDP chooses, as for a release
 DEV=()
-if overridden freerdp && [ "${LTO:-}" = off ]; then
-    DEV=(-DCMAKE_INTERPROCEDURAL_OPTIMIZATION=OFF)
+if overridden freerdp; then
+    if [ "${LTO:-}" = off ]; then
+        DEV=(-DCMAKE_INTERPROCEDURAL_OPTIMIZATION=OFF)
+    else
+        DEV=(-UCMAKE_INTERPROCEDURAL_OPTIMIZATION)
+    fi
 fi
 # PKG_CONFIG_LIBDIR: pkg-config sees /deps only, so FreeRDP does not find
 # the host's wayland-client either
@@ -116,7 +122,7 @@ licenses "$PKG/licenses" freerdp sdl3 sdl3_ttf freetype openssl opus dav1d zlib 
     # shellcheck source=/dev/null
     echo "build environment: $(. /etc/os-release && echo "$PRETTY_NAME"), $(ldd --version | head -1)"
     override_manifest
-    [ ${#DEV[@]} = 0 ] || echo "LTO off (local build)"
+    [ "${DEV[0]:-}" != -DCMAKE_INTERPROCEDURAL_OPTIMIZATION=OFF ] || echo "LTO off (local build)"
     echo
     echo "sources (sources.lock):"
     for name in freerdp sdl3 sdl3_ttf freetype openssl opus dav1d zlib jansson; do
