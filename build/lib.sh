@@ -31,6 +31,34 @@ JOBS=$(nproc)
 DEPS=$WORK/deps
 mkdir -p "$WORK/log" "$WORK/stamp" "$SOURCES"
 
+# ccache, when the container has it and the host script mounted a cache
+# (CCACHE_DIR): CMake gets it as the launcher of both compilers (C++ too,
+# FreeRDP's own WITH_CCACHE covers C only), Meson finds it by itself. The
+# paths under /work are the same on every run, so a fresh build tree
+# still hits. base_dir stays empty, whatever a ccache.conf says: it makes
+# the source paths relative but not FreeRDP's -fmacro-prefix-map, so
+# __FILE__ and the binary change; without it a build from the cache is
+# byte for byte the build without it.
+# SDL builds with a precompiled header, which ccache takes only with
+# pch_defines,time_macros. The statistics count this build only.
+LAUNCHER=()
+if [ -n "${CCACHE_DIR:-}" ] && command -v ccache > /dev/null; then
+    export CCACHE_BASEDIR='' CCACHE_MAXSIZE=${CCACHE_MAXSIZE:-5G}
+    export CCACHE_SLOPPINESS=pch_defines,time_macros
+    LAUNCHER=(-DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache)
+    ccache --zero-stats > /dev/null
+fi
+
+# ccache_stats: this build's hits, misses and uncached calls, if ccache ran
+ccache_stats() {
+    [ -n "${CCACHE_DIR:-}" ] && command -v ccache > /dev/null || return 0
+    echo "== ccache: $(ccache --print-stats | awk -F'\t' '
+        $1 == "direct_cache_hit" || $1 == "preprocessed_cache_hit" { hit += $2 }
+        $1 == "cache_miss" { miss = $2 }
+        $1 ~ /^(could_not_use_precompiled_header|called_for_link|called_for_preprocessing)$/ { unc += $2 }
+        END { printf "%d hits, %d misses, %d not cacheable", hit, miss, unc }')"
+}
+
 # fetch <name>: the verified source archive in $SOURCES, path on stdout.
 # Every step is checked explicitly: fetch runs as "$(fetch) || return 1",
 # and bash ignores set -e inside a function called that way.
@@ -86,14 +114,56 @@ verify_signature() {
     fi
 }
 
-# unpack <name>: a fresh copy of the source in $WORK/src/<name>, path on stdout
+# unpack <name>: a fresh copy of the source in $WORK/src/<name>, path on
+# stdout; an overridden source is synced from its local directory instead
 unpack() {
     local name=$1 file
+    if overridden "$name"; then
+        sync_override "$name" || return 1
+        echo "$WORK/src/$name"
+        return 0
+    fi
     file=$(fetch "$name") || return 1
     rm -rf "${WORK:?}/src/$name"
     mkdir -p "$WORK/src/$name"
     tar -xf "$file" --strip-components=1 -C "$WORK/src/$name" || return 1
     echo "$WORK/src/$name"
+}
+
+# overridden <name>: the host script mounted a local directory for <name>
+# (build/overrides.sh)
+overridden() {
+    [[ " ${OVERRIDES:-} " == *" $1 "* ]]
+}
+
+# sync_override <name>: $WORK/src/<name> becomes the files listed in
+# $WORK/override/<name>.list, copied by content: a file whose content did
+# not change keeps its time stamp and Ninja leaves it alone. Copying the
+# time stamps instead (rsync -t, cp -p) would break that: going back to an
+# older commit gives a changed file an older time, and it looks built.
+sync_override() {
+    local name=$1 dst=$WORK/src/$1 list=$WORK/override/$1.list
+    # last unpacked from sources.lock: start over
+    if [ ! -f "$dst/.override" ]; then
+        rm -rf "${dst:?}"
+        mkdir -p "$dst"
+        touch "$dst/.override"
+    fi
+    # a tracked file deleted in the checkout is still listed: skip it
+    rsync -rlp --checksum --ignore-missing-args --files-from="$list" "/override/$name/" "$dst/" \
+        || return 1
+    # files no longer in the checkout
+    comm -23 <(cd "$dst" && find . \( -type f -o -type l \) ! -name .override | sed 's|^\./||' | sort) \
+        <(sort "$list") | (cd "$dst" && xargs -r -d '\n' rm -f --)
+}
+
+# override_manifest: one line per overridden source, for the MANIFEST
+override_manifest() {
+    local name var
+    for name in ${OVERRIDES:-}; do
+        var=OVERRIDE_$name
+        echo "OVERRIDE $name: local directory ${!var} (not from sources.lock)"
+    done
 }
 
 # toolchain_id: what compiles the dependencies, the first line of its
@@ -113,6 +183,10 @@ toolchain_id() {
 # the same compiler; a dependency is rebuilt when either changes (remove
 # the work tree to force it)
 built() {
+    if overridden "$1"; then
+        echo "== $1 (local)"
+        return 1
+    fi
     if [ "$(cat "$WORK/stamp/$1" 2> /dev/null)" = "${SHA[$1]} $(toolchain_id)" ]; then
         echo "== $1 ${VERSION[$1]} (built)"
         return 0
@@ -121,8 +195,31 @@ built() {
     return 1
 }
 
+# stamp <name>: <name> is in $DEPS; a local build is stamped as such, so
+# the next build from sources.lock rebuilds it
 stamp() {
-    echo "${SHA[$1]} $(toolchain_id)" > "$WORK/stamp/$1"
+    if overridden "$1"; then
+        echo "local" > "$WORK/stamp/$1"
+    else
+        echo "${SHA[$1]} $(toolchain_id)" > "$WORK/stamp/$1"
+    fi
+}
+
+# configure <build dir> <command...>: runs a CMake configure command, but
+# not again for a build tree already configured by the same command (a
+# local source keeps its tree; Ninja itself reruns CMake when a CMake file
+# of the project changes). Under Emscripten a configure takes 17 s.
+configure() {
+    local dir=$1 sum
+    shift
+    sum=$(printf '%s\n' "$@" | sha256sum | cut -d' ' -f1)
+    if [ -f "$dir/build.ninja" ] && [ "$(cat "$dir/.configured" 2> /dev/null)" = "$sum" ]; then
+        echo "== configuration kept (same options)"
+        return 0
+    fi
+    rm -f "$dir/.configured"
+    "$@" || return 1
+    echo "$sum" > "$dir/.configured"
 }
 
 # cmake_dep <name> [cmake options]: a CMake project, static, into $DEPS
@@ -131,8 +228,9 @@ cmake_dep() {
     shift
     built "$name" && return 0
     src=$(unpack "$name")
-    rm -rf "${WORK:?}/build/$name"
-    cmake -G Ninja -S "$src" -B "$WORK/build/$name" -DCMAKE_BUILD_TYPE=Release \
+    # a local source keeps its build tree: Ninja rebuilds what changed
+    overridden "$name" || rm -rf "${WORK:?}/build/$name"
+    cmake -G Ninja -S "$src" -B "$WORK/build/$name" -DCMAKE_BUILD_TYPE=Release "${LAUNCHER[@]}" \
         -DCMAKE_INSTALL_PREFIX="$DEPS" -DCMAKE_INSTALL_LIBDIR=lib \
         -DCMAKE_PREFIX_PATH="$DEPS" -DBUILD_SHARED_LIBS=OFF \
         -DCMAKE_POSITION_INDEPENDENT_CODE=ON "$@" > "$WORK/log/$name.log" 2>&1

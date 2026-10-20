@@ -69,12 +69,20 @@ cmake_dep sdl3_ttf -DSDLTTF_VENDORED=OFF -DSDLTTF_HARFBUZZ=OFF -DSDLTTF_PLUTOSVG
 echo "== freerdp ${VERSION[freerdp]}"
 src=$(unpack freerdp)
 # always a fresh configure: a kept CMake cache would keep options that
-# were removed from this script, and the release must match a clean build
-rm -rf "$WORK/build/freerdp" "$STAGE"
+# were removed from this script, and the release must match a clean build.
+# A local FreeRDP (build/overrides.sh) keeps its tree, for quick rebuilds.
+rm -rf "$STAGE"
+overridden freerdp || rm -rf "$WORK/build/freerdp"
+# LTO=off (a local FreeRDP only): no link-time optimisation, whose code
+# generation at the link ccache cannot keep, for the quickest rebuild
+DEV=()
+if overridden freerdp && [ "${LTO:-}" = off ]; then
+    DEV=(-DCMAKE_INTERPROCEDURAL_OPTIMIZATION=OFF)
+fi
 # PKG_CONFIG_LIBDIR: pkg-config sees /deps only, so FreeRDP does not find
 # the host's wayland-client either
-PKG_CONFIG_LIBDIR=$DEPS/lib/pkgconfig \
-    cmake -G Ninja -S "$src" -B "$WORK/build/freerdp" -DCMAKE_BUILD_TYPE=Release \
+configure "$WORK/build/freerdp" env PKG_CONFIG_LIBDIR="$DEPS/lib/pkgconfig" \
+    cmake -G Ninja -S "$src" -B "$WORK/build/freerdp" -DCMAKE_BUILD_TYPE=Release "${LAUNCHER[@]}" \
     -DCMAKE_INSTALL_PREFIX=/opt/freerdp -DCMAKE_PREFIX_PATH=$DEPS \
     -DCMAKE_SKIP_RPATH=ON -DBUILD_SHARED_LIBS=OFF -DBUILD_TESTING=OFF \
     -DCMAKE_EXE_LINKER_FLAGS="-static-libstdc++" \
@@ -88,14 +96,15 @@ PKG_CONFIG_LIBDIR=$DEPS/lib/pkgconfig \
     -DWITH_OPENH264=OFF -DWITH_GFX_AV1=ON -DWITH_DAV1D=ON -DWITH_OPUS=ON \
     -DWITH_SYSTEMD=OFF -DWITH_UNICODE_BUILTIN=ON -DWITH_INTERNAL_MD4=ON \
     -DWITH_INTERNAL_RC4=ON -DWITH_SSO_MIB=OFF -DCHANNEL_URBDRC=OFF \
-    -DWITH_MANPAGES=OFF > "$WORK/log/freerdp.log" 2>&1
-grep -q "AV1 decoder: dav1d" "$WORK/log/freerdp.log"
+    -DWITH_MANPAGES=OFF "${DEV[@]}" > "$WORK/log/freerdp.log" 2>&1
+grep -q -e "AV1 decoder: dav1d" -e "configuration kept" "$WORK/log/freerdp.log"
 cmake --build "$WORK/build/freerdp" >> "$WORK/log/freerdp.log" 2>&1
 DESTDIR=$STAGE cmake --install "$WORK/build/freerdp" >> "$WORK/log/freerdp.log" 2>&1
+ccache_stats
 
 # --- package: the client, licences, manifest
 ARCH=$(uname -m)
-NAME=sdl3-freerdp-${VERSION[freerdp]}-linux-$ARCH
+NAME=sdl3-freerdp-${VERSION[freerdp]}-linux-$ARCH${OVERRIDES:+-local}
 PKG=$WORK/pkg/$NAME
 rm -rf "$WORK/pkg"
 mkdir -p "$PKG/bin" "$PKG/licenses"
@@ -106,6 +115,8 @@ licenses "$PKG/licenses" freerdp sdl3 sdl3_ttf freetype openssl opus dav1d zlib 
     echo "sdl3-freerdp ${VERSION[freerdp]} for Linux $ARCH, built $(date -u +%F)"
     # shellcheck source=/dev/null
     echo "build environment: $(. /etc/os-release && echo "$PRETTY_NAME"), $(ldd --version | head -1)"
+    override_manifest
+    [ ${#DEV[@]} = 0 ] || echo "LTO off (local build)"
     echo
     echo "sources (sources.lock):"
     for name in freerdp sdl3 sdl3_ttf freetype openssl opus dav1d zlib jansson; do
@@ -115,6 +126,7 @@ licenses "$PKG/licenses" freerdp sdl3 sdl3_ttf freetype openssl opus dav1d zlib 
     "$PKG/bin/sdl-freerdp" /buildconfig 2> /dev/null | tr ' ' '\n' | grep -E '^WITH_' | sort
 } > "$PKG/MANIFEST"
 "$KIT/build/check-portable.sh" "$PKG/bin/sdl-freerdp"
-tar -C "$WORK/pkg" -cJf "$OUT/$NAME.tar.xz" "$NAME"
+# a local build is compressed quickly: 0.5 s instead of 9 s, 10 % larger
+XZ_OPT=${OVERRIDES:+-1} tar -C "$WORK/pkg" -cJf "$OUT/$NAME.tar.xz" "$NAME"
 (cd "$OUT" && sha256sum "$NAME.tar.xz" > "$NAME.tar.xz.sha256")
 echo "== done: $OUT/$NAME.tar.xz"

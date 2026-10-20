@@ -39,7 +39,20 @@ jobs:
           path: ~/.cache/rdp-release-kit/sources
           key: sources-${{ hashFiles('sources.lock') }}
 
+      # compiled objects from the last run (a pull request's own cache is
+      # never restored on main); a v* release builds without them
+      - name: Cache compiled objects
+        if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/rdp-release-kit/ccache
+          key: ccache-linux-${{ matrix.runner }}-${{ github.sha }}
+          restore-keys: ccache-linux-${{ matrix.runner }}-
+
       - name: Build
+        env:
+          CCACHE: ${{ startsWith(github.ref, 'refs/tags/v') && 'off' || '' }}
+          CCACHE_MAXSIZE: 1G
         run: ./build.sh dist
 
       - name: Smoke test on the supported distributions
@@ -237,7 +250,18 @@ jobs:
           path: ~/.cache/rdp-release-kit/sources
           key: sources-${{ hashFiles('sources.lock') }}
 
+      - name: Cache compiled objects
+        if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/rdp-release-kit/ccache
+          key: ccache-wasm-${{ github.sha }}
+          restore-keys: ccache-wasm-
+
       - name: Build
+        env:
+          CCACHE: ${{ startsWith(github.ref, 'refs/tags/v') && 'off' || '' }}
+          CCACHE_MAXSIZE: 1G
         run: |
           ./build-wasm.sh
           cp ~/.cache/rdp-release-kit/wasm/src/freerdp_web/rdp-gateway.sh dist/wasm/

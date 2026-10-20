@@ -11,7 +11,8 @@
 # <output dir>/freerdp-web-<version>.zip.
 #
 # PAGE_SRC=<dir> takes the page from a local checkout instead of the pinned
-# commit, while the page is being changed (not for releases).
+# commit, while the page is being changed (not for releases); a local
+# FreeRDP comes the same way, as SRC_freerdp_preview (build/overrides.sh).
 set -Eeuo pipefail
 
 KIT=$1
@@ -27,6 +28,11 @@ export LDFLAGS="-pthread"
 export PKG_CONFIG_PATH=$DEPS/lib/pkgconfig
 export PKG_CONFIG_LIBDIR=$DEPS/lib/pkgconfig
 mkdir -p "$OUT"
+# ccache wraps the clang that emcc runs, not emcc itself
+if [ ${#LAUNCHER[@]} != 0 ]; then
+    export EM_COMPILER_WRAPPER=ccache
+    LAUNCHER=()
+fi
 
 # emcmake points CMake at Emscripten's toolchain
 wasm_dep() {
@@ -34,7 +40,7 @@ wasm_dep() {
     shift
     built "$name" && return 0
     src=$(unpack "$name")
-    rm -rf "${WORK:?}/build/$name"
+    overridden "$name" || rm -rf "${WORK:?}/build/$name"
     emcmake cmake -G Ninja -S "$src" -B "$WORK/build/$name" -DCMAKE_BUILD_TYPE=Release \
         -DCMAKE_INSTALL_PREFIX="$DEPS" -DCMAKE_INSTALL_LIBDIR=lib -DCMAKE_PREFIX_PATH="$DEPS" \
         -DCMAKE_FIND_ROOT_PATH="$DEPS" -DBUILD_SHARED_LIBS=OFF "$@" > "$WORK/log/$name.log" 2>&1
@@ -69,8 +75,15 @@ fi
 # into it with ccall, _malloc and _free
 echo "== freerdp ${VERSION[freerdp_preview]} (preview)"
 src=$(unpack freerdp_preview)
-rm -rf "$WORK/build/freerdp"
-emcmake cmake -G Ninja -S "$src" -B "$WORK/build/freerdp" -DCMAKE_BUILD_TYPE=Release \
+overridden freerdp_preview || rm -rf "$WORK/build/freerdp"
+# a local FreeRDP keeps ThinLTO's code generation between links: a relink
+# redoes only the changed modules
+DEV=()
+if overridden freerdp_preview; then
+    DEV=(-DCMAKE_EXE_LINKER_FLAGS_RELEASE="-Wl,--thinlto-cache-dir=$WORK/thinlto")
+fi
+configure "$WORK/build/freerdp" \
+    emcmake cmake -G Ninja -S "$src" -B "$WORK/build/freerdp" -DCMAKE_BUILD_TYPE=Release \
     -DCMAKE_PREFIX_PATH="$DEPS" -DCMAKE_FIND_ROOT_PATH="$DEPS" -DBUILD_SHARED_LIBS=OFF \
     -DOPENSSL_ROOT_DIR="$DEPS" -DWITH_LIBRESSL=ON \
     -DWITH_CLIENT_SDL=ON -DWITH_CLIENT_SDL3=ON -DWITH_CLIENT_SDL2=OFF \
@@ -88,9 +101,10 @@ emcmake cmake -G Ninja -S "$src" -B "$WORK/build/freerdp" -DCMAKE_BUILD_TYPE=Rel
 -sSTACK_SIZE=1048576 -sPTHREAD_POOL_SIZE=32 -sWEBSOCKET_SUBPROTOCOL=binary \
 -sENVIRONMENT=web,worker -sINVOKE_RUN=0 -sEXIT_RUNTIME=1 -sFORCE_FILESYSTEM=1 \
 -sEXPORTED_RUNTIME_METHODS=callMain,FS,ENV,ccall -sEXPORTED_FUNCTIONS=_main,_malloc,_free" \
-    > "$WORK/log/freerdp.log" 2>&1
-grep -q "AV1 decoder: dav1d" "$WORK/log/freerdp.log"
+    "${DEV[@]}" > "$WORK/log/freerdp.log" 2>&1
+grep -q -e "AV1 decoder: dav1d" -e "configuration kept" "$WORK/log/freerdp.log"
 cmake --build "$WORK/build/freerdp" --target sdl3-freerdp >> "$WORK/log/freerdp.log" 2>&1
+ccache_stats
 
 # --- the page: freerdp-web's web/ plus the client
 if [ -n "${PAGE_SRC:-}" ]; then
@@ -100,7 +114,7 @@ else
     page=$(unpack freerdp_web)
     page_rev=${SHA[freerdp_web]}
 fi
-NAME=freerdp-web-${VERSION[freerdp_preview]}
+NAME=freerdp-web-${VERSION[freerdp_preview]}${OVERRIDES:+-local}
 rm -rf "$OUT/web" "$OUT/$NAME.zip"
 mkdir -p "$OUT/web/licenses"
 cp -r "$page/web/." "$OUT/web/"
@@ -112,6 +126,7 @@ licenses "$OUT/web/licenses" freerdp_preview sdl3_wasm sdl3_ttf freetype libress
 {
     echo "FreeRDP web client (preview), built $(date -u +%F) with $(emcc --version | head -1)"
     echo "page: freerdp-web $page_rev"
+    override_manifest
     echo
     echo "sources (sources.lock):"
     for name in freerdp_preview sdl3_wasm sdl3_ttf freetype libressl opus dav1d zlib jansson; do

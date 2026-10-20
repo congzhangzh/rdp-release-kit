@@ -4,7 +4,10 @@
 #
 #   ./build.sh [output dir, default ./dist]
 #
-# Sources are downloaded once into ~/.cache/rdp-release-kit/sources.
+# Sources are downloaded once into ~/.cache/rdp-release-kit/sources;
+# compiled objects are kept by ccache in ~/.cache/rdp-release-kit/ccache.
+# SRC_<name>=<dir> builds a source from a local checkout (see
+# build/overrides.sh; not for releases).
 set -euo pipefail
 
 KIT=$(cd "$(dirname "$0")" && pwd)
@@ -22,11 +25,32 @@ owner() { case "$ENGINE" in *docker) echo "$(id -u):$(id -g)" ;; esac; }
 # can reuse it
 WORK=${WORK:-$HOME/.cache/rdp-release-kit/work-$(uname -m)}
 mkdir -p "$WORK"
+# the compiler cache, shared by every run on this machine; CCACHE=off
+# builds without it
+CCACHE=${CCACHE:-$HOME/.cache/rdp-release-kit/ccache/linux-$(uname -m)}
+CACHE=()
+if [ "$CCACHE" != off ]; then
+    mkdir -p "$CCACHE"
+    CACHE=(-v "$CCACHE":/ccache -e CCACHE_DIR=/ccache)
+fi
+
+# SRC_<name>=<dir> or sources.local: a local source (development only)
+# shellcheck source=build/overrides.sh
+. "$KIT/build/overrides.sh"
+overrides "$WORK"
+# LTO=off: FreeRDP without link-time optimisation, for a local FreeRDP only
+if [ -n "${LTO:-}" ]; then
+    if [ "$LTO" != off ] || [[ $OVERRIDDEN != *" freerdp "* ]]; then
+        echo "LTO=off is for a local FreeRDP only (SRC_freerdp=<dir>)" >&2
+        exit 1
+    fi
+    OVERRIDE+=(-e LTO=off)
+fi
 
 "$ENGINE" build -q -t "$IMAGE" -f "$KIT/build/Containerfile" "$KIT/build" > /dev/null
 # the single quotes are for the container's shell
 # shellcheck disable=SC2016
 "$ENGINE" run --rm -v "$KIT":/kit:ro -v "$SOURCES":/sources -v "$OUT":/out -v "$WORK":/work \
-    -e OWNER="$(owner)" "$IMAGE" \
+    "${CACHE[@]}" "${OVERRIDE[@]}" -e OWNER="$(owner)" "$IMAGE" \
     bash -c '/kit/build/build-sdl3-client.sh /kit /sources /out; rc=$?;
-             [ -z "$OWNER" ] || chown -R "$OWNER" /out /work; exit $rc'
+             [ -z "$OWNER" ] || chown -R "$OWNER" /out /work ${CCACHE_DIR:-}; exit $rc'

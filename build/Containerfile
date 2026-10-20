@@ -12,8 +12,8 @@ FROM almalinux:9
 RUN dnf -y install dnf-plugins-core epel-release \
     && dnf config-manager --set-enabled crb \
     && dnf -y install \
-        gcc gcc-c++ make cmake ninja-build meson nasm pkgconf-pkg-config \
-        perl-core python3 xz bzip2 file diffutils binutils \
+        gcc gcc-c++ make cmake ninja-build meson nasm pkgconf-pkg-config ccache \
+        perl-core python3 xz bzip2 file diffutils binutils rsync \
         libX11-devel libXext-devel libXrandr-devel libXcursor-devel libXi-devel \
         libXfixes-devel libXrender-devel libXScrnSaver-devel libXtst-devel \
         libxkbcommon-devel ibus-devel systemd-devel libusb1-devel vulkan-headers \

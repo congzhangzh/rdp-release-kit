@@ -37,6 +37,38 @@ any other host library, needs a newer glibc, or exports library symbols.
 The archive contains the client, the licences of every component inside
 it, and a `MANIFEST` with the versions, hashes and build options.
 
+### Rebuilding quickly
+
+Downloads are kept in `~/.cache/rdp-release-kit/sources`, each built
+dependency in the work tree (rebuilt only when its pin or compiler
+changes), and compiled objects by ccache in `~/.cache/rdp-release-kit/ccache`
+(`CCACHE=off` builds without it). FreeRDP is configured from scratch on
+every build, as a release must be; ccache makes that rebuild cheap.
+
+To build a source from a local checkout instead of its pin, edits
+included, set `SRC_<name>` for one run or list it in `sources.local`
+(never committed):
+
+```sh
+SRC_freerdp=$HOME/src/FreeRDP ./build.sh               # the Linux client
+SRC_freerdp_preview=$HOME/src/FreeRDP ./build-wasm.sh  # the web client
+echo "freerdp dir $HOME/src/FreeRDP" > sources.local   # every run
+```
+
+The checkout's files (those git knows, tracked or new) are copied by
+content, so an unchanged file keeps its time stamp, and the build tree of
+a local source is kept and not configured again while the options stay
+the same: Ninja recompiles only what changed. `LTO=off` (with a local
+FreeRDP) skips link-time optimisation for the quickest Linux rebuild; a
+local web client keeps ThinLTO's cache between links. The result says
+so: `-local` in its name and an `OVERRIDE` line in its `MANIFEST`. CI and
+`v*` tags refuse any override (`test/overrides.sh` checks that).
+
+An edit to one FreeRDP file, measured with 8 build threads: the Linux
+client in 5.5 s with `LTO=off` (21 s before: 8.5 s for the LTO link, 9 s
+for xz), the web client in about 46 s (55 s before), most of it
+Emscripten's post-link optimisation (Binaryen, 22 s).
+
 ## Windows client
 
 ```sh

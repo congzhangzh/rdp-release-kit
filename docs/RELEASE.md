@@ -114,5 +114,18 @@ for the xrdp packages, which only its login test needs. Now the build
 order of effect:
 
 1. Skip the runs a change cannot affect (documentation only).
-2. Keep compiler caches between runs (ccache through the CI cache) for
-   FreeRDP and its dependencies.
+2. Builder images with each toolchain installed: the Windows, web and
+   xrdp builds install their tools with apt or dnf on every run.
+
+The Linux and web clients keep compiled objects between runs (ccache, in
+the CI cache for pushes to main; a pull request's own cache is never
+restored on main). A release builds without them. A build from the cache
+is byte for byte the build without it: checked for the Linux client
+(`sdl-freerdp`) and the web client (`sdl-freerdp.wasm`), which is why
+ccache's `base_dir` stays empty (it would change `__FILE__`).
+
+Local work on a source goes through `SRC_<name>` or `sources.local`
+(see the README), which CI and `v*` tags refuse: the build tree is kept,
+so an edit to one FreeRDP file rebuilds the Linux client in about 6 s
+with `LTO=off` (21 s before) and the web client in about 46 s (55 s),
+where Binaryen's post-link passes (22 s) remain.
