@@ -124,5 +124,61 @@ check "build.sh: LTO=off with only a local freerdp_preview is refused" \
 check "build.sh: LTO=on is refused (off is the only setting)" '! lto LTO=on SRC_freerdp="$src"'
 check "build.sh: CI=true refuses an override" '! lto CI=true SRC_freerdp="$src"'
 
+check "build-windows.sh: LTO=off without a local FreeRDP is refused" \
+    '! env -i PATH="$PATH" HOME="$HOME" ENGINE=true KIT_CACHE="$TMP/cache" LTO=off \
+         "$KIT/build-windows.sh" x86_64 > /dev/null 2>&1'
+
+# builder images (build/builder.sh) against a fake engine that keeps the
+# labels of the one image it "builds" in a file
+cat > "$TMP/engine" << 'EOF2'
+#!/bin/bash
+# one file of labels per image name
+dir=$(dirname "$0")
+case "$1 $2" in
+    "image inspect")
+        name=${*: -1}
+        db=$dir/image-${name//[:\/]/-}
+        [ -f "$db" ] || exit 1
+        case "$*" in *.Id*) echo "sha256:$name" ;; *) cat "$db" ;; esac ;;
+    "build "*)
+        while [ "$1" != -t ]; do shift; done
+        db=$dir/image-${2//[:\/]/-}
+        ctx=${*: -1}
+        echo "$(sed -n 's/^ENV KIT_TOOLS=//p' "$ctx/Containerfile") \
+$(sed -n 's/.*rdp-release-kit.made=//p' "$ctx/Containerfile")" > "$db"
+        echo "build $2" >> "$dir/images.log" ;;
+    "rmi "*) echo "rmi $2" >> "$dir/images.log" ;;
+esac
+EOF2
+chmod +x "$TMP/engine"
+mkdir -p "$TMP/kit/deps"
+cp "$KIT/build/tools.sh" "$TMP/kit/build/"
+cp "$KIT/build/builder.sh" "$TMP/kit/build/"
+cp "$KIT"/deps/*.txt "$TMP/kit/deps/"
+image() {
+    env -i PATH="$PATH" KIT="$TMP/kit" ENGINE="$TMP/engine" "$@" bash -c \
+        '. "$KIT/build/builder.sh"; builder debian:13 xrdp'
+}
+out=$(image BUILDER=off)
+check "builder: BUILDER=off runs the stock image" '[ "$out" = debian:13 ]'
+out=$(image 2> /dev/null)
+check "builder: the image is named after its kind, flavour and stock image" \
+    '[ "$out" = rdp-release-kit-xrdp-stable:debian-13 ] && [ "$(grep -c build "$TMP/images.log")" = 1 ]'
+image > /dev/null 2>&1
+check "builder: a second build reuses the image" '[ "$(grep -c build "$TMP/images.log")" = 1 ]'
+image FLAVOUR=preview > /dev/null 2>&1
+image > /dev/null 2>&1
+check "builder: another flavour makes another image, and keeps the first" \
+    '[ "$(grep -c build "$TMP/images.log")" = 2 ] &&
+     grep -qx "build rdp-release-kit-xrdp-preview:debian-13" "$TMP/images.log"'
+echo "extra-package  for the test" >> "$TMP/kit/deps/deb.txt"
+image > /dev/null 2>&1
+check "builder: a changed dependency list makes it again, and removes the old one" \
+    '[ "$(grep -c build "$TMP/images.log")" = 3 ] && grep -qx "rmi sha256:rdp-release-kit-xrdp-stable:debian-13" "$TMP/images.log"'
+sed -i "s/ [0-9]*\$/ $(($(date +%s) - 8 * 86400))/" "$TMP/image-rdp-release-kit-xrdp-stable-debian-13"
+image > /dev/null 2>&1
+check "builder: an image older than BUILDER_DAYS is made again" \
+    '[ "$(grep -c build "$TMP/images.log")" = 4 ]'
+
 echo "passed $pass, failed $fail"
 [ "$fail" = 0 ]

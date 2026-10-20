@@ -99,7 +99,11 @@ ldconfig
 exit 0
 EOF
 chmod 755 "$ROOT"/DEBIAN/{postinst,prerm,postrm}
-dpkg-deb --root-owner-group -Zxz --build "$ROOT" "$OUT/xrdp_${XRDP_VERSION}_$ARCH.deb" > /dev/null
+# a build with a local source (OVERRIDES) compresses quickly: default xz
+# takes 6 s for xrdp, -z1 0.4 s, for a package 15 % larger
+ZXZ=(-Zxz)
+[ -z "${OVERRIDES:-}" ] || ZXZ+=(-z1)
+dpkg-deb --root-owner-group "${ZXZ[@]}" --build "$ROOT" "$OUT/xrdp_${XRDP_VERSION}_$ARCH.deb" > /dev/null
 
 # --- xorgxrdp
 ROOT=$STAGE/xorgxrdp
@@ -120,5 +124,5 @@ Description: Xorg drivers for xrdp (rdp-release-kit build)
  xorgxrdp $FROM, built for this distribution's Xorg
  server (video driver ABI $XORG_ABI).
 EOF
-dpkg-deb --root-owner-group -Zxz --build "$ROOT" \
+dpkg-deb --root-owner-group "${ZXZ[@]}" --build "$ROOT" \
     "$OUT/xorgxrdp_${XORGXRDP_VERSION}_$ARCH.deb" > /dev/null

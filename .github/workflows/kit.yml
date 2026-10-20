@@ -79,7 +79,18 @@ jobs:
           path: ~/.cache/rdp-release-kit/sources
           key: sources-${{ hashFiles('sources.lock') }}
 
+      - name: Cache compiled objects
+        if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/rdp-release-kit/ccache
+          key: ccache-windows-${{ matrix.arch }}-${{ github.sha }}
+          restore-keys: ccache-windows-${{ matrix.arch }}-
+
       - name: Build
+        env:
+          CCACHE: ${{ startsWith(github.ref, 'refs/tags/v') && 'off' || '' }}
+          CCACHE_MAXSIZE: 1G
         run: ./build-windows.sh ${{ matrix.arch }}
 
       - uses: actions/upload-artifact@v7
@@ -126,7 +137,18 @@ jobs:
         id: name
         run: echo "name=xrdp-$(echo '${{ matrix.image }}' | tr ':/' '--')" >> "$GITHUB_OUTPUT"
 
+      - name: Cache compiled objects
+        if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/rdp-release-kit/ccache
+          key: ccache-${{ steps.name.outputs.name }}-${{ github.sha }}
+          restore-keys: ccache-${{ steps.name.outputs.name }}-
+
       - name: Build
+        env:
+          CCACHE: ${{ startsWith(github.ref, 'refs/tags/v') && 'off' || '' }}
+          CCACHE_MAXSIZE: 1G
         run: ./build-xrdp.sh "${{ matrix.image }}"
 
       - name: Check the dependencies
@@ -179,7 +201,18 @@ jobs:
         id: name
         run: echo "name=xrdp-preview-$(echo '${{ matrix.image }}' | tr ':/' '--')" >> "$GITHUB_OUTPUT"
 
+      - name: Cache compiled objects
+        if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/rdp-release-kit/ccache
+          key: ccache-${{ steps.name.outputs.name }}-${{ github.sha }}
+          restore-keys: ccache-${{ steps.name.outputs.name }}-
+
       - name: Build
+        env:
+          CCACHE: ${{ startsWith(github.ref, 'refs/tags/v') && 'off' || '' }}
+          CCACHE_MAXSIZE: 1G
         run: ./build-xrdp.sh --preview "${{ matrix.image }}"
 
       - name: Log in over RDP, Xorg and Wayland

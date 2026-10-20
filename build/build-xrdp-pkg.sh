@@ -20,6 +20,13 @@
 # previews sort higher (a commit's date cannot: rebuilt stacks keep them).
 # NO_AV1=1 (a release marked no-av1 in distros-preview.list) leaves AV1
 # and libaom out.
+#
+# A local source (SRC_xrdp_preview=<dir>, see build/overrides.sh) is built
+# in place and kept: the next run regenerates and configures only when
+# that is needed, and make recompiles what changed. Its packages are
+# marked: release 0local1 instead of 0kit1.
+# the autotools subshells set their own PATH on purpose (ccache, below)
+# shellcheck disable=SC2030,SC2031
 set -Eeuo pipefail
 
 KIT=$1
@@ -37,22 +44,14 @@ case " $ID ${ID_LIKE:-} " in
     *" fedora "*) FAMILY=rpm ;;
     *) echo "unsupported distribution: $PRETTY_NAME" >&2; exit 1 ;;
 esac
-# the build dependencies: the first word of each line in deps/<family>.txt
 export FLAVOUR=${FLAVOUR:-stable} NO_AV1=${NO_AV1:-}
-DEPLISTS=("$KIT/deps/$FAMILY.txt")
-[ "$FLAVOUR" = preview ] && DEPLISTS+=("$KIT/deps/$FAMILY-preview.txt")
-mapfile -t BUILD_DEPS < <(grep -h -v -E '^\s*(#|$)' "${DEPLISTS[@]}" | awk '{print $1}' |
-    if [ -n "$NO_AV1" ]; then grep -v '^libaom-'; else cat; fi)
-
-echo "== build dependencies ($PRETTY_NAME)"
+# the build dependencies (deps/<family>.txt), unless the image has them
+# (build/builder.sh)
+[ -n "${KIT_TOOLS:-}" ] || "$KIT/build/tools.sh" "$KIT" xrdp
 if [ $FAMILY = deb ]; then
     PAM_CONFIG=debian
-    export DEBIAN_FRONTEND=noninteractive
-    apt-get update -qq
-    apt-get install -y -qq --no-install-recommends "${BUILD_DEPS[@]}" > /dev/null
 else
     PAM_CONFIG=redhat
-    dnf -y -q install "${BUILD_DEPS[@]}" > /dev/null
 fi
 
 # shellcheck source=build/lib.sh
@@ -65,10 +64,28 @@ export CPPFLAGS="-I$DEPS/include"
 export LDFLAGS="-L$DEPS/lib"
 # what the static libraries need, which their shared versions bring along
 export LIBS="-lm -lpthread -ldl"
+# ccache for the autotools builds: its gcc wrapper first in PATH. CC
+# stays unset: xrdp records its configure options and CC/CFLAGS in its
+# binaries (xrdp --version), and CC="ccache gcc" would change them. Only
+# for those builds: CMake has the launcher, and ccache behind ccache fails
+CCPATH=$PATH
+if [ ${#LAUNCHER[@]} != 0 ]; then
+    for dir in /usr/lib/ccache /usr/lib64/ccache; do
+        [ -x "$dir/gcc" ] && CCPATH=$dir:$PATH
+    done
+fi
+
+# bootstrap <src>: generates configure for a git commit; a kept local
+# source only when configure.ac changed (make regenerates the rest)
+bootstrap() {
+    [ -f "$1/configure" ] && [ "$1/configure" -nt "$1/configure.ac" ] && return 0
+    (cd "$1" && ./bootstrap) >> "$WORK/log/bootstrap.log" 2>&1
+}
+rm -f "$WORK/log/bootstrap.log"
 
 if ! built x264; then
     src=$(unpack x264)
-    (cd "$src" && ./configure --prefix="$DEPS" --libdir="$DEPS/lib" --enable-static \
+    (cd "$src" && export PATH=$CCPATH && ./configure --prefix="$DEPS" --libdir="$DEPS/lib" --enable-static \
          --enable-pic --disable-cli --disable-opencl && make -j"$JOBS" && make install) \
         > "$WORK/log/x264.log" 2>&1
     stamp x264
@@ -91,11 +108,13 @@ if [ "$FLAVOUR" = preview ]; then
     # a git commit, not a release tarball: the submodules come separately
     # and the configure scripts are generated
     src=$(unpack $XRDP)
+    # a local checkout brings its own, if it has them checked out
     for sub in librfxcodec libpainter; do
+        overridden $XRDP && [ -f "$src/$sub/configure.ac" ] && continue
         rm -rf "${src:?}/$sub"
         cp -a "$(unpack $sub)" "$src/$sub"
     done
-    (cd "$src" && ./bootstrap) > "$WORK/log/bootstrap.log" 2>&1
+    bootstrap "$src"
     base=$(sed -n 's/^AC_INIT(\[xrdp\], \[\([^]]*\)\].*/\1/p' "$src/configure.ac")
     XRDP_VERSION=$base~preview.${VERSION[$XRDP]}.${SHA[$XRDP]:0:8}
     EXTRA=(--enable-wlup)
@@ -110,29 +129,41 @@ else
     XRDP=xrdp
     XORGXRDP=xorgxrdp
     src=$(unpack $XRDP)
+    # a local checkout of a release branch: a git tree
+    overridden $XRDP && bootstrap "$src"
     XRDP_VERSION=${VERSION[xrdp]}
     EXTRA=()
 fi
 
+overridden $XRDP && echo "== $XRDP (local)"
+# a local build installs xrdp with the time stamps of its files: xorgxrdp
+# includes its headers from the stage, and new times on unchanged headers
+# would make all of xorgxrdp recompile
+KEEP_TIME=()
+[ -z "${OVERRIDES:-}" ] || KEEP_TIME=(INSTALL="install -p")
 echo "== $XRDP $XRDP_VERSION"
 rm -rf "$STAGE"
-(cd "$src" &&
- ./configure --prefix=/usr --sysconfdir=/etc --localstatedir=/var --libdir=$LIBDIR \
+(cd "$src" && export PATH=$CCPATH &&
+ configure "$src" ./configure \
+     --prefix=/usr --sysconfdir=/etc --localstatedir=/var --libdir=$LIBDIR \
      --with-systemdsystemunitdir=/usr/lib/systemd/system --enable-pam-config=$PAM_CONFIG \
      --enable-fuse --enable-pixman --enable-jpeg --enable-opus --enable-x264 \
      --enable-ipv6 --enable-vsock "${EXTRA[@]}" &&
- make -j"$JOBS" && make install DESTDIR="$STAGE/xrdp") > "$WORK/log/xrdp.log" 2>&1
-grep -q -E "x264 +yes" "$WORK/log/xrdp.log"
+ make -j"$JOBS" && make install DESTDIR="$STAGE/xrdp" "${KEEP_TIME[@]}") > "$WORK/log/xrdp.log" 2>&1
+# configure's summary; a kept configuration passed these checks before
+grep -q -E -e "x264 +yes" -e "configuration kept" "$WORK/log/xrdp.log"
 # AV1 is in a preview unless the release is marked no-av1
 if [ "$FLAVOUR" = preview ] && [ -z "$NO_AV1" ]; then
-    grep -q -E "av1 \(libaom\) +yes" "$WORK/log/xrdp.log"
+    grep -q -E -e "av1 \(libaom\) +yes" -e "configuration kept" "$WORK/log/xrdp.log"
 fi
 
 # xorgxrdp builds against the xrdp just staged: a copy of its .pc file
 # that points into the staging tree
 src=$(unpack $XORGXRDP)
+if [ "$FLAVOUR" = preview ] || overridden $XORGXRDP; then
+    bootstrap "$src"
+fi
 if [ "$FLAVOUR" = preview ]; then
-    (cd "$src" && ./bootstrap) >> "$WORK/log/bootstrap.log" 2>&1
     XORGXRDP_VERSION=$(sed -n 's/^AC_INIT(\[xorgxrdp\], \[\([^]]*\)\].*/\1/p' "$src/configure.ac")
     XORGXRDP_VERSION=$XORGXRDP_VERSION~preview.${VERSION[$XORGXRDP]}.${SHA[$XORGXRDP]:0:8}
 else
@@ -141,9 +172,10 @@ fi
 echo "== $XORGXRDP $XORGXRDP_VERSION"
 mkdir -p "$WORK/pc"
 sed "s|^prefix=.*|prefix=$STAGE/xrdp/usr|" "$STAGE/xrdp$LIBDIR/pkgconfig/xrdp.pc" > "$WORK/pc/xrdp.pc"
-(cd "$src" &&
- PKG_CONFIG_PATH=$WORK/pc ./configure --prefix=/usr --sysconfdir=/etc --libdir=$LIBDIR &&
+(cd "$src" && export PATH=$CCPATH PKG_CONFIG_PATH=$WORK/pc &&
+ configure "$src" ./configure --prefix=/usr --sysconfdir=/etc --libdir=$LIBDIR &&
  make -j"$JOBS" && make install DESTDIR="$STAGE/xorgxrdp") > "$WORK/log/xorgxrdp.log" 2>&1
+ccache_stats
 
 # Nothing for development, no keys: those are made per host on install
 rm -rf "$STAGE"/xrdp/usr/include "$STAGE"/*$LIBDIR/pkgconfig
@@ -153,7 +185,9 @@ sed -i "/^\[Xorg\]/,/^\[/ s|^param=Xorg\$|param=$XORG|" "$STAGE/xrdp/etc/xrdp/se
 grep -q "^param=$XORG\$" "$STAGE/xrdp/etc/xrdp/sesman.ini"
 XORG_ABI=$(pkg-config --variable=abi_videodrv xorg-server | cut -d. -f1)
 ARCH_DEB=$(dpkg --print-architecture 2> /dev/null || true)
+# a build with a local source is marked as one
 REL=0kit1
+[ -z "${OVERRIDES:-}" ] || REL=0local1
 
 echo "== package"
 # only this build's packages: an old build's would be installed with them

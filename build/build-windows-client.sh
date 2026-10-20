@@ -18,11 +18,8 @@ ARCH=$4
 WORK=/work
 STAGE=$WORK/stage
 
-echo "== build tools"
-export DEBIAN_FRONTEND=noninteractive
-apt-get update -qq
-apt-get install -y -qq --no-install-recommends cmake ninja-build meson nasm pkg-config \
-    python3 zip file curl git gnupg xz-utils ca-certificates > /dev/null
+# a stock image: the tools are not in it yet (build/builder.sh)
+[ -n "${KIT_TOOLS:-}" ] || "$KIT/build/tools.sh" "$KIT" windows
 
 # shellcheck source=build/lib.sh
 . "$KIT/build/lib.sh"
@@ -88,10 +85,29 @@ cmake_dep sdl3_ttf "${CROSS[@]}" -DSDLTTF_VENDORED=OFF -DSDLTTF_HARFBUZZ=OFF \
 # deprecated 3.x API, as upstream's scripts/mingw.sh: on Windows its
 # freerdp_keyboard_init_ex passes DWORD* as UINT32* and does not compile
 # with clang (3.32.2, still on master).
-echo "== freerdp ${VERSION[freerdp]}"
+# A local FreeRDP (SRC_freerdp) keeps its build tree, so Ninja rebuilds
+# only what changed; its link reuses the ThinLTO cache (clang's IPO is
+# ThinLTO), or LTO=off leaves link-time optimisation out.
+if overridden freerdp; then
+    echo "== freerdp (local)"
+else
+    echo "== freerdp ${VERSION[freerdp]}"
+fi
 src=$(unpack freerdp)
-rm -rf "$WORK/build/freerdp" "$STAGE"
-cmake -G Ninja -S "$src" -B "$WORK/build/freerdp" "${CROSS[@]}" -DCMAKE_BUILD_TYPE=Release \
+rm -rf "$STAGE"
+overridden freerdp || rm -rf "$WORK/build/freerdp"
+DEV=()
+if overridden freerdp; then
+    if [ "${LTO:-}" = off ]; then
+        DEV=(-DCMAKE_INTERPROCEDURAL_OPTIMIZATION=OFF)
+    else
+        # the kept build tree remembers an earlier LTO=off: drop it (-U)
+        DEV=(-UCMAKE_INTERPROCEDURAL_OPTIMIZATION
+             -DCMAKE_EXE_LINKER_FLAGS_RELEASE="-Wl,--thinlto-cache-dir=$WORK/thinlto")
+    fi
+fi
+configure "$WORK/build/freerdp" \
+    cmake -G Ninja -S "$src" -B "$WORK/build/freerdp" "${CROSS[@]}" -DCMAKE_BUILD_TYPE=Release \
     -DCMAKE_INSTALL_PREFIX=/freerdp -DCMAKE_PREFIX_PATH="$DEPS" \
     -DCMAKE_EXE_LINKER_FLAGS="-static" -DBUILD_SHARED_LIBS=OFF -DBUILD_TESTING=OFF \
     -DOPENSSL_ROOT_DIR="$DEPS" -DWITH_LIBRESSL=ON -DZLIB_LIBRARY="$DEPS/lib/libzs.a" \
@@ -101,13 +117,15 @@ cmake -G Ninja -S "$src" -B "$WORK/build/freerdp" "${CROSS[@]}" -DCMAKE_BUILD_TY
     -DWITH_OPENH264=OFF -DWITH_GFX_AV1=ON -DWITH_DAV1D=ON -DWITH_OPUS=ON -DWITH_SIMD=ON \
     -DWITH_INTERNAL_MD4=ON -DWITH_INTERNAL_RC4=ON -DCHANNEL_URBDRC=OFF -DUSE_UNWIND=OFF \
     -DWITHOUT_WINPR_3x_DEPRECATED=ON -DWITHOUT_FREERDP_3x_DEPRECATED=ON \
-    -DWITH_MANPAGES=OFF > "$WORK/log/freerdp.log" 2>&1
-grep -q "AV1 decoder: dav1d" "$WORK/log/freerdp.log"
+    -DWITH_MANPAGES=OFF "${LAUNCHER[@]}" "${DEV[@]}" > "$WORK/log/freerdp.log" 2>&1
+grep -q -e "AV1 decoder: dav1d" -e "configuration kept" "$WORK/log/freerdp.log"
 cmake --build "$WORK/build/freerdp" >> "$WORK/log/freerdp.log" 2>&1
 DESTDIR=$STAGE cmake --install "$WORK/build/freerdp" >> "$WORK/log/freerdp.log" 2>&1
+ccache_stats
 
 # --- package: the client, licences, manifest
-NAME=sdl3-freerdp-${VERSION[freerdp]}-windows-$ARCH
+# a local build says so in its name
+NAME=sdl3-freerdp-${VERSION[freerdp]}-windows-$ARCH${OVERRIDES:+-local}
 PKG=$WORK/pkg/$NAME
 rm -rf "$WORK/pkg"
 mkdir -p "$PKG/licenses"
@@ -124,8 +142,12 @@ licenses "$PKG/licenses" freerdp sdl3 sdl3_ttf freetype libressl opus dav1d zlib
     for name in freerdp sdl3 sdl3_ttf freetype libressl opus dav1d zlib jansson llvm_mingw; do
         printf '  %-10s %-8s %s\n' "$name" "${VERSION[$name]}" "${SHA[$name]}"
     done
+    override_manifest
+    [ "${DEV[0]:-}" != -DCMAKE_INTERPROCEDURAL_OPTIMIZATION=OFF ] || echo "LTO off (local build)"
 } > "$PKG/MANIFEST"
 "$KIT/build/check-windows.sh" "$PKG/$(basename "$EXE")"
+# zip adds to an existing archive: start a new one
+rm -f "$OUT/$NAME.zip"
 (cd "$WORK/pkg" && zip -qr "$OUT/$NAME.zip" "$NAME")
 (cd "$OUT" && sha256sum "$NAME.zip" > "$NAME.zip.sha256")
 echo "== done: $OUT/$NAME.zip"

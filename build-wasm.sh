@@ -34,6 +34,10 @@ overrides "$WORK"
 # who the files the container writes should belong to: docker runs it as
 # root, rootless podman already as this user
 owner() { case "$ENGINE" in *docker) echo "$(id -u):$(id -g)" ;; esac; }
+# the image with the build tools already installed (build/builder.sh)
+# shellcheck source=build/builder.sh
+. "$KIT/build/builder.sh"
+IMAGE=$(builder "$IMAGE" wasm)
 
 PAGE=()
 if [ -n "${PAGE_SRC:-}" ]; then
@@ -43,7 +47,6 @@ fi
 # shellcheck disable=SC2016
 "$ENGINE" run --rm -v "$KIT":/kit:ro -v "$SOURCES":/sources -v "$OUT":/out -v "$WORK":/work \
     "${PAGE[@]}" "${CACHE[@]}" "${OVERRIDE[@]}" -e OWNER="$(owner)" "$IMAGE" \
-    bash -c 'apt-get update -qq && apt-get install -y -qq --no-install-recommends ninja-build \
-                 meson pkg-config zip ccache rsync > /dev/null
+    bash -c '[ -n "${KIT_TOOLS:-}" ] || /kit/build/tools.sh /kit wasm
              /kit/build/build-wasm-client.sh /kit /sources /out; rc=$?
              [ -z "$OWNER" ] || chown -R "$OWNER" /out /work /sources ${CCACHE_DIR:-}; exit $rc'

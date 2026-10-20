@@ -110,22 +110,27 @@ local ones.
 
 A run took about 19 minutes while the web client's 8 minute build waited
 for the xrdp packages, which only its login test needs. Now the build
-(`wasm-build`) starts at once and only the test (`wasm`) waits. Next, in
-order of effect:
+(`wasm-build`) starts at once and only the test (`wasm`) waits. Next:
+skip the runs a change cannot affect (documentation only).
 
-1. Skip the runs a change cannot affect (documentation only).
-2. Builder images with each toolchain installed: the Windows, web and
-   xrdp builds install their tools with apt or dnf on every run.
+Every build keeps compiled objects between runs (ccache, in the CI cache
+for pushes to main; a pull request's own cache is never restored on
+main) and starts from a builder image with its tools installed
+(`build/builder.sh`: made once per build and distribution, again after
+7 days or when `build/tools.sh` or `deps/` change). A release builds
+without ccache. A build from the cache is byte for byte the build
+without it, checked for each kind:
 
-The Linux and web clients keep compiled objects between runs (ccache, in
-the CI cache for pushes to main; a pull request's own cache is never
-restored on main). A release builds without them. A build from the cache
-is byte for byte the build without it: checked for the Linux client
-(`sdl-freerdp`) and the web client (`sdl-freerdp.wasm`), which is why
-ccache's `base_dir` stays empty (it would change `__FILE__`).
+| Build | Checked | How it stays identical |
+|---|---|---|
+| Linux client | `sdl-freerdp` | ccache's `base_dir` stays empty (it would change `__FILE__`) |
+| web client | `sdl-freerdp.wasm` | as above |
+| Windows client | `sdl-freerdp.exe`, but for its link time | lld writes the link time into every PE file (twice: COFF header, debug directory), with ccache or without |
+| xrdp packages | every staged file (debian:13) | ccache through its gcc wrapper in `PATH`, not `CC="ccache gcc"`: xrdp records its configure options and `CC` in its binaries |
 
 Local work on a source goes through `SRC_<name>` or `sources.local`
 (see the README), which CI and `v*` tags refuse: the build tree is kept,
-so an edit to one FreeRDP file rebuilds the Linux client in about 6 s
-with `LTO=off` (21 s before) and the web client in about 46 s (55 s),
-where Binaryen's post-link passes (22 s) remain.
+so an edit to one file rebuilds the Linux client in about 6 s with
+`LTO=off` (21 s before), the Windows client in 5 s (ThinLTO, cached), the
+xrdp preview in 7 s and the web client in about 46 s (55 s), where
+Binaryen's post-link passes (22 s) remain.

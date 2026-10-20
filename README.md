@@ -39,35 +39,57 @@ it, and a `MANIFEST` with the versions, hashes and build options.
 
 ### Rebuilding quickly
 
-Downloads are kept in `~/.cache/rdp-release-kit/sources`, each built
-dependency in the work tree (rebuilt only when its pin or compiler
-changes), and compiled objects by ccache in `~/.cache/rdp-release-kit/ccache`
-(`CCACHE=off` builds without it). FreeRDP is configured from scratch on
-every build, as a release must be; ccache makes that rebuild cheap.
+Every build keeps what it can between runs:
+
+| Kept | Where | Off with |
+|---|---|---|
+| downloads | `~/.cache/rdp-release-kit/sources` | (delete it) |
+| built dependencies, rebuilt when their pin or compiler changes | each build's work tree | (delete it) |
+| compiled objects (ccache) | `~/.cache/rdp-release-kit/ccache/<build>` | `CCACHE=off` |
+| build tools: a builder image per build and distribution, made again after a week or when `build/tools.sh` or `deps/` change | `rdp-release-kit-<build>:<image>` | `BUILDER=off` |
+
+The client and the packages are still configured and built from scratch
+on every run, as a release must be; ccache makes that cheap, and a build
+from the cache is byte for byte the build without it. `KIT_CACHE=<dir>`
+moves the Windows and xrdp work trees and caches elsewhere.
 
 To build a source from a local checkout instead of its pin, edits
 included, set `SRC_<name>` for one run or list it in `sources.local`
 (never committed):
 
 ```sh
-SRC_freerdp=$HOME/src/FreeRDP ./build.sh               # the Linux client
-SRC_freerdp_preview=$HOME/src/FreeRDP ./build-wasm.sh  # the web client
-echo "freerdp dir $HOME/src/FreeRDP" > sources.local   # every run
+SRC_freerdp=$HOME/src/FreeRDP ./build.sh                       # the Linux client
+SRC_freerdp=$HOME/src/FreeRDP ./build-windows.sh x86_64        # the Windows client
+SRC_freerdp_preview=$HOME/src/FreeRDP ./build-wasm.sh          # the web client
+SRC_xrdp_preview=$HOME/src/xrdp SRC_xorgxrdp_preview=$HOME/src/xorgxrdp \
+    ./build-xrdp.sh --preview debian:13                        # the xrdp preview
+echo "freerdp dir $HOME/src/FreeRDP" > sources.local           # every run
 ```
 
-The checkout's files (those git knows, tracked or new) are copied by
-content, so an unchanged file keeps its time stamp, and the build tree of
-a local source is kept and not configured again while the options stay
-the same: Ninja recompiles only what changed. `LTO=off` (with a local
-FreeRDP) skips link-time optimisation for the quickest Linux rebuild; a
-local web client keeps ThinLTO's cache between links. The result says
-so: `-local` in its name and an `OVERRIDE` line in its `MANIFEST`. CI and
+The checkout's files (those git knows, tracked or new, its submodules'
+too) are copied by content, so an unchanged file keeps its time stamp,
+and the build tree of a local source is kept and not configured again
+while the options stay the same: Ninja or make recompiles only what
+changed. `LTO=off` (with a local FreeRDP) skips link-time optimisation;
+the Windows and web clients keep ThinLTO's cache between links instead.
+The result says so: `-local` in a client's name and an `OVERRIDE` line in
+its `MANIFEST`, release `0local1` in an xrdp package's version. CI and
 `v*` tags refuse any override (`test/overrides.sh` checks that).
 
-An edit to one FreeRDP file, measured with 8 build threads: the Linux
-client in 5.5 s with `LTO=off` (21 s before: 8.5 s for the LTO link, 9 s
-for xz), the web client in about 46 s (55 s before), most of it
-Emscripten's post-link optimisation (Binaryen, 22 s).
+Measured with 8 build threads, before these changes → now (the edit: a
+new function in one file, so it compiles and links for real):
+
+| | rebuild, nothing changed | one file edited, local source |
+|---|---|---|
+| Linux client | 36 s → 26 s | 21 s → 5.5 s (`LTO=off`) |
+| Windows client (x86_64) | 56 s → 15 s | 5.1 s (ThinLTO, cached), 3.3 s (`LTO=off`) |
+| web client | 145 s → 124 s | 55 s → 46 s, of which Binaryen's post-link passes 22 s |
+| xrdp packages (debian:13) | 83 s → 26 s | |
+| xrdp preview (debian:13) | 101 s → 43 s | 7 s (xrdp and xorgxrdp local) |
+
+A local xrdp build installs xrdp with its files' time stamps (xorgxrdp
+includes its headers from there) and compresses its packages with
+`xz -1` (default xz: 6 s for xrdp's).
 
 ## Windows client
 
