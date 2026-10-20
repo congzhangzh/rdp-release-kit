@@ -12,8 +12,8 @@ verify them; they never compile.
 | `sdl-freerdp`, Linux x86_64 / aarch64 | FreeRDP release tag | stable | `v<YYYY>.<MM>.<N>` |
 | `sdl-freerdp.exe`, Windows x86_64 / ARM64 | FreeRDP release tag | stable | `v<YYYY>.<MM>.<N>` |
 | xrdp + xorgxrdp, `.deb` / `.rpm` for every release in `distros.list` | xrdp, xorgxrdp signed release tags | stable | `v<YYYY>.<MM>.<N>` |
-| Web client (WebAssembly) + the freerdp-web page | FreeRDP master + open pull requests, frozen on a fork branch; the page by commit | preview | `web-<page commit, 12>` on every push to main; also inside `v*` |
-| xrdp preview packages: Wayland sessions, AV1, pacing | a frozen xrdp development commit + xorgxrdp devel | preview | `xrdp-preview-<commit, 12>` |
+| Web client (WebAssembly) + the freerdp-web page | FreeRDP master + open pull requests, frozen on a fork branch; the page by commit | preview | `web-<page commit, 12>` on every push to main; also inside `v*`. Frozen form: `web-<page, 12>-<kit, 12>` ([Frozen releases](#frozen-releases)) |
+| xrdp preview packages: Wayland sessions, AV1, pacing | a frozen xrdp development commit + xorgxrdp devel | preview | `xrdp-preview-<commit, 12>`. Frozen form: `xrdp-preview-<commit, 12>-<kit, 12>` |
 | Demo videos (planned) | recorded by `test/wasm-session.sh` | with the web client | `web-<page commit, 12>` |
 
 **Stable** means: upstream release tags only, hashes (and signatures where
@@ -82,7 +82,8 @@ upstream tag / frozen branch
   compares each `sources.lock` entry with the newest upstream release of
   the series the kit follows (`git ls-remote`, no token); the daily
   `upstream` workflow opens one issue per update found. A person decides;
-  nothing bumps itself.
+  nothing bumps itself, and nothing waits longer than two weeks (see
+  [Keeping pins fresh](#keeping-pins-fresh)).
 - **The web client**: the kit pins a page commit, its CI makes
   `web-<page commit>`; freerdp-web publishes either that exact build (always
   for a freerdp-web `v*` tag; the client's `MANIFEST` must name the page
@@ -93,6 +94,162 @@ upstream tag / frozen branch
   are published by hand.
 - **Releases are never automatic**: a push builds and tests; publishing
   needs a tag or a manual run.
+
+## Frozen releases
+
+**A published name always means the same files.** Once a release or
+pre-release is published, nothing replaces, adds or deletes its assets,
+and its tag never moves. A different build gets a different name; the old
+one stays, so anything that downloaded it, pinned it or recorded its
+checksum keeps being right.
+
+### Why
+
+The pre-releases have been overwritten: each one is named by its source
+commit only, and every push to main rebuilds it and uploads with
+`--clobber`.
+
+- `web-2cf615b88ecc` was published by the kit's 0ea7f94 at 14:58 on
+  2026-10-19. The next push, a2afe67, changed only xrdp's packaging, yet
+  it rebuilt the web client and replaced all five assets at 15:12. The
+  `KIT_COMMIT` asset names a2afe67 now.
+- `xrdp-preview-53af799d2548` was published at 11:12 the same day. Its
+  packages were replaced at 15:11, and they kept their version
+  (`…-0kit1`).
+
+Whoever downloaded before 15:12 holds a `KIT_COMMIT` that names 0ea7f94,
+under the same name. Whether the client and the packages changed as well
+can no longer be checked, because their old checksums were overwritten
+with them. That loss is the harm in itself.
+
+The consumers make it worse:
+- freerdp-web's `site.sh` keeps one downloaded client per tag and checks
+  it against the checksum saved with it. A machine that fetched the tag
+  early keeps the old client while CI fetches the new one.
+- apt takes two packages with one version for the same package, so it
+  never installs the second. A repository that served both would give
+  its users a hash mismatch.
+
+### What other projects do
+
+| Project | Rule |
+|---|---|
+| Python | A release's files are never replaced. PyPI refuses a file name that has ever been used, even after it is deleted. A fix is a new version (3.13.0 → 3.13.1). |
+| Chromium | Every build has its own number (major.minor.build.patch), never reused. The channels (stable, beta, dev, canary) are pointers that move from one number to the next. |
+| Debian | The archive never takes a different file under a version it already has. A rebuild without a source change is a new version (`+b1`), and snapshot.debian.org keeps every one. |
+
+The kit takes the same three ideas: one name per build, pointers that
+move while builds don't, and versions that only go up.
+
+### Rules
+
+1. **Each name records every input.** A pre-release names the source
+   commit and the kit commit. The kit commit fixes everything else
+   through `sources.lock`: FreeRDP, Emscripten, every dependency, the
+   build scripts.
+
+   The name records how a build was made, not every byte: the
+   distributions' packages in the build images are not pinned (only
+   Emscripten's image is pinned, by digest), so the same kit commit built
+   a month later can differ. That is why a name is built and published
+   once, and never again.
+
+   | Product | Name |
+   |---|---|
+   | Web client | `web-<page commit, 12>-<kit commit, 12>` |
+   | xrdp preview | `xrdp-preview-<xrdp commit, 12>-<kit commit, 12>` |
+   | Stable | `v<YYYY>.<MM>.<N>`, a tag on one kit commit (already the case) |
+
+   A push that cannot change a build (documentation only) should not
+   make a new one; see [Speed](#speed).
+2. **Publish once, complete.** A publish step:
+   - stops if the tag already exists;
+   - otherwise creates a draft, uploads every asset with `SHA256SUMS`,
+     then publishes it.
+
+   No `--clobber`, and no `gh release edit` of assets. A draft can be
+   deleted and made again, because nobody can download one. Two runs of
+   one commit (a push and a manual run) must not publish at once: the
+   publish jobs share a `concurrency` group per tag.
+3. **Pointers move; releases don't.** "The newest tested web client" is a
+   query: the newest published `web-*`, as `site.sh` reads it now. "The
+   client for page P" is the newest `web-<P, 12>-*`. A moving git tag such
+   as `web-latest` is not used, because a moving tag is exactly what rule
+   2 forbids.
+4. **A version is one set of bytes.** A package keeps the upstream
+   version plus `0kit<N>`. N goes up whenever the kit's build of the same
+   upstream source changes, like Debian's `+b1`. Today N is always 1
+   (`build/build-xrdp-pkg.sh`). A way that goes up by itself: the number
+   of kit commits on main (`git rev-list --count`), which needs CI to
+   fetch the full history.
+5. **Withdraw, don't delete.** A bad release stays, with release notes
+   that start `WITHDRAWN: <why>; use <tag>`. Queries for the newest
+   release skip withdrawn ones.
+   - A release is deleted only when it exposes something private
+     (see `privacy-scan`).
+   - Its name is never used again.
+6. **GitHub enforces it.** GitHub's immutable releases (repository
+   settings) lock a published release's assets and its tag. Release notes
+   can still change, so rule 5 still works. GitHub recommends the same
+   order as rule 2: a draft first, then publish. It applies only to
+   releases published after it is turned on.
+   - Its documentation does not say whether it covers pre-releases. Try
+     it once on a throwaway repository before relying on it.
+
+### Moving there
+
+| Where | Today | Change |
+|---|---|---|
+| kit `wasm` job, "Hand the tested page to freerdp-web" | `web-<page, 12>`, `gh release edit` + `upload --clobber` | the new name; draft, upload, publish; stop if it exists |
+| kit `xrdp-preview-release` job | `xrdp-preview-<commit, 12>`, the same | the same |
+| kit `release` job (`v*`) | creates the release with all assets in one call; a second run fails because the release exists | nothing, beyond immutable releases |
+| freerdp-web `pages.yml`, exact client for a commit | the URL of `web-<commit, 12>` | look up the newest `web-<commit, 12>-*` |
+| freerdp-web `site.sh` | the newest `web-*`, or `web-<commit, 12>` for `kit:<commit>`; one cache per tag | the newest `web-*` still works; `kit:<commit>` as in `pages.yml` |
+| package revisions | always `0kit1` | rule 4 |
+
+The order matters:
+1. freerdp-web accepts both names.
+2. The kit switches to the new names.
+3. Immutable releases are turned on.
+
+The three pre-releases made so far keep their names, since their links are
+in use. Their notes say they were made before this policy and may have
+been replaced.
+
+## Keeping pins fresh
+
+A pin that falls behind upstream costs more the longer it waits: the jump
+grows, and so do the fixes it misses. Each update gets a decision within
+two weeks.
+
+- **Every day**, the `upstream` workflow:
+  - opens one issue per new upstream release
+    (`Update available: <name> <pinned> → <newest>`);
+  - closes the issues whose pin has moved since.
+- **After 14 days**, an update must be bumped (a pull request that changes
+  `sources.lock`) or deferred. To defer, give the issue the `deferred`
+  label and say why in it, for example "opus 1.6 changes the API, after
+  the FreeRDP 3.33 bump". The label is made once, with
+  `gh label create deferred`. Until one of those happens, the workflow
+  fails every day, and GitHub notifies whoever last changed the
+  workflow's schedule.
+- **Closing an issue by hand** means "not this version". It is not opened
+  again, but the next upstream release opens a new one.
+- **A security fix** does not wait for the two weeks: bump it the same
+  day, outside the cycle.
+- **Kept updates:**
+  - The clock starts when the issue opens and stops only when the pin
+    moves. A newer upstream release opens another issue, while the older
+    one keeps counting.
+  - A deferred issue stays open, and its label can come off at any time.
+- **Not covered:**
+  - Preview sources and our own repositories, which move when a new commit
+    is frozen.
+  - Builder images, which pick up distribution updates every 7 days on
+    their own (`build/builder.sh`).
+- **Quiet repositories:** GitHub turns off scheduled workflows in a public
+  repository after 60 days without activity. The check then stops
+  silently, and has to be turned on again in the Actions tab.
 
 ## Consuming a release
 

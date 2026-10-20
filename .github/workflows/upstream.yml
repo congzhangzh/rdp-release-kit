@@ -2,7 +2,8 @@ name: upstream
 
 # Once a day, compares every pinned upstream source with upstream's newest
 # release (check-upstream.sh) and opens one issue per update found. It
-# changes nothing: a person bumps sources.lock in a pull request.
+# changes nothing: a person bumps sources.lock in a pull request. An
+# update waits two weeks at most (docs/RELEASE.md, "Keeping pins fresh").
 on:
   schedule:
     - cron: '17 5 * * *'
@@ -38,3 +39,39 @@ jobs:
           Found by the daily upstream check (check-upstream.sh)."
             echo "opened: $title"
           done
+
+      # An issue whose pin has moved since is done: sources.lock no longer
+      # pins the version its title starts from
+      - name: Close the updates done
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh issue list --state open --limit 200 --json number,title \
+              -q '.[] | select(.title | startswith("Update available:")) | "\(.number) \(.title)"' |
+            while read -r number _ _ name have _; do
+              pinned=$(awk -v n="$name" '$1 == n { print $2 }' upstream.txt)
+              if [ -n "$pinned" ] && [ "$pinned" != "$have" ]; then
+                gh issue close "$number" --comment "sources.lock pins $name $pinned now."
+                echo "closed: #$number $name $have"
+              fi
+            done
+
+      # Two weeks after its issue opened, an update is bumped or deferred:
+      # the deferred label, and in the issue why. Until then this run
+      # fails every day, and GitHub notifies whoever last changed the
+      # schedule above.
+      - name: No update waits longer than two weeks
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          late=$(gh issue list --state open --limit 200 --json number,title,createdAt,labels |
+            jq -r --arg cutoff "$(date -u -d '14 days ago' +%FT%TZ)" '.[]
+              | select(.title | startswith("Update available:"))
+              | select(any(.labels[]; .name == "deferred") | not)
+              | select(.createdAt < $cutoff)
+              | "#\(.number) \(.title), open since \(.createdAt[0:10])"')
+          if [ -n "$late" ]; then
+            echo "$late"
+            echo "::error::updates waiting more than two weeks: bump them in sources.lock, or label the issue deferred and say why in it"
+            exit 1
+          fi
