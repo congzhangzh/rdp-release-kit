@@ -3,9 +3,11 @@
 mkdir -p /run/sshd && /usr/sbin/sshd
 # Xwayland's socket directory, as an init system would make it
 mkdir -p /tmp/.X11-unix && chmod 1777 /tmp/.X11-unix
-# a system bus, as an init system would start it; and no stale systemd state in /run, so
-# GNOME Shell does not look for logind (it checks /run/systemd/seats)
-rm -rf /run/systemd
+# a system bus, as an init system would start it; and nothing an earlier run left in
+# /run or /tmp (docker restart keeps the container's files): dbus-daemon refuses to start
+# over its old pid file, GNOME Shell looks for logind when /run/systemd/seats exists, and
+# an old session-ended would report this session ended
+rm -rf /run/systemd /run/dbus /tmp/session-ended
 mkdir -p /run/dbus && dbus-daemon --system --fork
 runuser -u tester -- /usr/local/bin/session &
 # stay up when the session ends, so its logs (/tmp/*.log) can still be read
