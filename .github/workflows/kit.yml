@@ -12,6 +12,9 @@ on:
   push:
     branches: [main]
     tags: ['v*']
+    # a change no build reads makes no new pre-release (docs/RELEASE.md,
+    # "Frozen releases"); tag pushes are never filtered by path
+    paths-ignore: ['**.md', 'docs/**', '.github/workflows/upstream.yml', 'check-upstream.sh']
   pull_request:
   workflow_dispatch:
     inputs:
@@ -24,6 +27,15 @@ permissions:
   contents: read
 
 jobs:
+  # The kit's own scripts, without building: local sources, builder images,
+  # and the one-time publishing of the pre-releases (a fake gh)
+  scripts:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - run: test/overrides.sh
+      - run: test/publish.sh
+
   build:
     strategy:
       fail-fast: false
@@ -120,6 +132,8 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0   # the packages' release, 0kit<N>, counts the kit's commits
 
       - name: Cache sources
         uses: actions/cache@v6
@@ -184,6 +198,8 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0   # the packages' release, 0kit<N>, counts the kit's commits
 
       - name: Cache sources
         uses: actions/cache@v6
@@ -235,11 +251,13 @@ jobs:
           if-no-files-found: ignore
 
   # Every release's preview packages, once all of them pass, go to the
-  # pre-release xrdp-preview-<commit> (pushes only; never a kit release)
+  # pre-release xrdp-preview-<xrdp commit>-<kit commit> (pushes only; never
+  # a kit release), published once and never replaced
   xrdp-preview-release:
     if: github.event_name != 'pull_request'
-    needs: [xrdp-preview]
+    needs: [scripts, xrdp-preview]
     runs-on: ubuntu-24.04
+    concurrency: publish-xrdp-preview-${{ github.sha }}
     permissions:
       contents: write
     steps:
@@ -253,7 +271,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           sha=$(awk '$1 == "xrdp_preview" { print $4 }' sources.lock)
-          tag=xrdp-preview-${sha:0:12}
+          tag=xrdp-preview-${sha:0:12}-${GITHUB_SHA:0:12}
           # release assets are flat, and GitHub turns '~' in their names
           # into '.': give the files those names first, so SHA256SUMS
           # matches what is downloaded
@@ -262,14 +280,8 @@ jobs:
             cp "$f" "upload/$(basename "$f" | tr '~' '.')"
           done
           (cd upload && sha256sum -- *.deb *.rpm > SHA256SUMS)
-          notes="A PREVIEW of the next xrdp: xrdp $sha (its development branch with Wayland sessions, AV1 and pacing) and xorgxrdp's development branch, built and tested (an Xorg and a Wayland login) by rdp-release-kit $GITHUB_SHA. Not an xrdp release."
-          if gh release view "$tag" > /dev/null 2>&1; then
-            gh release edit "$tag" --notes "$notes"
-          else
-            gh release create "$tag" --prerelease --latest=false --target "$GITHUB_SHA" \
-              --title "xrdp preview ${sha:0:12}" --notes "$notes"
-          fi
-          gh release upload "$tag" --clobber upload/*
+          notes="A PREVIEW of the next xrdp: xrdp $sha (its development branch with Wayland sessions, AV1 and pacing) and xorgxrdp's development branch, built and tested (an Xorg and a Wayland login) by rdp-release-kit $GITHUB_SHA. Not an xrdp release. Published once, never replaced."
+          build/publish-prerelease.sh "$tag" "xrdp preview ${sha:0:12} (kit ${GITHUB_SHA:0:12})" "$notes" upload/*
 
   # The web client builds at once; only its login test waits for xrdp
   wasm-build:
@@ -307,8 +319,9 @@ jobs:
           include-hidden-files: true   # the page's .well-known/
 
   wasm:
-    needs: [wasm-build, xrdp]
+    needs: [scripts, wasm-build, xrdp]
     runs-on: ubuntu-24.04
+    concurrency: publish-web-${{ github.sha }}
     permissions:
       contents: write   # the tested page goes to a pre-release, for freerdp-web
     steps:
@@ -341,27 +354,27 @@ jobs:
         run: test/wasm-session.sh dist/wasm/web dist/wasm/rdp-gateway.sh
 
       # freerdp-web publishes the page; it builds nothing. The tested client
-      # goes to a pre-release here, one per page commit, with the xrdp
-      # packages its check of the published site logs in to.
+      # goes to a pre-release here, web-<page commit>-<kit commit>, with the
+      # xrdp packages its check of the published site logs in to; published
+      # once and never replaced (docs/RELEASE.md, "Frozen releases").
       - name: Hand the tested page to freerdp-web
         if: github.event_name != 'pull_request'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           page=$(awk '$1 == "freerdp_web" { print $4 }' sources.lock)
-          tag=web-${page:0:12}
+          tag=web-${page:0:12}-${GITHUB_SHA:0:12}
           mkdir -p dist/handoff
           cp dist/wasm/freerdp-web-*.zip dist/handoff/freerdp-web-page.zip
           echo "$GITHUB_SHA" > dist/handoff/KIT_COMMIT
-          (cd dist/handoff && sha256sum freerdp-web-page.zip > freerdp-web-page.zip.sha256)
-          notes="The web client for freerdp-web $page, built and tested (a browser login to xrdp over SSH) by rdp-release-kit $GITHUB_SHA. freerdp-web's workflow publishes it. Not a kit release."
-          if gh release view "$tag" > /dev/null 2>&1; then
-            gh release edit "$tag" --notes "$notes"
-          else
-            gh release create "$tag" --prerelease --latest=false --target "$GITHUB_SHA" \
-              --title "Web client for freerdp-web ${page:0:12}" --notes "$notes"
-          fi
-          gh release upload "$tag" --clobber dist/handoff/* dist/xrdp/debian-13/*.deb
+          # GitHub turns '~' in asset names into '.': name them so first
+          for f in dist/xrdp/debian-13/*.deb; do
+            cp "$f" "dist/handoff/$(basename "$f" | tr '~' '.')"
+          done
+          (cd dist/handoff && sha256sum freerdp-web-page.zip > freerdp-web-page.zip.sha256 &&
+            sha256sum -- * > ../SHA256SUMS && mv ../SHA256SUMS .)
+          notes="The web client for freerdp-web $page, built and tested (a browser login to xrdp over SSH) by rdp-release-kit $GITHUB_SHA. freerdp-web's workflow publishes it. Not a kit release. Published once, never replaced."
+          build/publish-prerelease.sh "$tag" "Web client for freerdp-web ${page:0:12} (kit ${GITHUB_SHA:0:12})" "$notes" dist/handoff/*
 
       - uses: actions/upload-artifact@v7
         with:

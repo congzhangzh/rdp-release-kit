@@ -24,7 +24,7 @@
 # A local source (SRC_xrdp_preview=<dir>, see build/overrides.sh) is built
 # in place and kept: the next run regenerates and configures only when
 # that is needed, and make recompiles what changed. Its packages are
-# marked: release 0local1 instead of 0kit1.
+# marked: release 0local1 instead of 0kit<N>.
 # the autotools subshells set their own PATH on purpose (ccache, below)
 # shellcheck disable=SC2030,SC2031
 set -Eeuo pipefail
@@ -185,8 +185,9 @@ sed -i "/^\[Xorg\]/,/^\[/ s|^param=Xorg\$|param=$XORG|" "$STAGE/xrdp/etc/xrdp/se
 grep -q "^param=$XORG\$" "$STAGE/xrdp/etc/xrdp/sesman.ini"
 XORG_ABI=$(pkg-config --variable=abi_videodrv xorg-server | cut -d. -f1)
 ARCH_DEB=$(dpkg --print-architecture 2> /dev/null || true)
-# a build with a local source is marked as one
-REL=0kit1
+# N counts the kit's commits (build-xrdp.sh); a build with a local source
+# is marked as one
+REL=0kit${KIT_REV:-0}
 [ -z "${OVERRIDES:-}" ] || REL=0local1
 
 echo "== package"

@@ -42,6 +42,17 @@ if [ ${#IMAGES[@]} = 0 ]; then
     mapfile -t IMAGES < <(grep -v -E '^\s*(#|$)' "$KIT/$LIST" | awk '{print $1}')
 fi
 
+# The packages' release is 0kit<N>, N the number of kit commits: every kit
+# change gives a higher version, so one version is never two different
+# packages (docs/RELEASE.md, "Frozen releases"). A shallow clone would
+# count 1, so it is refused; a tree without git (git archive) gets 0.
+if [ "$(git -C "$KIT" rev-parse --is-shallow-repository 2> /dev/null)" = true ]; then
+    echo "build-xrdp.sh: a shallow clone cannot number the packages: fetch the whole history" >&2
+    exit 1
+fi
+KIT_REV=$(git -C "$KIT" rev-list --count HEAD 2> /dev/null) || KIT_REV=0
+echo "== packages: release 0kit$KIT_REV"
+
 status=0
 for image in "${IMAGES[@]}"; do
     work=$KIT_CACHE/xrdp$SUFFIX-${image//[\/:]/-}
@@ -70,7 +81,7 @@ for image in "${IMAGES[@]}"; do
     # shellcheck disable=SC2016
     if ! "$ENGINE" run --rm -v "$KIT":/kit:ro -v "$SOURCES":/sources -v "$OUT":/out \
             -v "$work":/work "${CACHE[@]}" "${OVERRIDE[@]}" -e OWNER="$(owner)" \
-            -e FLAVOUR="$FLAVOUR" -e NO_AV1="$NO_AV1" "$builder" \
+            -e FLAVOUR="$FLAVOUR" -e NO_AV1="$NO_AV1" -e KIT_REV="$KIT_REV" "$builder" \
             bash -c '/kit/build/build-xrdp-pkg.sh /kit /sources /out; rc=$?;
                      [ -z "$OWNER" ] || chown -R "$OWNER" /out /work /sources ${CCACHE_DIR:-}
                      exit $rc'; then

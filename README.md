@@ -177,8 +177,9 @@ today's gnome-remote-desktop baseline.
 
 The web client is published on freerdp-web's own GitHub Pages; this kit
 builds and tests it. On each push the wasm job hands the tested client of
-the pinned page over as a pre-release `web-<page commit>` (with the xrdp
-packages for the published site's login check); freerdp-web's workflow
+the pinned page over as a pre-release `web-<page commit>-<kit commit>`
+(with the xrdp packages for the published site's login check), published
+once and never replaced (docs/RELEASE.md, "Frozen releases"); freerdp-web's workflow
 downloads it and publishes it, only on purpose (a `v*` tag there, or *Run
 workflow* with **publish**). This repository's Pages only redirect there, to
 the same origin, so saved hosts come along. A pull request builds and tests
@@ -209,8 +210,9 @@ run-time dependency of the built packages with the version that would be
 installed, each line starting with `ok` or `MISSING`. Run it first when
 adding a release to [`distros.list`](distros.list).
 
-The packages are named `xrdp` and `xorgxrdp`, with a `0kit1` release
-suffix, and take the place of the distribution's packages of the same
+The packages are named `xrdp` and `xorgxrdp`, with a `0kit<N>` release
+suffix (N: the number of kit commits, so every kit change sorts higher),
+and take the place of the distribution's packages of the same
 name. Services are not started on install, and the host keys are made on
 install, never shipped.
 

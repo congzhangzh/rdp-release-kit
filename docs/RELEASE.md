@@ -12,9 +12,9 @@ verify them; they never compile.
 | `sdl-freerdp`, Linux x86_64 / aarch64 | FreeRDP release tag | stable | `v<YYYY>.<MM>.<N>` |
 | `sdl-freerdp.exe`, Windows x86_64 / ARM64 | FreeRDP release tag | stable | `v<YYYY>.<MM>.<N>` |
 | xrdp + xorgxrdp, `.deb` / `.rpm` for every release in `distros.list` | xrdp, xorgxrdp signed release tags | stable | `v<YYYY>.<MM>.<N>` |
-| Web client (WebAssembly) + the freerdp-web page | FreeRDP master + open pull requests, frozen on a fork branch; the page by commit | preview | `web-<page commit, 12>` on every push to main; also inside `v*`. Frozen form: `web-<page, 12>-<kit, 12>` ([Frozen releases](#frozen-releases)) |
-| xrdp preview packages: Wayland sessions, AV1, pacing | a frozen xrdp development commit + xorgxrdp devel | preview | `xrdp-preview-<commit, 12>`. Frozen form: `xrdp-preview-<commit, 12>-<kit, 12>` |
-| Demo videos (planned) | recorded by `test/wasm-session.sh` | with the web client | `web-<page commit, 12>` |
+| Web client (WebAssembly) + the freerdp-web page | FreeRDP master + open pull requests, frozen on a fork branch; the page by commit | preview | `web-<page commit, 12>-<kit commit, 12>` on every push to main that changes a build; also inside `v*` |
+| xrdp preview packages: Wayland sessions, AV1, pacing | a frozen xrdp development commit + xorgxrdp devel | preview | `xrdp-preview-<commit, 12>-<kit commit, 12>` |
+| Demo videos (planned) | recorded by `test/wasm-session.sh` | with the web client | `web-<page commit, 12>-<kit commit, 12>` |
 
 **Stable** means: upstream release tags only, hashes (and signatures where
 upstream signs) checked, no patches. **Preview** means: a fixed commit of
@@ -23,7 +23,9 @@ appears, never mixed into a stable package's name or version.
 
 A stable release is named by date, `v2026.10.0`, because it bundles
 several upstream versions; each archive's `MANIFEST` and the release notes
-list them. Packages keep the upstream version with a `0kit<N>` suffix.
+list them. Packages keep the upstream version with a `0kit<N>` suffix, N
+the number of kit commits. Every pre-release and release is published
+once and never replaced ([Frozen releases](#frozen-releases)).
 
 ## Inputs
 
@@ -72,7 +74,7 @@ a negative test (a wrong hash, a wrong key, a tampered tarball).
 ```
 upstream tag / frozen branch
   → bump commit in sources.lock (a pull request: build + all gates)
-  → main: CI again; the web client goes to pre-release web-<page commit>
+  → main: CI again; the web client goes to pre-release web-<page>-<kit>
   → tag v<YYYY>.<MM>.<N> on a green main commit
   → release: every artifact, SHA256SUMS, build provenance attestations
   → consumers download and verify (freerdp-web publishes on purpose)
@@ -85,7 +87,8 @@ upstream tag / frozen branch
   nothing bumps itself, and nothing waits longer than two weeks (see
   [Keeping pins fresh](#keeping-pins-fresh)).
 - **The web client**: the kit pins a page commit, its CI makes
-  `web-<page commit>`; freerdp-web publishes either that exact build (always
+  `web-<page commit>-<kit commit>`; freerdp-web (its `kit-release.sh`
+  finds the newest build of a commit) publishes either that exact build (always
   for a freerdp-web `v*` tag; the client's `MANIFEST` must name the page
   commit) or, for page-only changes, its page over the newest tested client.
   A tag publishes its own commit's page: tag only a commit at or ahead of
@@ -178,10 +181,11 @@ move while builds don't, and versions that only go up.
    2 forbids.
 4. **A version is one set of bytes.** A package keeps the upstream
    version plus `0kit<N>`. N goes up whenever the kit's build of the same
-   upstream source changes, like Debian's `+b1`. Today N is always 1
-   (`build/build-xrdp-pkg.sh`). A way that goes up by itself: the number
-   of kit commits on main (`git rev-list --count`), which needs CI to
-   fetch the full history.
+   upstream source changes, like Debian's `+b1`. N is the number of kit
+   commits (`git rev-list --count HEAD`, in `build-xrdp.sh`), so it goes
+   up by itself; CI fetches the whole history for it, and a shallow clone
+   is refused. A tree without git (`git archive`) builds `0kit0`, below
+   every published one.
 5. **Withdraw, don't delete.** A bad release stays, with release notes
    that start `WITHDRAWN: <why>; use <tag>`. Queries for the newest
    release skip withdrawn ones.
@@ -196,25 +200,26 @@ move while builds don't, and versions that only go up.
    - Its documentation does not say whether it covers pre-releases. Try
      it once on a throwaway repository before relying on it.
 
-### Moving there
+### How it is done
 
-| Where | Today | Change |
-|---|---|---|
-| kit `wasm` job, "Hand the tested page to freerdp-web" | `web-<page, 12>`, `gh release edit` + `upload --clobber` | the new name; draft, upload, publish; stop if it exists |
-| kit `xrdp-preview-release` job | `xrdp-preview-<commit, 12>`, the same | the same |
-| kit `release` job (`v*`) | creates the release with all assets in one call; a second run fails because the release exists | nothing, beyond immutable releases |
-| freerdp-web `pages.yml`, exact client for a commit | the URL of `web-<commit, 12>` | look up the newest `web-<commit, 12>-*` |
-| freerdp-web `site.sh` | the newest `web-*`, or `web-<commit, 12>` for `kit:<commit>`; one cache per tag | the newest `web-*` still works; `kit:<commit>` as in `pages.yml` |
-| package revisions | always `0kit1` | rule 4 |
+| Where | What |
+|---|---|
+| [`build/publish-prerelease.sh`](../build/publish-prerelease.sh) | rules 1 and 2 for both pre-releases: a published tag is left as it is; a tag without a release is refused; a draft an earlier run left is deleted; a new draft gets every file, is published, and must then list exactly those files. Only an HTTP 404 counts as "not there": any other error stops it. Tested with a fake `gh` ([`test/publish.sh`](../test/publish.sh)) |
+| kit `wasm` job, "Hand the tested page to freerdp-web" | `web-<page, 12>-<kit, 12>`: the client, `KIT_COMMIT`, the debian-13 xrdp packages, `SHA256SUMS` of them all |
+| kit `xrdp-preview-release` job | `xrdp-preview-<xrdp, 12>-<kit, 12>` |
+| both jobs | a `concurrency` group per kit commit: two runs of one commit publish one after the other, and the second finds the release there |
+| kit `release` job (`v*`) | unchanged: it creates the release with every file in one call, and a second run fails because the release exists |
+| kit pushes | a push that changes only documentation (or only the upstream check) runs no build, so it makes no new pre-release |
+| package revisions | `0kit<N>`, rule 4 |
+| freerdp-web [`kit-release.sh`](https://github.com/congzhangzh/freerdp-web/blob/main/kit-release.sh) | rule 3: the newest published `web-*`, or the newest build of a page commit; withdrawn ones and drafts skipped; the older names `web-<page, 12>` are still found. `site.sh` and `pages.yml` use it |
 
-The order matters:
-1. freerdp-web accepts both names.
-2. The kit switches to the new names.
-3. Immutable releases are turned on.
+The order of the pushes: freerdp-web first (it finds both names), then the
+kit, then immutable releases turned on (rule 6, after a trial).
 
-The three pre-releases made so far keep their names, since their links are
-in use. Their notes say they were made before this policy and may have
-been replaced.
+The three pre-releases made before this (`web-ea48a1f73d0b`,
+`web-2cf615b88ecc`, `xrdp-preview-53af799d2548`) keep their names, since
+their links are in use, and their notes say they were made before the
+freeze and may have been replaced.
 
 ## Keeping pins fresh
 
@@ -267,8 +272,8 @@ local ones.
 
 A run took about 19 minutes while the web client's 8 minute build waited
 for the xrdp packages, which only its login test needs. Now the build
-(`wasm-build`) starts at once and only the test (`wasm`) waits. Next:
-skip the runs a change cannot affect (documentation only).
+(`wasm-build`) starts at once and only the test (`wasm`) waits. A push
+that changes only documentation runs no build at all.
 
 Every build keeps compiled objects between runs (ccache, in the CI cache
 for pushes to main; a pull request's own cache is never restored on
