@@ -35,6 +35,8 @@ jobs:
       - uses: actions/checkout@v7
       - run: test/overrides.sh
       - run: test/publish.sh
+      - name: freerdp-web is pinned by a release (vX.Y.Z)
+        run: build/check-release-pins.sh
 
   build:
     strategy:

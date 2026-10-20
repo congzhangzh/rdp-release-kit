@@ -12,7 +12,7 @@ verify them; they never compile.
 | `sdl-freerdp`, Linux x86_64 / aarch64 | FreeRDP release tag | stable | `v<YYYY>.<MM>.<N>` |
 | `sdl-freerdp.exe`, Windows x86_64 / ARM64 | FreeRDP release tag | stable | `v<YYYY>.<MM>.<N>` |
 | xrdp + xorgxrdp, `.deb` / `.rpm` for every release in `distros.list` | xrdp, xorgxrdp signed release tags | stable | `v<YYYY>.<MM>.<N>` |
-| Web client (WebAssembly) + the freerdp-web page | FreeRDP master + open pull requests, frozen on a fork branch; the page by commit | preview | `web-<YYYYMMDD>.<N>-<kit commit, 12>` on every push to main that changes a build; also inside `v*` |
+| Web client (WebAssembly) + the freerdp-web page | FreeRDP master + open pull requests, frozen on a fork branch; the page by a freerdp-web release (`vYYYYMMDD.N`, earlier `vX.Y.Z`) | preview | `web-<YYYYMMDD>.<N>-<kit commit, 12>` on every push to main that changes a build; also inside `v*` |
 | xrdp preview packages: Wayland sessions, AV1, pacing | a frozen xrdp development commit + xorgxrdp devel | preview | `xrdp-preview-<YYYYMMDD>.<N>-<kit commit, 12>` |
 | Demo videos (planned) | recorded by `test/wasm-session.sh` | with the web client | `web-<YYYYMMDD>.<N>-<kit commit, 12>` |
 
@@ -32,6 +32,12 @@ once and never replaced ([Frozen releases](#frozen-releases)).
 - [`sources.lock`](../sources.lock): `name version url sha256`, or
   `name short-commit git+url full-commit` for a git source. Every build
   reads its sources from here and nowhere else.
+- freerdp-web is pinned only by its GitHub point releases, as a whole:
+  the version column is the release (`0.4.12`), the commit is the one its
+  tag `v0.4.12` points to (`build/check-release-pins.sh`, in CI), and
+  `check-upstream.sh` watches its tags like any upstream. Its GitHub
+  Pages are freerdp-web's own: it publishes them over the kit's newest
+  tested client whenever it likes, and never waits for the kit.
 - [`signed.lock`](../signed.lock) and [`keys/`](../keys): the release key
   each signed tarball must verify against.
 - [`distros.list`](../distros.list): the distribution releases to package
@@ -86,13 +92,13 @@ upstream tag / frozen branch
   `upstream` workflow opens one issue per update found. A person decides;
   nothing bumps itself, and nothing waits longer than two weeks (see
   [Keeping pins fresh](#keeping-pins-fresh)).
-- **The web client**: the kit pins a page commit, its CI makes
-  `web-<YYYYMMDD>.<N>-<kit commit>`; freerdp-web (its `kit-release.sh`
-  finds the newest build of a commit) publishes either that exact build (always
-  for a freerdp-web `v*` tag; the client's `MANIFEST` must name the page
-  commit) or, for page-only changes, its page over the newest tested client.
-  A tag publishes its own commit's page: tag only a commit at or ahead of
-  what the site serves, or the tag rolls the site back.
+- **The web client**: two projects, each at its own speed. freerdp-web
+  makes point releases (`v20261021.1`; before that `v0.4.12`) and publishes its Pages itself: its
+  page over the kit's newest tested client (its `kit-release.sh` finds
+  it), at any time. The kit pins a freerdp-web release when one comes out
+  (the upstream check opens the issue), tests the client with it, and
+  makes `web-<YYYYMMDD>.<N>-<kit commit>`; a kit `v*` release carries the
+  client and that freerdp-web release as one whole.
 - **Pages**: the kit's own Pages only redirect to the freerdp-web site and
   are published by hand.
 - **Releases are never automatic**: a push builds and tests; publishing

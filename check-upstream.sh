@@ -5,7 +5,8 @@
 #   ./check-upstream.sh          one line per source: name, pinned, newest, status
 #
 # Prints "update" where upstream is ahead; exits 0 either way (a person
-# decides what to bump). Our own preview sources are not checked.
+# decides what to bump). Our own preview sources are not checked;
+# freerdp-web is, because the kit takes it by its releases.
 set -euo pipefail
 cd "$(dirname "$0")"
 
@@ -27,6 +28,7 @@ WATCH=(
 	"xorgxrdp    https://github.com/neutrinolabs/xorgxrdp.git     ^v[0-9]+\.[0-9]+\.[0-9]+(\.[0-9]+)?$  v"
 	"libressl    https://github.com/libressl/portable.git         ^v[0-9]+\.[0-9]+\.[0-9]+$             v"
 	"llvm_mingw  https://github.com/mstorsjo/llvm-mingw.git       ^[0-9]{8}$                           ''"
+	"freerdp_web https://github.com/congzhangzh/freerdp-web.git   ^v[0-9]+\.[0-9]+\.[0-9]+$             v"
 )
 
 pinned() { awk -v n="$1" '$1 == n { print $2 }' sources.lock; }
