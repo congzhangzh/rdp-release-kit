@@ -1,7 +1,7 @@
 #!/bin/bash
 # Prints the tag of a pre-release (docs/RELEASE.md, "Frozen releases"):
 #
-#   prerelease-tag.sh <kind> <title>      kind: web, xrdp-preview
+#   prerelease-tag.sh <kind> <title>      kind: web, xrdp-preview, pipewire-module-xrdp
 #
 # - A release with this title, published or a draft an earlier run left,
 #   keeps its tag: the title names the inputs and the kit commit, so a
@@ -18,7 +18,7 @@ set -euo pipefail
 KIND=$1 TITLE=$2
 REPO=${GITHUB_REPOSITORY:?} SHA=${GITHUB_SHA:?}
 case $KIND in
-    web | xrdp-preview) ;;
+    web | xrdp-preview | pipewire-module-xrdp) ;;
     *) echo "prerelease-tag.sh: unknown kind: $KIND" >&2; exit 1 ;;
 esac
 

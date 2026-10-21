@@ -6,8 +6,7 @@ name: kit
 # dependencies and logs in to each over RDP with that client; builds the web
 # client and logs in from a browser. A v* tag publishes everything as a
 # release; a push to main only builds and tests. The web client itself is
-# published on freerdp-web's own Pages; this repository's Pages only redirect
-# there (with a v* tag, or Run workflow with "publish").
+# published on freerdp-web's own Pages; this repository has none.
 on:
   push:
     branches: [main]
@@ -17,11 +16,6 @@ on:
     paths-ignore: ['**.md', 'docs/**', '.github/workflows/upstream.yml', 'check-upstream.sh', 'LICENSE', 'NOTICE']
   pull_request:
   workflow_dispatch:
-    inputs:
-      publish:
-        description: Publish the Pages redirect to freerdp-web's site
-        type: boolean
-        default: false
 
 permissions:
   contents: read
@@ -279,11 +273,50 @@ jobs:
           # into '.': give the files those names first, so SHA256SUMS
           # matches what is downloaded
           mkdir -p upload
-          find dist/xrdp-preview -type f \( -name '*.deb' -o -name '*.rpm' \) | while read -r f; do
+          # PipeWire's xrdp module has its own pre-release (below)
+          find dist/xrdp-preview -type f \( -name '*.deb' -o -name '*.rpm' \) \
+              ! -name 'pipewire-module-xrdp-*' | while read -r f; do
             cp "$f" "upload/$(basename "$f" | tr '~' '.')"
           done
           (cd upload && sha256sum -- *.deb *.rpm > SHA256SUMS)
           notes="A PREVIEW of the next xrdp: xrdp $sha (its development branch with Wayland sessions, AV1 and pacing) and xorgxrdp's development branch, built and tested (an Xorg and a Wayland login) by rdp-release-kit $GITHUB_SHA. Not an xrdp release. Published once, never replaced."
+          build/publish-prerelease.sh "$tag" "$title" "$notes" upload/*
+
+  # PipeWire's xrdp module for Fedora (Fedora does not package it), for the
+  # stable and the preview xrdp alike: its own pre-release
+  # pipewire-module-xrdp-<YYYYMMDD>.<N>-<kit commit>, published only when
+  # what it is built from changes. Its title names those inputs and not the
+  # kit commit, so prerelease-tag.sh finds the earlier release of the same
+  # inputs and publish-prerelease.sh leaves it as it is.
+  pipewire-xrdp-release:
+    if: github.event_name != 'pull_request'
+    needs: [scripts, xrdp-preview]
+    runs-on: ubuntu-24.04
+    concurrency: publish-pipewire-xrdp-${{ github.sha }}
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: xrdp-preview-fedora-*
+          path: dist/xrdp-preview
+      - name: Publish the pre-release, if its inputs changed
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          read -r version sha < <(awk '$1 == "pipewire_xrdp" { print $2, $4 }' sources.lock)
+          fedora=$(awk '/^fedora:/ { sub("fedora:", "", $1); print $1 }' distros-preview.list | sort -n | paste -sd, -)
+          # the source, the Fedora releases, their build dependencies, the packaging
+          inputs=$({ grep '^pipewire_xrdp ' sources.lock; echo "$fedora"; cat deps/rpm.txt build/package-rpm.sh; } |
+              sha256sum | cut -c1-12)
+          title="pipewire-module-xrdp $version (${sha:0:12}) for Fedora $fedora (inputs $inputs)"
+          tag=$(build/prerelease-tag.sh pipewire-module-xrdp "$title")
+          mkdir -p upload
+          find dist/xrdp-preview -type f -name 'pipewire-module-xrdp-*.rpm' -exec cp {} upload/ \;
+          ls upload/*.rpm > /dev/null
+          (cd upload && sha256sum -- *.rpm > SHA256SUMS)
+          notes="PipeWire's xrdp module (the sink and source that carry an xrdp session's sound and microphone), release v$version of neutrinolabs/pipewire-module-xrdp ($sha), unpatched, built by rdp-release-kit $GITHUB_SHA for Fedora $fedora, which does not package it. Debian 12 (backports), 13 and Ubuntu 24.04 and newer package it themselves (apt install pipewire-module-xrdp). Published once, never replaced; a new one only when its inputs change."
           build/publish-prerelease.sh "$tag" "$title" "$notes" upload/*
 
   # The web client builds at once; only its login test waits for xrdp
@@ -388,18 +421,6 @@ jobs:
             dist/wasm/*.zip.sha256
           if-no-files-found: error
 
-      # The web client is published on freerdp-web's own Pages; this site
-      # only sends its visitors there (same origin: their hosts come along)
-      - name: The redirect to freerdp-web's site
-        run: |
-          mkdir -p dist/pages
-          for f in index.html install.html safety.html keyboard.html; do
-            cp test/pages-redirect.html "dist/pages/$f"
-          done
-      - uses: actions/upload-pages-artifact@v5
-        with:
-          path: dist/pages
-
       - name: Keep the browser test's logs and screenshot
         if: always()
         uses: actions/upload-artifact@v7
@@ -407,39 +428,6 @@ jobs:
           name: test-wasm
           path: dist/test/
           if-no-files-found: ignore
-
-  # The tested page goes to GitHub Pages only on purpose: from a v* tag, or
-  # from a run started by hand with "publish" (the branch or tag it runs on)
-  pages:
-    if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.publish)
-    needs: [wasm]
-    runs-on: ubuntu-24.04
-    permissions:
-      pages: write
-      id-token: write
-    environment:
-      name: github-pages
-      url: ${{ steps.deploy.outputs.page_url }}
-    steps:
-      - id: deploy
-        uses: actions/deploy-pages@v5
-    outputs:
-      url: ${{ steps.deploy.outputs.page_url }}
-
-  # The published redirect points to freerdp-web's site
-  pages-check:
-    needs: [pages]
-    runs-on: ubuntu-24.04
-    steps:
-      - name: The redirect is served
-        env:
-          URL: ${{ needs.pages.outputs.url }}
-        run: |
-          for i in $(seq 30); do
-            curl -fsSL "${URL}index.html" 2> /dev/null | grep -q 'freerdp-web/' && exit 0
-            sleep 10
-          done
-          echo "the redirect did not appear at $URL" >&2; exit 1
 
   release:
     if: startsWith(github.ref, 'refs/tags/v')

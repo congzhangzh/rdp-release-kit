@@ -181,9 +181,8 @@ the pinned page over as a pre-release `web-<YYYYMMDD>.<N>-<kit commit>`
 (with the xrdp packages for the published site's login check), published
 once and never replaced (docs/RELEASE.md, "Frozen releases"); freerdp-web's workflow
 downloads it and publishes it, only on purpose (a `v*` tag there, or *Run
-workflow* with **publish**). This repository's Pages only redirect there, to
-the same origin, so saved hosts come along. A pull request builds and tests
-only.
+workflow* with **publish**). This repository has no Pages of its own: the
+web client's site is freerdp-web's. A pull request builds and tests only.
 
 ## xrdp packages
 

@@ -99,8 +99,8 @@ upstream tag / frozen branch
   (the upstream check opens the issue), tests the client with it, and
   makes `web-<YYYYMMDD>.<N>-<kit commit>`; a kit `v*` release carries the
   client and that freerdp-web release as one whole.
-- **Pages**: the kit's own Pages only redirect to the freerdp-web site and
-  are published by hand.
+- **Pages**: only freerdp-web has them; the kit publishes none (its old
+  address kept the redirect GitHub last deployed).
 - **Releases are never automatic**: a push builds and tests; publishing
   needs a tag or a manual run.
 
