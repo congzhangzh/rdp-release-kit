@@ -95,8 +95,10 @@ check "sesman started an Xorg session for tester" 'pgrep -u tester -f "Xorg .*xr
 check "Xorg loaded the xorgxrdp drivers" \
     'grep -q -E "Loading .*(xrdpdev|libxorgxrdp)" /home/tester/.local/share/xrdp/*.log /home/tester/.xorgxrdp.*.log 2> /dev/null'
 check "the session runs its xterm" 'pgrep -u tester xterm > /dev/null'
+# the black desktop and the white xterm are two colours: a lossless or
+# clean codec (AV1) shows exactly those, H.264 adds a few around the text
 check "the client shows more than one colour" \
-    '[ "$(convert /out/screen.png -format "%k" info: 2> /dev/null)" -gt 2 ]'
+    '[ "$(convert /out/screen.png -format "%k" info: 2> /dev/null)" -gt 1 ]'
 
 # The preview's Wayland session (wlup): sway, headless, for a second user,
 # picked with autorun; /bpp:24, because at 32 xrdp sends planar, which
