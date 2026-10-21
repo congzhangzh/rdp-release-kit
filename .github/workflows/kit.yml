@@ -54,8 +54,10 @@ jobs:
         uses: actions/cache@v6
         with:
           path: ~/.cache/rdp-release-kit/ccache
-          key: ccache-linux-${{ matrix.runner }}-${{ github.sha }}
-          restore-keys: ccache-linux-${{ matrix.runner }}-
+          # by architecture, not runner name: "ubuntu-24.04-" is a prefix of
+          # "ubuntu-24.04-arm-", so x86_64 restored ARM's objects (0 hits)
+          key: ccache-linux-${{ runner.arch }}-${{ github.sha }}
+          restore-keys: ccache-linux-${{ runner.arch }}-
 
       - name: Build
         env:
