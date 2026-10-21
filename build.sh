@@ -47,7 +47,7 @@ if [ -n "${LTO:-}" ]; then
     OVERRIDE+=(-e LTO=off)
 fi
 
-"$ENGINE" build -q -t "$IMAGE" -f "$KIT/build/Containerfile" "$KIT/build" > /dev/null
+"$ENGINE" build -q -t "$IMAGE" -f "$KIT/build/Dockerfile" "$KIT/build" > /dev/null
 # the single quotes are for the container's shell
 # shellcheck disable=SC2016
 "$ENGINE" run --rm -v "$KIT":/kit:ro -v "$SOURCES":/sources -v "$OUT":/out -v "$WORK":/work \

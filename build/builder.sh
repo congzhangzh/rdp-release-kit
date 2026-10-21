@@ -38,7 +38,7 @@ builder() {
     mkdir -p "$ctx/build"
     cp "$KIT/build/tools.sh" "$ctx/build/"
     cp -r "$KIT/deps" "$ctx/"
-    cat > "$ctx/Containerfile" << EOF
+    cat > "$ctx/Dockerfile" << EOF
 FROM $base
 COPY . /tools
 RUN FLAVOUR=${FLAVOUR:-stable} NO_AV1=${NO_AV1:-} bash /tools/build/tools.sh /tools ${kind%%-*} \\
@@ -46,7 +46,7 @@ RUN FLAVOUR=${FLAVOUR:-stable} NO_AV1=${NO_AV1:-} bash /tools/build/tools.sh /to
 ENV KIT_TOOLS=$hash
 LABEL rdp-release-kit.tools=$hash rdp-release-kit.made=$(date +%s)
 EOF
-    if ! "$ENGINE" build -q -f "$ctx/Containerfile" -t "$name" "$ctx" > /dev/null; then
+    if ! "$ENGINE" build -q -f "$ctx/Dockerfile" -t "$name" "$ctx" > /dev/null; then
         rm -rf "$ctx"
         echo "builder image $name: failed" >&2
         return 1

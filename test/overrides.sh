@@ -144,8 +144,8 @@ case "$1 $2" in
         while [ "$1" != -t ]; do shift; done
         db=$dir/image-${2//[:\/]/-}
         ctx=${*: -1}
-        echo "$(sed -n 's/^ENV KIT_TOOLS=//p' "$ctx/Containerfile") \
-$(sed -n 's/.*rdp-release-kit.made=//p' "$ctx/Containerfile")" > "$db"
+        echo "$(sed -n 's/^ENV KIT_TOOLS=//p' "$ctx/Dockerfile") \
+$(sed -n 's/.*rdp-release-kit.made=//p' "$ctx/Dockerfile")" > "$db"
         echo "build $2" >> "$dir/images.log" ;;
     "rmi "*) echo "rmi $2" >> "$dir/images.log" ;;
 esac
