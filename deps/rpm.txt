@@ -37,3 +37,4 @@ imlib2-devel            images on the login screen
 
 # xorgxrdp
 xorg-x11-server-devel   the Xorg server xorgxrdp is a driver for
+pipewire-devel          pipewire-module-xrdp (Fedora has no package of it)

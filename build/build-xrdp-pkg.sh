@@ -175,6 +175,19 @@ sed "s|^prefix=.*|prefix=$STAGE/xrdp/usr|" "$STAGE/xrdp$LIBDIR/pkgconfig/xrdp.pc
 (cd "$src" && export PATH=$CCPATH PKG_CONFIG_PATH=$WORK/pc &&
  configure "$src" ./configure --prefix=/usr --sysconfdir=/etc --libdir=$LIBDIR &&
  make -j"$JOBS" && make install DESTDIR="$STAGE/xorgxrdp") > "$WORK/log/xorgxrdp.log" 2>&1
+
+# PipeWire's xrdp module, a session's sound and microphone: Debian and
+# Ubuntu package it, Fedora does not, so the rpm builds ship it (as its
+# own package, pipewire-module-xrdp)
+if [ $FAMILY = rpm ]; then
+    src=$(unpack pipewire_xrdp)
+    bootstrap "$src"
+    echo "== pipewire_xrdp ${VERSION[pipewire_xrdp]}"
+    (cd "$src" && export PATH=$CCPATH &&
+     configure "$src" ./configure --prefix=/usr --libdir=$LIBDIR --sysconfdir=/etc &&
+     make -j"$JOBS" && make install DESTDIR="$STAGE/pipewire-module-xrdp") \
+        > "$WORK/log/pipewire_xrdp.log" 2>&1
+fi
 ccache_stats
 
 # Nothing for development, no keys: those are made per host on install
@@ -208,9 +221,11 @@ if [ $FAMILY = deb ]; then
 else
     # an rpm Release may not contain '-': Fedora's dist tag, as in .fc44
     "$KIT/build/package-rpm.sh" "$STAGE" "$OUT/$DISTRO" "$XRDP_VERSION" \
-        "$XORGXRDP_VERSION" "$REL.fc$VERSION_ID" "$LIBDIR" > "$WORK/log/package.log" 2>&1
+        "$XORGXRDP_VERSION" "$REL.fc$VERSION_ID" "$LIBDIR" "${VERSION[pipewire_xrdp]}" \
+        > "$WORK/log/package.log" 2>&1
 fi
 licenses "$OUT/$DISTRO/licenses" $XRDP $XORGXRDP x264 opus
+[ $FAMILY = deb ] || licenses "$OUT/$DISTRO/licenses" pipewire_xrdp
 (cd "$OUT/$DISTRO" && sha256sum ./*.deb ./*.rpm 2> /dev/null > SHA256SUMS || true)
 echo "== done: $OUT/$DISTRO"
 ls "$OUT/$DISTRO"

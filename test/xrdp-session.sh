@@ -65,6 +65,14 @@ else
 fi
 check "the packages install" '[ -x /usr/sbin/xrdp ] && [ -x /usr/sbin/xrdp-sesman ]'
 check "host keys were made on install" '[ -s /etc/xrdp/cert.pem ] && [ -s /etc/xrdp/rsakeys.ini ]'
+# Fedora: the kit's own build of PipeWire's xrdp module (Debian and Ubuntu
+# package it), where PipeWire looks for modules, and its session autostart
+if command -v rpm > /dev/null; then
+    check "PipeWire's xrdp module installs (pipewire-module-xrdp)" \
+        'rpm -q pipewire-module-xrdp > /dev/null &&
+         [ -f "$(pkg-config --variable=moduledir libpipewire-0.3 2> /dev/null || echo /usr/lib64/pipewire-0.3)/libpipewire-module-xrdp.so" ] &&
+         ls /etc/xdg/autostart/*xrdp*.desktop > /dev/null 2>&1'
+fi
 
 # a user whose session is an xterm, and xrdp on the loopback only
 useradd -m tester

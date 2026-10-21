@@ -17,6 +17,9 @@ jansson     2.15.1   https://github.com/akheron/jansson/releases/download/v2.15.
 xrdp        0.10.6.1 https://github.com/neutrinolabs/xrdp/releases/download/v0.10.6.1/xrdp-0.10.6.1.tar.gz   2f7beb5a3b2529c8d72dc0df9b8cdca31ab0e0c14d1e3421210f5e6ec0ab3b75
 xorgxrdp    0.10.5   https://github.com/neutrinolabs/xorgxrdp/releases/download/v0.10.5/xorgxrdp-0.10.5.tar.gz a5d03435f0ef48bf3d5010e63d9264f2334e7063cba3ecd8d4c0a15616a4f712
 x264        b35605a  git+https://code.videolan.org/videolan/x264.git                                          b35605ace3ddf7c1a5d67a2eb553f034aef41d55
+# sound of an xrdp session through PipeWire, built for Fedora (Debian and
+# Ubuntu package it): the release v0.2, by its tag's commit
+pipewire_xrdp 0.2    git+https://github.com/neutrinolabs/pipewire-module-xrdp.git                             748f562d616590c678d5b06722f3fe5ae9707465
 # Windows client: LibreSSL as FreeRDP's own scripts/mingw.sh pins it (same
 # hash); the llvm-mingw toolchain publishes no checksums, so its hash is
 # the one of the copy downloaded on 2026-10-21 (trust on first use; it

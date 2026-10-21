@@ -2,6 +2,7 @@
 # Packages the staged xrdp and xorgxrdp trees as .rpm files:
 #
 #   package-rpm.sh <stage> <out> <xrdp version> <xorgxrdp version> <release> <libdir>
+#                  <pipewire-module-xrdp version>
 #
 # rpmbuild adds the shared-library Requires on its own; xorgxrdp also
 # requires the Xorg video driver ABI it was built for. Host keys are made
@@ -23,6 +24,7 @@ XRDP_VERSION=$3
 XORGXRDP_VERSION=$4
 RELEASE=$5
 LIBDIR=$6
+PW_VERSION=$7
 TOP=$(mktemp -d)
 XORG_ABI_REQ=$(xserver-sdk-abi-requires videodrv)
 
@@ -61,9 +63,22 @@ Requires: xrdp, xorg-x11-server-Xorg, $XORG_ABI_REQ
 xorgxrdp $FROM, built for this distribution's Xorg
 server ($XORG_ABI_REQ).
 
+%package -n pipewire-module-xrdp
+Version: $PW_VERSION
+Summary: PipeWire modules for xrdp sessions' sound and microphone (rdp-release-kit build)
+License: MIT
+URL: https://github.com/neutrinolabs/pipewire-module-xrdp
+Requires: pipewire
+
+%description -n pipewire-module-xrdp
+The sink and source that carry an xrdp session's sound to the client and
+the client's microphone into the session, built from the upstream
+release v$PW_VERSION. Sessions load them on start (XDG autostart).
+
 %install
 cp -a $STAGE/xrdp/. %{buildroot}/
 cp -a $STAGE/xorgxrdp/. %{buildroot}/
+cp -a $STAGE/pipewire-module-xrdp/. %{buildroot}/
 
 %post
 ETC=/etc/xrdp
@@ -94,6 +109,9 @@ $(files "$STAGE/xrdp")
 
 %files -n xorgxrdp
 $(files "$STAGE/xorgxrdp")
+
+%files -n pipewire-module-xrdp
+$(files "$STAGE/pipewire-module-xrdp")
 EOF
 
 rpmbuild -bb --define "_topdir $TOP" --define "_libdir $LIBDIR" "$TOP/kit.spec" \

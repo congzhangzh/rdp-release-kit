@@ -29,6 +29,7 @@ WATCH=(
 	"libressl    https://github.com/libressl/portable.git         ^v[0-9]+\.[0-9]+\.[0-9]+$             v"
 	"llvm_mingw  https://github.com/mstorsjo/llvm-mingw.git       ^[0-9]{8}$                           ''"
 	"freerdp_web https://github.com/congzhangzh/freerdp-web.git   ^v[0-9]+\.[0-9]+(\.[0-9]+)?$         v"
+	"pipewire_xrdp https://github.com/neutrinolabs/pipewire-module-xrdp.git ^v[0-9]+\.[0-9]+(\.[0-9]+)?$ v"
 )
 
 pinned() { awk -v n="$1" '$1 == n { print $2 }' sources.lock; }
