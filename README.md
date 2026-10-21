@@ -12,7 +12,7 @@ no upstream source.
 |---|---|---|
 | `sdl-freerdp` (FreeRDP's SDL3 client), with AV1 (dav1d) and Opus | step 1 (this) | Linux x86_64 / aarch64 with glibc ≥ 2.34 and PulseAudio's `libpulse.so.0`: RHEL/Rocky/Alma 9, Debian 12, Ubuntu 22.04, Fedora 35 and newer |
 | `sdl-freerdp.exe`, the same client for Windows, with AV1 and Opus | step 3 | Windows 10 and 11, x86_64 and ARM64 |
-| FreeRDP web client (WebAssembly) with the [freerdp-web](https://github.com/congzhangzh/freerdp-web) page | preview: FreeRDP master + the open Emscripten pull requests #13728, #13731, #13732, #13733 | a current browser (tested: Chrome); served from GitHub Pages |
+| FreeRDP web client (WebAssembly) with the [freerdp-web](https://github.com/congzhangzh/freerdp-web) page | preview: FreeRDP master + open pull requests: AV1 #13731, sound #13732, clipboard #13733, microphone #13810 + #13811, H.264 #13812 | a current browser (tested: Chrome); served from GitHub Pages |
 | xrdp + xorgxrdp native packages (.deb / .rpm) | step 2 | Debian testing, 13, 12; Ubuntu 26.10, 26.04, 24.04; Fedora 45, 44, 43 |
 
 Every source is pinned in [`sources.lock`](sources.lock) with its SHA-256

@@ -22,11 +22,12 @@ x264        b35605a  git+https://code.videolan.org/videolan/x264.git            
 # the one of the copy downloaded on 2026-10-09 (trust on first use)
 libressl    4.3.3    https://ftp.openbsd.org/pub/OpenBSD/LibreSSL/libressl-4.3.3.tar.gz                         ff97c432457f349e6ba3d416ab903bc7468f1436f0f32efe5fff808de292c7b8
 llvm_mingw  20260922 https://github.com/mstorsjo/llvm-mingw/releases/download/20260922/llvm-mingw-20260922-ucrt-ubuntu-22.04-x86_64.tar.xz bb7bb7654b33d5aa8712acb837c963b2e0c56352560c76105270a3268c665c21
-# WASM client (preview): FreeRDP master plus the open Emscripten pull
-# requests #13728, #13731, #13732, #13733 (branch wasm-preview on a fork),
+# WASM client (preview): FreeRDP master plus open pull requests, frozen on a
+# fork branch named wasm-preview-<preview number>-<commit>: AV1 (#13731),
+# sound (#13732), clipboard (#13733), microphone (#13810, #13811), H.264 (#13812);
 # the web page with its passkey vault, and the SDL release the Emscripten
 # build was tested with
-freerdp_preview fdf8d54  git+https://github.com/congzhangzh/FreeRDP.git                                      fdf8d54472bda28d2f3fc1284442764a759d7245
+freerdp_preview 20261020.1 git+https://github.com/congzhangzh/FreeRDP.git                                    257807e156da033f3f0b03db8d95a8fb2a966386
 sdl3_wasm   3.2.28   https://github.com/libsdl-org/SDL/releases/download/release-3.2.28/SDL3-3.2.28.tar.gz        1330671214d146f8aeb1ed399fc3e081873cdb38b5189d1f8bb6ab15bbc04211
 freerdp_web 06593c1  git+https://github.com/congzhangzh/freerdp-web.git                                     06593c161e5df3a751f3240830fa5ebe7026692f
 xrdp_preview     20261018.2 git+https://github.com/congzhangzh/xrdp.git                                          53af799d2548ad2270cdc9327848e5bf9caaf0c2
