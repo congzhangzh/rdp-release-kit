@@ -34,7 +34,7 @@ llvm_mingw  20261020 https://github.com/mstorsjo/llvm-mingw/releases/download/20
 # build was tested with
 freerdp_preview 20261021.1 git+https://github.com/congzhangzh/FreeRDP.git                                    79f10e8ae52c60060440513fd35b972628aef0ec
 sdl3_wasm   3.2.30   https://github.com/libsdl-org/SDL/releases/download/release-3.2.30/SDL3-3.2.30.tar.gz        4c3b09330d866dc52eb65b66259a6684ad387252ca8c57901b3a2b534eb42e3d
-freerdp_web 20261021.1 git+https://github.com/congzhangzh/freerdp-web.git                                     6f491514a8be0728ce0132bfd42c506d08412378
+freerdp_web 20261021.2 git+https://github.com/congzhangzh/freerdp-web.git                                     78cd3425db3eab88fc71b0ff76395c1f86f338eb
 xrdp_preview     20261021.1 git+https://github.com/congzhangzh/xrdp.git                                          bfba3d7f185f5d2ba9c2281dfcab8ceba44b7280
 librfxcodec      0badc06  git+https://github.com/neutrinolabs/librfxcodec.git                                  0badc062e96d170af57870480a4aa7cf469302b0
 libpainter       379b8fb  git+https://github.com/neutrinolabs/libpainter.git                                   379b8fbf40f309829364bf3414d721f9ba77766d
