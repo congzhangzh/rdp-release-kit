@@ -11,7 +11,8 @@
 # the user on the server. Output in dist/test/wasm/.
 #
 # Ports: on the server, RDP 3389 and websockify 3390; on this side, the
-# page's gateway 127.0.0.1:13390 and, for a native client, 127.0.0.1:13389.
+# page's gateway 127.0.0.1:13390 and, for a native client, 127.0.0.1:13389
+# (LOCAL_WS_PORT, LOCAL_RDP_PORT: others, when something else holds these).
 #
 # PAGE_URL=<url> tests a published page instead (e.g. the GitHub Pages
 # site); the page dir is then not served.
@@ -19,6 +20,11 @@
 # SERVER=gnome uses GNOME instead of xrdp: gnome-shell headless on Wayland,
 # reached through gnome-remote-desktop, in a container
 # (test/gnome/, unprivileged); the RDP and websockify ports stay 3389 and 3390.
+#
+# SERVER=xrdp-gnome: GNOME on Wayland through the kit's xrdp preview, with
+# AV1 (test/xrdp-gnome/: Fedora 45, systemd under rootless podman). The
+# packages dir then holds the preview's Fedora 45 packages (default
+# dist/xrdp-preview/fedora-45).
 #
 # DEMO_VIDEO=<file.mp4> records a demo instead of the plain login: the server
 # gets a desktop (Xfce for xrdp) and test/wasm-demo.mjs plays a user's visit,
@@ -35,6 +41,11 @@ PAGE=$1
 GATEWAY=$(cd "$(dirname "$2")" && pwd)/$(basename "$2")
 PKGS=${3:-$KIT/dist/xrdp/debian-13}
 ENGINE=${ENGINE:-$(command -v docker || command -v podman)}
+# GNOME through the xrdp preview needs systemd in its container: rootless podman
+if [ "${SERVER:-}" = xrdp-gnome ]; then
+    ENGINE=$(command -v podman) || { echo "SERVER=xrdp-gnome needs podman (rootless: systemd without privileges)" >&2; exit 1; }
+    PKGS=${3:-$KIT/dist/xrdp-preview/fedora-45}
+fi
 OUT=$KIT/dist/test/wasm
 NAME=kit-wasm-server
 rm -rf "$OUT"; mkdir -p "$OUT/ssh"
@@ -42,15 +53,16 @@ ssh-keygen -q -t ed25519 -N '' -f "$OUT/ssh/key" -C wasm-session-test
 # -F none: the test's ssh ignores the user's ~/.ssh/config, so nothing of
 # the user's (agent or X11 forwarding, other keys, proxies, shared
 # connections) reaches the throwaway server
-SSH_OPTS="-F none -L 127.0.0.1:13389:127.0.0.1:3389 -p 2223 -i $OUT/ssh/key -o IdentitiesOnly=yes -o ForwardAgent=no -o ForwardX11=no -o UserKnownHostsFile=$OUT/ssh/known_hosts -o StrictHostKeyChecking=accept-new"
+LOCAL_WS_PORT=${LOCAL_WS_PORT:-13390} LOCAL_RDP_PORT=${LOCAL_RDP_PORT:-13389}
+SSH_OPTS="-F none -L 127.0.0.1:$LOCAL_RDP_PORT:127.0.0.1:3389 -p 2223 -i $OUT/ssh/key -o IdentitiesOnly=yes -o ForwardAgent=no -o ForwardX11=no -o UserKnownHostsFile=$OUT/ssh/known_hosts -o StrictHostKeyChecking=accept-new"
 export SSH_OPTS
-export WS_PORT=13390 SERVER_WS_PORT=3390   # rdp-gateway.sh: the page's port, websockify's on the server
+export WS_PORT=$LOCAL_WS_PORT SERVER_WS_PORT=3390   # rdp-gateway.sh: the page's port, websockify's on the server
 
 # This test listens on fixed local ports; if anything else holds one, the
 # page would reach that instead and the checks would fail for no visible
 # reason. Stop first, saying which port.
 "$ENGINE" rm -f "$NAME" > /dev/null 2>&1   # this test's own server from a kept run
-ports=(2223 13389 13390)
+ports=(2223 "$LOCAL_RDP_PORT" "$LOCAL_WS_PORT")
 [ -n "${PAGE_URL:-}" ] || ports+=(8199)
 for port in "${ports[@]}"; do
     if ss -Hltn "sport = :$port" | grep -q .; then
@@ -98,6 +110,38 @@ echo "== server: GNOME on Wayland (headless) + gnome-remote-desktop, unprivilege
     for _ in $(seq 90); do grep -qiE ":0D3D [0:]+ 0A" /proc/net/tcp /proc/net/tcp6 && exit 0; sleep 1; done
     exit 1' || { echo "gnome-remote-desktop did not start:" >&2
                  "$ENGINE" exec "$NAME" sh -c "tail -n 20 /tmp/gnome-shell.log /tmp/grd.log" >&2; exit 1; }
+elif [ "$SERVER" = xrdp-gnome ]; then
+echo "== server: GNOME on Wayland through the xrdp preview (AV1), Fedora 45, systemd under rootless podman"
+ls "$PKGS"/xrdp-*.fc45.x86_64.rpm > /dev/null 2>&1 || { echo "no Fedora 45 xrdp preview packages in $PKGS" \
+    "(./build-xrdp.sh --preview fedora:45, or the *fc45* files of an xrdp-preview-* pre-release)" >&2; exit 1; }
+"$ENGINE" rm -f "$NAME" > /dev/null 2>&1
+# the build context: the image's file and the packages
+mkdir -p "$OUT/xrdp-gnome/pkgs"
+cp "$KIT/test/xrdp-gnome/Dockerfile" "$OUT/xrdp-gnome/"
+cp "$PKGS"/xrdp-*.fc45.x86_64.rpm "$OUT/xrdp-gnome/pkgs/"
+# PipeWire's xrdp module, the session's sound (the kit's package; Fedora has none)
+cp "$PKGS"/pipewire-module-xrdp-*.fc45.x86_64.rpm "$OUT/xrdp-gnome/pkgs/" 2> /dev/null ||
+    { echo "no pipewire-module-xrdp *fc45* package in $PKGS (a pipewire-module-xrdp-* pre-release)" >&2; exit 1; }
+"$ENGINE" build -q -t kit-xrdp-gnome:f45 "$OUT/xrdp-gnome" > "$OUT/xrdp-gnome-build.log" 2>&1 ||
+    { tail -20 "$OUT/xrdp-gnome-build.log" >&2; echo "the GNOME + xrdp image did not build" >&2; exit 1; }
+# room for a whole GNOME session with Firefox playing video next to WebGL:
+# tasks (podman's default is 2048; see the Dockerfile) and the shared
+# memory of Firefox's processes (default 64 MB)
+"$ENGINE" run -d --name "$NAME" --hostname rdp-gnome --systemd=always --cap-add SYS_ADMIN,SYS_NICE \
+    --pids-limit 4096 --shm-size=1g \
+    -p 127.0.0.1:2223:22 -v "$OUT/ssh/key.pub":/key.pub:ro "${DEMO_MOUNTS[@]}" kit-xrdp-gnome:f45 > /dev/null
+# shellcheck disable=SC2016 # for the container's shell
+"$ENGINE" exec "$NAME" bash -c '
+    install -d -m 700 -o tester -g tester /home/tester/.ssh
+    install -m 600 -o tester -g tester /key.pub /home/tester/.ssh/authorized_keys
+    [ ! -d /demo-setup ] || install -m 755 /demo-setup/webdemo /usr/local/bin/
+    # xrdp listens on 3389 (0D3D) and sshd runs once systemd has started them
+    for _ in $(seq 60); do
+        grep -qiE ":0D3D [0:]+ 0A" /proc/net/tcp /proc/net/tcp6 && systemctl -q is-active sshd && exit 0
+        sleep 1
+    done
+    exit 1' || { echo "xrdp or sshd did not start:" >&2
+                 "$ENGINE" exec "$NAME" journalctl -b --no-pager -n 30 >&2; exit 1; }
 else
 echo "== server: sshd + xrdp on 127.0.0.1 only"
 "$ENGINE" rm -f "$NAME" > /dev/null 2>&1
@@ -147,21 +191,31 @@ QUERY=""
 DRIVER=$KIT/test/wasm-session.mjs
 [ -z "${DEMO_VIDEO:-}" ] || DRIVER=$KIT/test/wasm-demo.mjs
 DRIVER=${WASM_DRIVER:-$DRIVER}   # another driver, e.g. while debugging
-node "$DRIVER" "${PAGE_URL:-http://127.0.0.1:8199/index.html}$QUERY" 127.0.0.1:13390 \
+# what xrdp says it encodes, for the demo's caption: the web client reports no
+# codec of its own yet (its build has no codec statistics)
+[ "$SERVER" != xrdp-gnome ] ||
+    export DEMO_CODEC_CMD="$ENGINE exec $NAME grep -h 'xrdp_encoder_av1: encoder for' /var/log/xrdp.log"
+node "$DRIVER" "${PAGE_URL:-http://127.0.0.1:8199/index.html}$QUERY" 127.0.0.1:"$LOCAL_WS_PORT" \
     tester kit-test-pw "$OUT" ${DEMO_VIDEO:+"$DEMO_VIDEO"}
 sleep 2
 pass=0; fail=0
 check() { if eval "$2"; then echo "PASS  $1"; pass=$((pass + 1)); else echo "FAIL  $1"; fail=$((fail + 1)); fi; }
 check "the page started the client as tester" 'grep -q -- " /u:tester " "$OUT/page.log"'
-if [ "$SERVER" = gnome ]; then
+if [ "$SERVER" = xrdp-gnome ]; then
+check "sesman started GNOME for tester (gnome-session, GNOME Shell)" \
+    '"$ENGINE" exec "$NAME" pgrep -u tester -f "gnome-session-service --session=gnome" > /dev/null &&
+     "$ENGINE" exec "$NAME" pgrep -u tester -x gnome-shell > /dev/null'
+check "xrdp encodes the session in AV1" \
+    '"$ENGINE" exec "$NAME" grep -q "starting AV1 codec session" /var/log/xrdp.log'
+elif [ "$SERVER" = gnome ]; then
 check "GNOME Shell runs headless for tester" '"$ENGINE" exec "$NAME" pgrep -u tester -f "gnome-shell --headless" > /dev/null'
 check "gnome-remote-desktop runs for tester" '"$ENGINE" exec "$NAME" pgrep -u tester -f "gnome-remote-desktop-daemon --headless" > /dev/null'
 else
 check "an Xorg session started for tester" \
     '"$ENGINE" exec "$NAME" pgrep -u tester -f "Xorg .*xrdp/xorg.conf" > /dev/null'
 fi
-check "RDP for a native client on 127.0.0.1:13389" 'timeout 3 bash -c "exec 3<> /dev/tcp/127.0.0.1/13389"'
-[ "$SERVER" = gnome ] || check "the session runs its $SHELL_PROC" '"$ENGINE" exec "$NAME" pgrep -u tester "$SHELL_PROC" > /dev/null'
+check "RDP for a native client on 127.0.0.1:$LOCAL_RDP_PORT" 'timeout 3 bash -c "exec 3<> /dev/tcp/127.0.0.1/$LOCAL_RDP_PORT"'
+[ "$SERVER" != xrdp ] || check "the session runs its $SHELL_PROC" '"$ENGINE" exec "$NAME" pgrep -u tester "$SHELL_PROC" > /dev/null'
 check "the screenshot shows more than one colour" \
     '[ "$(uvx -q --with pillow python -c "import sys; from PIL import Image; print(len(Image.open(sys.argv[1]).convert(\"RGB\").getcolors(1 << 24)))" "$OUT/wasm-session.png" 2> /dev/null || echo 0)" -gt 2 ]'
 if [ "$SERVER" = gnome ] && [ "$fail" != 0 ]; then

@@ -10,7 +10,7 @@
 // form, the session settings, Connect, typing in a terminal on the remote
 // desktop, then, in Firefox there, web video with sound (Big Buck Bunny) next
 // to a WebGL scene (the WebGL Aquarium), started by typing "webdemo", the Info
-// panel, Disconnect. On GNOME, GNOME Console is started from the search, as a
+// panel, Disconnect. On GNOME, the terminal is started from the search, as a
 // user would. DEMO_LABEL names the remote desktop in a corner label.
 //
 // Sound: the page plays the session's sound with Web Audio; for the recording
@@ -24,10 +24,23 @@ import { tmpdir } from "node:os";
 
 const [url, gateway, user, password, out, video] = process.argv.slice(2);
 const W = 1920, H = 1080;
-const GNOME = process.env.SERVER === "gnome";   // wasm-session.sh's server: GNOME or xrdp
+// wasm-session.sh's server: xrdp (Xfce), gnome (gnome-remote-desktop) or xrdp-gnome
+// (GNOME through the xrdp preview, in AV1); both GNOMEs start in the overview
+const XRDP_GNOME = process.env.SERVER === "xrdp-gnome";
+const GNOME = process.env.SERVER === "gnome" || XRDP_GNOME;
 const LABEL = process.env.DEMO_LABEL ||
-  (GNOME ? "gnome-remote-desktop + GNOME Wayland" : "xrdp + Xfce");
+  (XRDP_GNOME ? "xrdp preview + GNOME 51 Wayland, AV1"
+    : GNOME ? "gnome-remote-desktop + GNOME Wayland" : "xrdp + Xfce");
 const sleep = ms => new Promise(r => setTimeout(r, ms));
+// What the server says it encodes (DEMO_CODEC_CMD, from wasm-session.sh): the
+// last line of xrdp's AV1 encoder, e.g. "encoder for 1896x1056 (… 4:4:4,
+// cpu-used 10 …)", as a caption's tail; empty without one
+const serverCodec = () => {
+  if (!process.env.DEMO_CODEC_CMD) return "";
+  const r = spawnSync("sh", ["-c", process.env.DEMO_CODEC_CMD], { encoding: "utf8" });
+  const m = /encoder for (\d+)x(\d+) \(.*?(4:[24]:[04])/.exec((r.stdout || "").trim().split("\n").pop() || "");
+  return m ? ` (xrdp's encoder: ${m[1]} × ${m[2]}, ${m[3]})` : "";
+};
 const profile = mkdtempSync(join(tmpdir(), "wasm-demo-"));
 const frames = join(out, "demo-frames");
 rmSync(frames, { recursive: true, force: true }); mkdirSync(frames, { recursive: true });
@@ -49,9 +62,11 @@ const ws = new WebSocket(target.webSocketDebuggerUrl);
 await new Promise(r => ws.addEventListener("open", r));
 let id = 0; const pending = new Map(); const shots = [];
 const send = (method, params = {}) => new Promise(r => { const i = ++id; pending.set(i, r); ws.send(JSON.stringify({ id: i, method, params })); });
+const logs = [];   // the page's console, for page.log (as wasm-session.mjs writes it)
 ws.addEventListener("message", e => {
   const m = JSON.parse(e.data);
   if (m.id && pending.has(m.id)) { pending.get(m.id)(m.result); pending.delete(m.id); }
+  if (m.method === "Runtime.consoleAPICalled") logs.push(m.params.args.map(a => a.value).join(" "));
   if (m.method === "Page.screencastFrame") {   // keep each frame with the time it was shown
     const file = join(frames, String(shots.length).padStart(5, "0") + ".jpg");
     writeFileSync(file, Buffer.from(m.params.data, "base64"));
@@ -211,14 +226,32 @@ let rx = 0;
 for (let i = 0; i < 80 && rx < 300000; i++) { await sleep(500); rx = await ev("window.freerdpNet?.rx ?? 0"); }
 await caption("The remote Linux desktop, over WebSocket and SSH");
 await sleep(7000);   // the desktop starts, then its terminal
+// newer pages offer, a few seconds after the login, to keep the password in
+// the passkey vault: answered as a user would, so it does not cover the desktop
+for (let i = 0; i < 30; i++) {
+  if (await ev("(b => !!b && b.offsetParent !== null)(document.getElementById('saveLater'))")) {
+    await caption("The page offers to keep the password with a passkey: not now");
+    await sleep(1800);
+    await clickOn("#saveLater");
+    await sleep(800);
+    break;
+  }
+  await sleep(500);
+}
 
 // 5. use it
 const canvas = await ev(`(() => { const r = document.getElementById('canvas').getBoundingClientRect(); return { x: r.left, y: r.top }; })()`);
 if (GNOME) {   // GNOME starts in the overview: typing searches, Enter starts the app
   await ev("document.getElementById('canvas').focus(), true");
-  await caption("GNOME on Wayland: type to search, Enter to start");
-  await sleep(1500);
-  await typeRemote("console\n");   // GNOME starts in the overview: typing goes to its search
+  await caption(XRDP_GNOME ? `GNOME 51 on Wayland through xrdp, in AV1${serverCodec()}`
+    : "GNOME on Wayland: type to search, Enter to start");
+  await sleep(XRDP_GNOME ? 3500 : 1500);
+  if (XRDP_GNOME) {
+    await caption("GNOME on Wayland: type to search, Enter to start");
+    await sleep(1500);
+  }
+  // typing goes to the overview's search; Fedora's terminal is Ptyxis, Debian's Console
+  await typeRemote(XRDP_GNOME ? "terminal\n" : "console\n");
   await sleep(4000);
 } else {
   await click(Math.round(canvas.x + 300), Math.round(canvas.y + 200));
@@ -233,6 +266,9 @@ await typeRemote("hostname\n");
 await sleep(2400);
 const shot = await send("Page.captureScreenshot", { format: "png" });   // for wasm-session.sh's check
 writeFileSync(join(out, "wasm-session.png"), Buffer.from(shot.data, "base64"));
+// the page's log and console, for wasm-session.sh's checks
+writeFileSync(join(out, "page.log"),
+  (await ev("document.getElementById('log')?.textContent ?? ''")) + "\n--- console ---\n" + logs.join("\n"));
 
 // 6. web video with sound and WebGL, in Firefox on the server, started by typing "webdemo"
 await caption("Web video with sound, and WebGL: Firefox on the server");
@@ -248,7 +284,7 @@ await clickOn("#tbInfo");
 await caption("Info: codecs, frame rate, bandwidth, sound");
 await sleep(4500);
 const infoText = await ev("document.getElementById('infoTable').innerText");
-console.log("info at the end:\n" + infoText.split("\n").filter(l => /Video|Audio|AV1 frames|Network in/.test(l)).join("\n"));
+console.log("info at the end:\n" + infoText.split("\n").filter(l => /Video|Audio|AV1 frames|AV1 decoder|Network in/.test(l)).join("\n"));
 await clickOn("#tbInfo");
 const audio = audioStart ? await ev("window.__demoStop ? window.__demoStop() : ''") : "";
 await caption("Disconnect ends the session. Then stop the gateway with Ctrl-C.");
