@@ -14,7 +14,7 @@ on:
     tags: ['v*']
     # a change no build reads makes no new pre-release (docs/RELEASE.md,
     # "Frozen releases"); tag pushes are never filtered by path
-    paths-ignore: ['**.md', 'docs/**', '.github/workflows/upstream.yml', 'check-upstream.sh']
+    paths-ignore: ['**.md', 'docs/**', '.github/workflows/upstream.yml', 'check-upstream.sh', 'LICENSE', 'NOTICE']
   pull_request:
   workflow_dispatch:
     inputs:

@@ -302,6 +302,9 @@ The same applies to gnome-remote-desktop and any other RDP server.
 
 ## Licences
 
+The kit itself (its scripts, workflows and documents) is licensed under
+the Apache License 2.0: see [LICENSE](LICENSE) and [NOTICE](NOTICE).
+
 The client combines FreeRDP (Apache-2.0), SDL3 and SDL3_ttf (zlib),
 FreeType (FTL), OpenSSL (Apache-2.0), Opus and dav1d (BSD), zlib and
 jansson (MIT-style). Their licence texts are in each archive under
