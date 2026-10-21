@@ -28,7 +28,7 @@ WATCH=(
 	"xorgxrdp    https://github.com/neutrinolabs/xorgxrdp.git     ^v[0-9]+\.[0-9]+\.[0-9]+(\.[0-9]+)?$  v"
 	"libressl    https://github.com/libressl/portable.git         ^v[0-9]+\.[0-9]+\.[0-9]+$             v"
 	"llvm_mingw  https://github.com/mstorsjo/llvm-mingw.git       ^[0-9]{8}$                           ''"
-	"freerdp_web https://github.com/congzhangzh/freerdp-web.git   ^v[0-9]+\.[0-9]+\.[0-9]+$             v"
+	"freerdp_web https://github.com/congzhangzh/freerdp-web.git   ^v[0-9]+\.[0-9]+(\.[0-9]+)?$         v"
 )
 
 pinned() { awk -v n="$1" '$1 == n { print $2 }' sources.lock; }
