@@ -118,7 +118,14 @@ const AUDIO_TAP = `(() => {
   const AC = window.AudioContext; if (!AC) return;
   const connect = AudioNode.prototype.connect;
   window.AudioContext = class extends AC {
-    constructor(...a) { super(...a); this.__demoTap = this.createMediaStreamDestination(); window.__demoCtx = this; }
+    constructor(...a) {
+      super(...a); this.__demoTap = this.createMediaStreamDestination(); window.__demoCtx = this;
+      // a source that always plays (silence) into the tap: without one the stream carries
+      // nothing while the session is quiet, and the recording leaves those stretches out,
+      // so later sound lands too early (the bunny's soundtrack over the login)
+      const hold = this.createConstantSource(); hold.offset.value = 0;
+      connect.call(hold, this.__demoTap); hold.start();
+    }
   };
   AudioNode.prototype.connect = function (dest, ...rest) {
     const r = connect.call(this, dest, ...rest);
