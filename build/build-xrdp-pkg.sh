@@ -183,6 +183,13 @@ find "$STAGE" \( -name '*.la' -o -name '*.a' \) -delete
 rm -f "$STAGE"/xrdp/etc/xrdp/{rsakeys.ini,cert.pem,key.pem}
 sed -i "/^\[Xorg\]/,/^\[/ s|^param=Xorg\$|param=$XORG|" "$STAGE/xrdp/etc/xrdp/sesman.ini"
 grep -q "^param=$XORG\$" "$STAGE/xrdp/etc/xrdp/sesman.ini"
+# A preview with AV1 offers it first: FreeRDP clients built with AV1 take
+# it, the others fall back to H.264, then RFX (xrdp ships H.264 first)
+if [ "$FLAVOUR" = preview ] && [ -z "$NO_AV1" ]; then
+    sed -i 's/^order = \[ "H\.264", "RFX" \]$/order = [ "AV1", "H.264", "RFX" ]/' \
+        "$STAGE/xrdp/etc/xrdp/gfx.toml"
+    grep -q '^order = \[ "AV1", "H\.264", "RFX" \]$' "$STAGE/xrdp/etc/xrdp/gfx.toml"
+fi
 XORG_ABI=$(pkg-config --variable=abi_videodrv xorg-server | cut -d. -f1)
 ARCH_DEB=$(dpkg --print-architecture 2> /dev/null || true)
 # N counts the kit's commits (build-xrdp.sh); a build with a local source
