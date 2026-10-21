@@ -12,9 +12,9 @@ verify them; they never compile.
 | `sdl-freerdp`, Linux x86_64 / aarch64 | FreeRDP release tag | stable | `v<YYYY>.<MM>.<N>` |
 | `sdl-freerdp.exe`, Windows x86_64 / ARM64 | FreeRDP release tag | stable | `v<YYYY>.<MM>.<N>` |
 | xrdp + xorgxrdp, `.deb` / `.rpm` for every release in `distros.list` | xrdp, xorgxrdp signed release tags | stable | `v<YYYY>.<MM>.<N>` |
-| Web client (WebAssembly) + the freerdp-web page | FreeRDP master + open pull requests, frozen on a fork branch; the page by commit | preview | `web-<page commit, 12>-<kit commit, 12>` on every push to main that changes a build; also inside `v*` |
-| xrdp preview packages: Wayland sessions, AV1, pacing | a frozen xrdp development commit + xorgxrdp devel | preview | `xrdp-preview-<commit, 12>-<kit commit, 12>` |
-| Demo videos (planned) | recorded by `test/wasm-session.sh` | with the web client | `web-<page commit, 12>-<kit commit, 12>` |
+| Web client (WebAssembly) + the freerdp-web page | FreeRDP master + open pull requests, frozen on a fork branch; the page by commit | preview | `web-<YYYYMMDD>.<N>-<kit commit, 12>` on every push to main that changes a build; also inside `v*` |
+| xrdp preview packages: Wayland sessions, AV1, pacing | a frozen xrdp development commit + xorgxrdp devel | preview | `xrdp-preview-<YYYYMMDD>.<N>-<kit commit, 12>` |
+| Demo videos (planned) | recorded by `test/wasm-session.sh` | with the web client | `web-<YYYYMMDD>.<N>-<kit commit, 12>` |
 
 **Stable** means: upstream release tags only, hashes (and signatures where
 upstream signs) checked, no patches. **Preview** means: a fixed commit of
@@ -74,7 +74,7 @@ a negative test (a wrong hash, a wrong key, a tampered tarball).
 ```
 upstream tag / frozen branch
   → bump commit in sources.lock (a pull request: build + all gates)
-  → main: CI again; the web client goes to pre-release web-<page>-<kit>
+  → main: CI again; the web client goes to pre-release web-<YYYYMMDD>.<N>-<kit>
   → tag v<YYYY>.<MM>.<N> on a green main commit
   → release: every artifact, SHA256SUMS, build provenance attestations
   → consumers download and verify (freerdp-web publishes on purpose)
@@ -87,7 +87,7 @@ upstream tag / frozen branch
   nothing bumps itself, and nothing waits longer than two weeks (see
   [Keeping pins fresh](#keeping-pins-fresh)).
 - **The web client**: the kit pins a page commit, its CI makes
-  `web-<page commit>-<kit commit>`; freerdp-web (its `kit-release.sh`
+  `web-<YYYYMMDD>.<N>-<kit commit>`; freerdp-web (its `kit-release.sh`
   finds the newest build of a commit) publishes either that exact build (always
   for a freerdp-web `v*` tag; the client's `MANIFEST` must name the page
   commit) or, for page-only changes, its page over the newest tested client.
@@ -146,8 +146,9 @@ move while builds don't, and versions that only go up.
 
 ### Rules
 
-1. **Each name records every input.** A pre-release names the source
-   commit and the kit commit. The kit commit fixes everything else
+1. **Each pre-release records every input.** Its title names the source
+   commit and the kit commit; its name, the date, the build number and
+   the kit commit. The kit commit fixes everything else
    through `sources.lock`: FreeRDP, Emscripten, every dependency, the
    build scripts.
 
@@ -159,9 +160,19 @@ move while builds don't, and versions that only go up.
 
    | Product | Name |
    |---|---|
-   | Web client | `web-<page commit, 12>-<kit commit, 12>` |
-   | xrdp preview | `xrdp-preview-<xrdp commit, 12>-<kit commit, 12>` |
+   | Web client | `web-<YYYYMMDD>.<N>-<kit commit, 12>`, titled "Web client for freerdp-web <page commit, 12> (kit <kit commit, 12>)" |
+   | xrdp preview | `xrdp-preview-<YYYYMMDD>.<N>-<kit commit, 12>`, titled "xrdp preview <xrdp commit, 12> (kit <kit commit, 12>)" |
    | Stable | `v<YYYY>.<MM>.<N>`, a tag on one kit commit (already the case) |
+
+   Pre-releases are made continuously, so they are named by date (since
+   21 October 2026): the UTC date of the build and N, that day's build
+   number of that kind (`build/prerelease-tag.sh`). The name sorts and
+   says how new a build is; the title names its inputs, and a second run
+   of one kit commit finds its title and keeps the name, so it publishes
+   nothing new. N counts drafts and tags without a release too, so a name
+   is never used twice. Two kit commits published at the same moment can
+   get the same N; their kit commits still keep the names apart. Names
+   from before keep them.
 
    A push that cannot change a build (documentation only) should not
    make a new one; see [Speed](#speed).
@@ -176,7 +187,7 @@ move while builds don't, and versions that only go up.
    publish jobs share a `concurrency` group per tag.
 3. **Pointers move; releases don't.** "The newest tested web client" is a
    query: the newest published `web-*`, as `site.sh` reads it now. "The
-   client for page P" is the newest `web-<P, 12>-*`. A moving git tag such
+   client for page P" is the newest web pre-release titled for P. A moving git tag such
    as `web-latest` is not used, because a moving tag is exactly what rule
    2 forbids.
 4. **A version is one set of bytes.** A package keeps the upstream
@@ -205,13 +216,13 @@ move while builds don't, and versions that only go up.
 | Where | What |
 |---|---|
 | [`build/publish-prerelease.sh`](../build/publish-prerelease.sh) | rules 1 and 2 for both pre-releases: a published tag is left as it is; a tag without a release is refused; a draft an earlier run left is deleted; a new draft gets every file, is published, and must then list exactly those files. Only an HTTP 404 counts as "not there": any other error stops it. Tested with a fake `gh` ([`test/publish.sh`](../test/publish.sh)) |
-| kit `wasm` job, "Hand the tested page to freerdp-web" | `web-<page, 12>-<kit, 12>`: the client, `KIT_COMMIT`, the debian-13 xrdp packages, `SHA256SUMS` of them all |
-| kit `xrdp-preview-release` job | `xrdp-preview-<xrdp, 12>-<kit, 12>` |
+| kit `wasm` job, "Hand the tested page to freerdp-web" | `web-<YYYYMMDD>.<N>-<kit, 12>` (`build/prerelease-tag.sh`): the client, `KIT_COMMIT`, the debian-13 xrdp packages, `SHA256SUMS` of them all |
+| kit `xrdp-preview-release` job | `xrdp-preview-<YYYYMMDD>.<N>-<kit, 12>` |
 | both jobs | a `concurrency` group per kit commit: two runs of one commit publish one after the other, and the second finds the release there |
 | kit `release` job (`v*`) | unchanged: it creates the release with every file in one call, and a second run fails because the release exists |
 | kit pushes | a push that changes only documentation (or only the upstream check) runs no build, so it makes no new pre-release |
 | package revisions | `0kit<N>`, rule 4 |
-| freerdp-web [`kit-release.sh`](https://github.com/congzhangzh/freerdp-web/blob/main/kit-release.sh) | rule 3: the newest published `web-*`, or the newest build of a page commit; withdrawn ones and drafts skipped; the older names `web-<page, 12>` are still found. `site.sh` and `pages.yml` use it |
+| freerdp-web [`kit-release.sh`](https://github.com/congzhangzh/freerdp-web/blob/main/kit-release.sh) | rule 3: the newest published `web-*`, or the newest build of a page commit; withdrawn ones and drafts skipped; the older names `web-<page, 12>-<kit, 12>` and `web-<page, 12>` are still found. `site.sh` and `pages.yml` use it |
 
 The order of the pushes: freerdp-web first (it finds both names), then the
 kit, then immutable releases turned on (rule 6, after a trial).

@@ -177,7 +177,7 @@ today's gnome-remote-desktop baseline.
 
 The web client is published on freerdp-web's own GitHub Pages; this kit
 builds and tests it. On each push the wasm job hands the tested client of
-the pinned page over as a pre-release `web-<page commit>-<kit commit>`
+the pinned page over as a pre-release `web-<YYYYMMDD>.<N>-<kit commit>`
 (with the xrdp packages for the published site's login check), published
 once and never replaced (docs/RELEASE.md, "Frozen releases"); freerdp-web's workflow
 downloads it and publishes it, only on purpose (a `v*` tag there, or *Run

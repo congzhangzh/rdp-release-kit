@@ -32,10 +32,11 @@ echo "$*" >> "$S/gh.log"
 [ -f "$S/offline" ] && { echo "error connecting to api.github.com" >&2; exit 1; }
 notfound() { echo "gh: Not Found (HTTP 404)" >&2; exit 1; }
 if [ "$1 $2" = "release create" ]; then
-    tag=$3; shift 3; files=()
+    tag=$3; shift 3; files=() title=
     while [ $# -gt 0 ]; do
         case $1 in
-            --repo | --target | --title | --notes) shift 2 ;;
+            --title) title=$2; shift 2 ;;
+            --repo | --target | --notes) shift 2 ;;
             --*) shift ;;
             *) files+=("$(basename "$1") sha256:$(sha256sum < "$1" | cut -d' ' -f1)"); shift ;;
         esac
@@ -43,8 +44,8 @@ if [ "$1 $2" = "release create" ]; then
     [ -f "$S/drop" ] && unset 'files[-1]'
     [ -f "$S/corrupt" ] && files[-1]="${files[-1]% *} sha256:0000"
     id=$((100 + $(jq length "$S/releases.json")))
-    jq --arg t "$tag" --argjson id "$id" \
-        '. + [{id: $id, tag_name: $t, draft: true,
+    jq --arg t "$tag" --arg n "$title" --argjson id "$id" \
+        '. + [{id: $id, tag_name: $t, name: $n, draft: true,
                assets: [$ARGS.positional[] | split(" ") | {name: .[0], digest: .[1]}]}]' \
         "$S/releases.json" --args "${files[@]}" > "$S/r" && mv "$S/r" "$S/releases.json"
     exit 0
@@ -70,6 +71,8 @@ case "$method $path" in
         out='{}' ;;
     "GET releases?per_page=100")
         out=$(cat "$S/releases.json") ;;
+    "GET git/matching-refs/tags/"*)
+        out=$(grep -- "^${path#git/matching-refs/tags/}" "$S/tags" | jq -R '{ref: ("refs/tags/" + .)}' | jq -s .) ;;
     "DELETE releases/"*)
         jq --argjson id "${path#releases/}" 'map(select(.id != $id))' "$S/releases.json" > "$S/r" &&
             mv "$S/r" "$S/releases.json"
@@ -99,7 +102,7 @@ publish() { # <tag> <file>...; output in $out, exit status in $rc
     shift
     out=$(cd "$TMP" && PATH="$TMP/bin:$PATH" STATE="$TMP/state" GH_TOKEN=x \
         GITHUB_REPOSITORY=o/r GITHUB_SHA=0123456789abcdef \
-        "$KIT/build/publish-prerelease.sh" "$tag" title notes "$@" 2>&1)
+        "$KIT/build/publish-prerelease.sh" "$tag" "${TITLE:-title}" notes "$@" 2>&1)
     rc=$?
 }
 published() { jq -r --arg t "$1" '[.[] | select(.tag_name == $t and (.draft | not))] | length' "$TMP/state/releases.json"; }
@@ -159,6 +162,46 @@ check "a file whose bytes changed on the way fails the step" '[ $rc != 0 ] && gr
 fresh
 publish web-a-b client.zip missing.deb
 check "a missing file stops it before any call" '[ $rc != 0 ] && [ ! -s "$TMP/state/gh.log" ]'
+
+# the names: <kind>-<YYYYMMDD>.<N>-<kit commit, 12> (build/prerelease-tag.sh)
+name() { # <kind> <title> [kit commit]; the tag in $out, exit status in $rc
+    out=$(cd "$TMP" && PATH="$TMP/bin:$PATH" STATE="$TMP/state" GH_TOKEN=x DAY=20261021 \
+        GITHUB_REPOSITORY=o/r GITHUB_SHA=${3:-0123456789abcdef} \
+        "$KIT/build/prerelease-tag.sh" "$1" "$2" 2>&1)
+    rc=$?
+}
+fresh
+name web "Web client for freerdp-web p1 (kit k1)"
+check "the first build of a day is .1" '[ $rc = 0 ] && [ "$out" = web-20261021.1-0123456789ab ]'
+TITLE="Web client for freerdp-web p1 (kit k1)" publish "$out" client.zip
+name web "Web client for freerdp-web p1 (kit k1)"
+check "a second run of the same build gets the same name" '[ "$out" = web-20261021.1-0123456789ab ]'
+TITLE="Web client for freerdp-web p1 (kit k1)" publish "$out" client.zip
+check "and publishes nothing new" '[ $rc = 0 ] && grep -q "published already" <<< "$out"'
+name web "Web client for freerdp-web p1 (kit k2)" fedcba9876543210
+check "the next build that day is .2, with its kit commit" '[ "$out" = web-20261021.2-fedcba987654 ]'
+name xrdp-preview "xrdp preview x1 (kit k2)" fedcba9876543210
+check "each kind counts on its own" '[ "$out" = xrdp-preview-20261021.1-fedcba987654 ]'
+echo '[{"id": 9, "tag_name": "web-20261021.4-aaaaaaaaaaaa", "name": "Web client for freerdp-web p0 (kit k0)", "draft": true}]' \
+    > "$TMP/state/releases.json"
+echo web-20261021.6-bbbbbbbbbbbb >> "$TMP/state/tags"
+name web "Web client for freerdp-web p2 (kit k3)"
+check "drafts and tags without a release count too: never a name twice" '[ "$out" = web-20261021.7-0123456789ab ]'
+name web "Web client for freerdp-web p0 (kit k0)"
+check "a draft an earlier run left keeps its name" '[ "$out" = web-20261021.4-aaaaaaaaaaaa ]'
+fresh
+echo '[{"id": 3, "tag_name": "web-06593c161e5d-68feb5b6f42a", "name": "Web client for freerdp-web 06593c161e5d (kit 68feb5b6f42a)", "draft": false}]' \
+    > "$TMP/state/releases.json"
+name web "Web client for freerdp-web 06593c161e5d (kit 68feb5b6f42a)"
+check "a build published under the older name keeps it" '[ "$out" = web-06593c161e5d-68feb5b6f42a ]'
+name web "Web client for freerdp-web 06593c161e5d (kit k9)"
+check "older names don't count for N" '[ "$out" = web-20261021.1-0123456789ab ]'
+name stable "x"
+check "an unknown kind is refused" '[ $rc != 0 ]'
+fresh
+touch "$TMP/state/offline"
+name web "Web client for freerdp-web p1 (kit k1)"
+check "no network: an error, not a name" '[ $rc != 0 ] && ! grep -q "^web-" <<< "$out"'
 
 echo "passed $pass, failed $fail"
 [ "$fail" = 0 ]

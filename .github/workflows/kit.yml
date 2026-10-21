@@ -251,7 +251,7 @@ jobs:
           if-no-files-found: ignore
 
   # Every release's preview packages, once all of them pass, go to the
-  # pre-release xrdp-preview-<xrdp commit>-<kit commit> (pushes only; never
+  # pre-release xrdp-preview-<YYYYMMDD>.<N>-<kit commit> (pushes only; never
   # a kit release), published once and never replaced
   xrdp-preview-release:
     if: github.event_name != 'pull_request'
@@ -271,7 +271,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           sha=$(awk '$1 == "xrdp_preview" { print $4 }' sources.lock)
-          tag=xrdp-preview-${sha:0:12}-${GITHUB_SHA:0:12}
+          title="xrdp preview ${sha:0:12} (kit ${GITHUB_SHA:0:12})"
+          tag=$(build/prerelease-tag.sh xrdp-preview "$title")
           # release assets are flat, and GitHub turns '~' in their names
           # into '.': give the files those names first, so SHA256SUMS
           # matches what is downloaded
@@ -281,7 +282,7 @@ jobs:
           done
           (cd upload && sha256sum -- *.deb *.rpm > SHA256SUMS)
           notes="A PREVIEW of the next xrdp: xrdp $sha (its development branch with Wayland sessions, AV1 and pacing) and xorgxrdp's development branch, built and tested (an Xorg and a Wayland login) by rdp-release-kit $GITHUB_SHA. Not an xrdp release. Published once, never replaced."
-          build/publish-prerelease.sh "$tag" "xrdp preview ${sha:0:12} (kit ${GITHUB_SHA:0:12})" "$notes" upload/*
+          build/publish-prerelease.sh "$tag" "$title" "$notes" upload/*
 
   # The web client builds at once; only its login test waits for xrdp
   wasm-build:
@@ -354,7 +355,7 @@ jobs:
         run: test/wasm-session.sh dist/wasm/web dist/wasm/rdp-gateway.sh
 
       # freerdp-web publishes the page; it builds nothing. The tested client
-      # goes to a pre-release here, web-<page commit>-<kit commit>, with the
+      # goes to a pre-release here, web-<YYYYMMDD>.<N>-<kit commit>, with the
       # xrdp packages its check of the published site logs in to; published
       # once and never replaced (docs/RELEASE.md, "Frozen releases").
       - name: Hand the tested page to freerdp-web
@@ -363,7 +364,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           page=$(awk '$1 == "freerdp_web" { print $4 }' sources.lock)
-          tag=web-${page:0:12}-${GITHUB_SHA:0:12}
+          title="Web client for freerdp-web ${page:0:12} (kit ${GITHUB_SHA:0:12})"
+          tag=$(build/prerelease-tag.sh web "$title")
           mkdir -p dist/handoff
           cp dist/wasm/freerdp-web-*.zip dist/handoff/freerdp-web-page.zip
           echo "$GITHUB_SHA" > dist/handoff/KIT_COMMIT
@@ -374,7 +376,7 @@ jobs:
           (cd dist/handoff && sha256sum freerdp-web-page.zip > freerdp-web-page.zip.sha256 &&
             sha256sum -- * > ../SHA256SUMS && mv ../SHA256SUMS .)
           notes="The web client for freerdp-web $page, built and tested (a browser login to xrdp over SSH) by rdp-release-kit $GITHUB_SHA. freerdp-web's workflow publishes it. Not a kit release. Published once, never replaced."
-          build/publish-prerelease.sh "$tag" "Web client for freerdp-web ${page:0:12} (kit ${GITHUB_SHA:0:12})" "$notes" dist/handoff/*
+          build/publish-prerelease.sh "$tag" "$title" "$notes" dist/handoff/*
 
       - uses: actions/upload-artifact@v7
         with:
