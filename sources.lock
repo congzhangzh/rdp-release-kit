@@ -8,9 +8,9 @@
 freerdp     3.32.2   https://github.com/FreeRDP/FreeRDP/releases/download/3.32.2/freerdp-3.32.2.tar.gz            e95a505c0057e4d06a3b120477c421028769deba4db9c639ef3465d050f0955c
 sdl3        3.4.18   https://github.com/libsdl-org/SDL/releases/download/release-3.4.18/SDL3-3.4.18.tar.gz        9c75cf16330322c217dedd2e0609f1124f1b54b8633e763467b4684d0f4334a3
 sdl3_ttf    3.2.2    https://github.com/libsdl-org/SDL_ttf/releases/download/release-3.2.2/SDL3_ttf-3.2.2.tar.gz   63547d58d0185c833213885b635a2c0548201cc8f301e6587c0be1a67e1e045d
-freetype    2.14.3   https://download.savannah.gnu.org/releases/freetype/freetype-2.14.3.tar.xz                   36bc4f1cc413335368ee656c42afca65c5a3987e8768cc28cf11ba775e785a5f
+freetype    2.15.0   https://download.savannah.gnu.org/releases/freetype/freetype-2.15.0.tar.xz                   93cd47eb719c325107f2d3cf087d06299e944c3b48a40b55537302304dea1dd5
 openssl     3.5.9    https://github.com/openssl/openssl/releases/download/openssl-3.5.9/openssl-3.5.9.tar.gz      603f5602e2eef00d77fbd429d34dcd5822bb301757a1bc9cdb24c670f1eb859a
-opus        1.5.2    https://github.com/xiph/opus/releases/download/v1.5.2/opus-1.5.2.tar.gz                      65c1d2f78b9f2fb20082c38cbe47c951ad5839345876e46941612ee87f9a7ce1
+opus        1.6.1    https://downloads.xiph.org/releases/opus/opus-1.6.1.tar.gz                                   6ffcb593207be92584df15b32466ed64bbec99109f007c82205f0194572411a1
 dav1d       1.5.4    https://downloads.videolan.org/pub/videolan/dav1d/1.5.4/dav1d-1.5.4.tar.xz                   686616b7c69eb88d44459391ab25cac13b6647a3b288835c5784e71c1514a5c5
 zlib        1.3.2    https://github.com/madler/zlib/releases/download/v1.3.2/zlib-1.3.2.tar.gz                    bb329a0a2cd0274d05519d61c667c062e06990d72e125ee2dfa8de64f0119d16
 jansson     2.15.1   https://github.com/akheron/jansson/releases/download/v2.15.1/jansson-2.15.1.tar.gz           0c7114dc0b2d22a670724a1f95922029d7077c19dbf79a584cb8084d2f267f2f
@@ -19,16 +19,17 @@ xorgxrdp    0.10.5   https://github.com/neutrinolabs/xorgxrdp/releases/download/
 x264        b35605a  git+https://code.videolan.org/videolan/x264.git                                          b35605ace3ddf7c1a5d67a2eb553f034aef41d55
 # Windows client: LibreSSL as FreeRDP's own scripts/mingw.sh pins it (same
 # hash); the llvm-mingw toolchain publishes no checksums, so its hash is
-# the one of the copy downloaded on 2026-10-09 (trust on first use)
+# the one of the copy downloaded on 2026-10-21 (trust on first use; it
+# equals the digest GitHub shows for the release asset)
 libressl    4.3.3    https://ftp.openbsd.org/pub/OpenBSD/LibreSSL/libressl-4.3.3.tar.gz                         ff97c432457f349e6ba3d416ab903bc7468f1436f0f32efe5fff808de292c7b8
-llvm_mingw  20260922 https://github.com/mstorsjo/llvm-mingw/releases/download/20260922/llvm-mingw-20260922-ucrt-ubuntu-22.04-x86_64.tar.xz bb7bb7654b33d5aa8712acb837c963b2e0c56352560c76105270a3268c665c21
+llvm_mingw  20261020 https://github.com/mstorsjo/llvm-mingw/releases/download/20261020/llvm-mingw-20261020-ucrt-ubuntu-22.04-x86_64.tar.xz 55064b60b991a1e1e8090b8c2f84e82b22cfe5903d12c159d65064cf5e8ae335
 # WASM client (preview): FreeRDP master plus open pull requests, frozen on a
 # fork branch named wasm-preview-<preview number>-<commit>: AV1 (#13731),
 # sound (#13732), clipboard (#13733), microphone (#13810, #13811), H.264 (#13812);
 # the web page with its passkey vault, and the SDL release the Emscripten
 # build was tested with
 freerdp_preview 20261020.1 git+https://github.com/congzhangzh/FreeRDP.git                                    257807e156da033f3f0b03db8d95a8fb2a966386
-sdl3_wasm   3.2.28   https://github.com/libsdl-org/SDL/releases/download/release-3.2.28/SDL3-3.2.28.tar.gz        1330671214d146f8aeb1ed399fc3e081873cdb38b5189d1f8bb6ab15bbc04211
+sdl3_wasm   3.2.30   https://github.com/libsdl-org/SDL/releases/download/release-3.2.30/SDL3-3.2.30.tar.gz        4c3b09330d866dc52eb65b66259a6684ad387252ca8c57901b3a2b534eb42e3d
 freerdp_web 20261021.1 git+https://github.com/congzhangzh/freerdp-web.git                                     6f491514a8be0728ce0132bfd42c506d08412378
 xrdp_preview     20261018.2 git+https://github.com/congzhangzh/xrdp.git                                          53af799d2548ad2270cdc9327848e5bf9caaf0c2
 librfxcodec      0badc06  git+https://github.com/neutrinolabs/librfxcodec.git                                  0badc062e96d170af57870480a4aa7cf469302b0
