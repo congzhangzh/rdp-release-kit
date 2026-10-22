@@ -61,6 +61,12 @@ jobs:
             { sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg > /dev/null; }
           printf '#!/bin/sh\nexec sudo podman "$@"\n' | sudo tee /usr/local/bin/podman-root > /dev/null
           sudo chmod 755 /usr/local/bin/podman-root
+          # Ubuntu forbids unprivileged user namespaces (AppArmor), and Fedora's
+          # GTK loads every image (icons, the wallpaper) through glycin, whose
+          # decoders run in a bwrap sandbox that needs one: Firefox aborted
+          # at start ("Failed to load .../image-missing.svg: Loader process
+          # exited early"), GNOME showed no wallpaper. This runner is thrown away
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
           podman --version
           ls -l /dev/udmabuf || true
           # what decides how systemd runs in a container
