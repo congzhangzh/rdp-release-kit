@@ -74,7 +74,11 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           KIT_COMMIT: ${{ github.event_name == 'push' && 'newest' || github.event.workflow_run.head_sha || github.sha }}
           PODMAN: /usr/local/bin/podman-root
-          SYSTEMD_LOG_LEVEL: debug
+          # Ubuntu's AppArmor profile for rootful podman forbids the mounts
+          # systemd makes for its own sandboxes ("Failed to remount root
+          # directory as MS_SLAVE: Permission denied", then "Failed to start
+          # up manager"); this runner is thrown away after the job
+          SERVER_RUN_OPTS: --security-opt apparmor=unconfined
         run: test/record-demos.sh "${{ matrix.server }}"
 
       - uses: actions/upload-artifact@v7
