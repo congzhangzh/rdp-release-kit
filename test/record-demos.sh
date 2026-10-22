@@ -78,6 +78,14 @@ caption() {
     esac
 }
 
+# the test's logs (the server's, the gateway's, the page's), with the demo
+keep_logs() {
+    local f
+    for f in server gateway page; do
+        [ ! -f "$KIT/dist/test/wasm/$f.log" ] || cp "$KIT/dist/test/wasm/$f.log" "$OUT/$1-$f.log"
+    done
+}
+
 status=0
 for server in "${SERVERS[@]}"; do
     echo "== demo: $server"
@@ -87,13 +95,13 @@ for server in "${SERVERS[@]}"; do
     if ! SERVER=$server DEMO_VIDEO=$raw "$KIT/test/wasm-session.sh" "$IN/client" "$IN/rdp-gateway.sh" "$pkgs" \
             > "$OUT/$server.log" 2>&1; then
         grep -v -E '^\[|systemd|^ *$' "$OUT/$server.log" | tail -30
-        [ ! -f "$KIT/dist/test/wasm/server.log" ] || cp "$KIT/dist/test/wasm/server.log" "$OUT/$server-server.log"
+        keep_logs "$server"
         echo "FAIL  the $server demo"
         status=1
         continue
     fi
     grep -E '^(PASS|demo:)' "$OUT/$server.log"
-    [ ! -f "$KIT/dist/test/wasm/server.log" ] || cp "$KIT/dist/test/wasm/server.log" "$OUT/$server-server.log"
+    keep_logs "$server"
     # as the site's videos: 720p, H.264 CRF 28, AAC 96 kbit/s, a poster from 70 %
     ffmpeg -v error -y -i "$raw" -vf "scale=1280:720:flags=lanczos,format=yuv420p" -c:v libx264 -crf 28 \
         -preset slow -profile:v high -c:a aac -b:a 96k -movflags +faststart "$OUT/demo-$server.mp4"
