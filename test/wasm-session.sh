@@ -284,7 +284,9 @@ fi
 if [ "$SERVER" = xrdp-gnome ] || [ "$SERVER" = xrdp-kde ]; then
     # kept with the test's output (a CI run's artifact): what the server did
     "$ENGINE" exec "$NAME" sh -c 'tail -n 200 /var/log/xrdp.log /var/log/xrdp-sesman.log; echo "== the session";
-        journalctl -b --no-pager -n 300 _UID=1000; echo "== the system"; journalctl -b --no-pager -n 300' \
+        journalctl -b --no-pager -n 300 _UID=1000; echo "== the system"; journalctl -b --no-pager -n 300
+        echo "== the sound, as the user sees it (wpctl status)"
+        su tester -c "XDG_RUNTIME_DIR=/run/user/1000 wpctl status" 2>&1 | head -60' \
         > "$OUT/server.log" 2>&1
     if [ "$fail" != 0 ]; then echo "== xrdp and the session's logs (all: $OUT/server.log)"; tail -n 40 "$OUT/server.log"; fi
 fi

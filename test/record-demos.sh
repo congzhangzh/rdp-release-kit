@@ -86,14 +86,32 @@ keep_logs() {
     done
 }
 
+# record <server> <video> <packages>: the session, then its sound. The last
+# 30 s show the web video, so they must be heard: a peak above -50 dB (a
+# healthy recording peaks near -11 dB, silence is -91)
+record() {
+    local peak
+    SERVER=$1 DEMO_VIDEO=$2 "$KIT/test/wasm-session.sh" "$IN/client" "$IN/rdp-gateway.sh" "$3" \
+        > "$OUT/$1.log" 2>&1 || return 1
+    peak=$(ffmpeg -hide_banner -sseof -30 -i "$2" -map 0:a -af volumedetect -f null - 2>&1 |
+        sed -n 's/.*max_volume: \(-*[0-9.]*\) dB/\1/p')
+    if ! awk -v p="${peak:--91}" 'BEGIN { exit !(p > -50) }'; then
+        echo "FAIL  the web video is heard (its last 30 s peak at ${peak:-no sound} dB)" >> "$OUT/$1.log"
+        return 1
+    fi
+    echo "PASS  the web video is heard (peak $peak dB)" >> "$OUT/$1.log"
+}
+
 status=0
 for server in "${SERVERS[@]}"; do
     echo "== demo: $server"
     raw=$OUT/raw-$server.mp4
     pkgs=$IN/preview
     [ "$server" = xrdp ] && pkgs=$IN/xrdp
-    if ! SERVER=$server DEMO_VIDEO=$raw "$KIT/test/wasm-session.sh" "$IN/client" "$IN/rdp-gateway.sh" "$pkgs" \
-            > "$OUT/$server.log" 2>&1; then
+    # a demo is a recording, not a test of xrdp: one more try when the
+    # machine's timing gets in the way (a CI runner now and then)
+    if ! record "$server" "$raw" "$pkgs" && ! { mv "$OUT/$server.log" "$OUT/$server-try1.log"
+            echo "== $server: a second try"; record "$server" "$raw" "$pkgs"; }; then
         grep -v -E '^\[|systemd|^ *$' "$OUT/$server.log" | tail -30
         keep_logs "$server"
         echo "FAIL  the $server demo"
