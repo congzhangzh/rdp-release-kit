@@ -1,0 +1,130 @@
+name: demo
+
+# Records the demo videos (test/record-demos.sh) with what a green kit run
+# on main published (its web client, its xrdp preview), and publishes them
+# as the pre-release demo-<YYYYMMDD>.<N>-<kit commit, 12>, once and never
+# replaced: freerdp-web's splash takes its videos from the newest one when
+# it publishes. Each server records on a runner of its own. A push to the
+# branch demo-ci records with the newest pre-releases and publishes nothing,
+# to work on the recordings themselves.
+on:
+  workflow_run:
+    workflows: [kit]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+  push:
+    branches: [demo-ci]
+
+permissions:
+  contents: read
+
+jobs:
+  record:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    strategy:
+      fail-fast: false
+      matrix:
+        server: [xrdp, gnome, xrdp-gnome, xrdp-kde]
+    runs-on: ubuntu-24.04
+    # KDE is new here: its video joins once it records, the others publish without it
+    continue-on-error: ${{ matrix.server == 'xrdp-kde' }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+
+      # the test driver uses Node's WebSocket (Node 22+); its checks use uvx
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+
+      - name: Cache the media the demo plays
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/rdp-release-kit/demo
+          key: demo-media-${{ hashFiles('test/demo-assets.sh') }}
+
+      # KDE's xrdp is compiled in its image from these
+      - name: Cache sources
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/rdp-release-kit/sources
+          key: sources-${{ hashFiles('sources.lock') }}
+
+      # GNOME and KDE run systemd in a podman container: a rootful one here,
+      # which also opens /dev/udmabuf for KWin (no GPU, no DRM, no vgem)
+      - name: Tools
+        run: |
+          command -v ffmpeg > /dev/null ||
+            { sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg > /dev/null; }
+          printf '#!/bin/sh\nexec sudo podman "$@"\n' | sudo tee /usr/local/bin/podman-root > /dev/null
+          sudo chmod 755 /usr/local/bin/podman-root
+          podman --version
+          ls -l /dev/udmabuf || true
+
+      - name: Record
+        env:
+          GH_TOKEN: ${{ github.token }}
+          KIT_COMMIT: ${{ github.event_name == 'push' && 'newest' || github.event.workflow_run.head_sha || github.sha }}
+          PODMAN: /usr/local/bin/podman-root
+        run: test/record-demos.sh "${{ matrix.server }}"
+
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: demo-${{ matrix.server }}
+          path: dist/demo/
+          retention-days: 3
+          if-no-files-found: ignore
+
+  publish:
+    if: github.event_name != 'push'
+    needs: [record]
+    runs-on: ubuntu-24.04
+    concurrency: publish-demo-${{ github.event.workflow_run.head_sha || github.sha }}
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: demo-*
+          path: dist/in
+
+      # one demo.json with every recorded video, in the splash's order
+      - name: Publish the pre-release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          KIT_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+        run: |
+          mkdir -p dist/demo
+          python3 - dist/in dist/demo << 'EOF'
+          import glob, json, os, shutil, sys
+          src, out = sys.argv[1], sys.argv[2]
+          order = ["xrdp-gnome", "xrdp-kde", "xrdp", "gnome"]
+          recorded, videos = {}, {}
+          for f in glob.glob(f"{src}/demo-*/demo.json"):
+              d = json.load(open(f, encoding="utf-8"))
+              recorded = recorded or d["recorded"]
+              for v in d["videos"]:
+                  server = os.path.basename(v["src"])[len("demo-"):-len(".mp4")]
+                  for name in (os.path.basename(v["src"]), os.path.basename(v["poster"])):
+                      shutil.copy(f"{os.path.dirname(f)}/{name}", f"{out}/{name}")
+                  videos[server] = v
+          if not videos:
+              sys.exit("no demo was recorded")
+          json.dump({"recorded": recorded, "videos": [videos[s] for s in order if s in videos]},
+                    open(f"{out}/demo.json", "w", encoding="utf-8"), indent=2, ensure_ascii=False)
+          print("videos:", ", ".join(s for s in order if s in videos))
+          EOF
+          (cd dist/demo && sha256sum -- * > ../SHA256SUMS && mv ../SHA256SUMS .)
+          web=$(python3 -c 'import json; print(json.load(open("dist/demo/demo.json"))["recorded"]["web"])')
+          title="Demo videos with $web (kit ${KIT_SHA:0:12})"
+          tag=$(build/prerelease-tag.sh demo "$title")
+          notes="The demo videos of freerdp-web's splash, recorded by rdp-release-kit's test/record-demos.sh with the pre-releases demo.json names, on throwaway servers: everything shown is synthetic. Big Buck Bunny © Blender Foundation, CC BY 3.0; WebGL Aquarium © Google, BSD. Published once, never replaced."
+          build/publish-prerelease.sh "$tag" "$title" "$notes" dist/demo/*
