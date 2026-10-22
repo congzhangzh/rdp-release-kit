@@ -18,10 +18,12 @@ WEBGL_COMMIT=4c87dfea3cff6bf9f351c5ed4a191f86ceed8bbc
 mkdir -p "$DIR"
 
 if [ ! -s "$DIR/bunny.webm" ]; then
-    if ! echo "$BBB_SHA256  $DIR/bbb-720p.webm" | sha256sum -c --quiet 2> /dev/null; then
+    # stdout carries only the directory, for the caller: sha256sum -c says
+    # "FAILED open or read" there when the file is not here yet
+    if ! echo "$BBB_SHA256  $DIR/bbb-720p.webm" | sha256sum -c --quiet > /dev/null 2>&1; then
         echo "== Big Buck Bunny (160 MB, once)" >&2
         curl -fL --retry 3 -A rdp-release-kit -o "$DIR/bbb-720p.webm.part" "$BBB_URL"
-        echo "$BBB_SHA256  $DIR/bbb-720p.webm.part" | sha256sum -c --quiet
+        echo "$BBB_SHA256  $DIR/bbb-720p.webm.part" | sha256sum -c --quiet >&2
         mv "$DIR/bbb-720p.webm.part" "$DIR/bbb-720p.webm"
     fi
     # the bunny leaves his burrow and stretches, with the music; the streams as they are
