@@ -163,8 +163,9 @@ fi
 # room for a whole desktop session with Firefox playing video next to WebGL:
 # tasks (podman's default is 2048; see the Dockerfiles) and the shared
 # memory of Firefox's processes (default 64 MB)
-# systemd's own messages on the console too: when it stops, podman logs says why
-"$ENGINE" run -d --name "$NAME" --hostname "$HOST" --systemd=always --cap-add SYS_ADMIN,SYS_NICE \
+# systemd's own messages on the console too, and a terminal for that console
+# (-t: without one podman logs never sees it): when it stops, podman logs says why
+"$ENGINE" run -d -t --name "$NAME" --hostname "$HOST" --systemd=always --cap-add SYS_ADMIN,SYS_NICE \
     --pids-limit 4096 --shm-size=1g "${DEVICES[@]}" -e SYSTEMD_LOG_TARGET=console \
     -e SYSTEMD_LOG_LEVEL="${SYSTEMD_LOG_LEVEL:-info}" "${RUN_OPTS[@]}" \
     -p 127.0.0.1:2223:22 -v "$OUT/ssh/key.pub":/key.pub:ro "${DEMO_MOUNTS[@]}" "$IMAGE" > /dev/null

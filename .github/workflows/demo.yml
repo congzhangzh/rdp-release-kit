@@ -75,8 +75,6 @@ jobs:
           KIT_COMMIT: ${{ github.event_name == 'push' && 'newest' || github.event.workflow_run.head_sha || github.sha }}
           PODMAN: /usr/local/bin/podman-root
           SYSTEMD_LOG_LEVEL: debug
-          # a test: does the runner's older seccomp profile stop systemd?
-          SERVER_RUN_OPTS: --security-opt seccomp=unconfined
         run: test/record-demos.sh "${{ matrix.server }}"
 
       - uses: actions/upload-artifact@v7
