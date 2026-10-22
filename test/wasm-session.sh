@@ -286,7 +286,9 @@ if [ "$SERVER" = xrdp-gnome ] || [ "$SERVER" = xrdp-kde ]; then
     "$ENGINE" exec "$NAME" sh -c 'tail -n 200 /var/log/xrdp.log /var/log/xrdp-sesman.log; echo "== the session";
         journalctl -b --no-pager -n 300 _UID=1000; echo "== the system"; journalctl -b --no-pager -n 300
         echo "== the sound, as the user sees it (wpctl status)"
-        su tester -c "XDG_RUNTIME_DIR=/run/user/1000 wpctl status" 2>&1 | head -60' \
+        su tester -c "XDG_RUNTIME_DIR=/run/user/1000 wpctl status" 2>&1 | head -60
+        echo "== the demo'"'"'s Firefox (webdemo)"; tail -n 80 /tmp/firefox.log 2> /dev/null
+        echo "== processes"; ps -eo user,pid,etime,rss,args --sort=-rss | head -25' \
         > "$OUT/server.log" 2>&1
     if [ "$fail" != 0 ]; then echo "== xrdp and the session's logs (all: $OUT/server.log)"; tail -n 40 "$OUT/server.log"; fi
 fi
