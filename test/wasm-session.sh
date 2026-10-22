@@ -31,7 +31,8 @@
 # sources). KWin renders in software with the host's /dev/udmabuf: no GPU,
 # no DRM node, no vgem; the user running podman must be able to open it
 # (group kvm). PODMAN=<command> runs another podman for both, e.g. a
-# rootful one on a CI runner.
+# rootful one on a CI runner; SERVER_RUN_OPTS=<options> adds options to
+# their container (e.g. what an older podman's defaults need).
 #
 # DEMO_VIDEO=<file.mp4> records a demo instead of the plain login: the server
 # gets a desktop (Xfce for xrdp) and test/wasm-demo.mjs plays a user's visit,
@@ -126,6 +127,7 @@ ctx=$OUT/$SERVER
 mkdir -p "$ctx"
 cp "$KIT/test/$SERVER/Dockerfile" "$ctx/"
 DEVICES=()
+read -r -a RUN_OPTS <<< "${SERVER_RUN_OPTS:-}"
 if [ "$SERVER" = xrdp-gnome ]; then
     echo "== server: GNOME on Wayland through the xrdp preview (AV1), Fedora 45, systemd under podman"
     IMAGE=kit-xrdp-gnome:f45 HOST=rdp-gnome
@@ -164,7 +166,7 @@ fi
 # systemd's own messages on the console too: when it stops, podman logs says why
 "$ENGINE" run -d --name "$NAME" --hostname "$HOST" --systemd=always --cap-add SYS_ADMIN,SYS_NICE \
     --pids-limit 4096 --shm-size=1g "${DEVICES[@]}" -e SYSTEMD_LOG_TARGET=console \
-    -e SYSTEMD_LOG_LEVEL="${SYSTEMD_LOG_LEVEL:-info}" \
+    -e SYSTEMD_LOG_LEVEL="${SYSTEMD_LOG_LEVEL:-info}" "${RUN_OPTS[@]}" \
     -p 127.0.0.1:2223:22 -v "$OUT/ssh/key.pub":/key.pub:ro "${DEMO_MOUNTS[@]}" "$IMAGE" > /dev/null
 # shellcheck disable=SC2016 # for the container's shell
 "$ENGINE" exec "$NAME" bash -c '
