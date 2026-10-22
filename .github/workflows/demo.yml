@@ -63,12 +63,18 @@ jobs:
           sudo chmod 755 /usr/local/bin/podman-root
           podman --version
           ls -l /dev/udmabuf || true
+          # what decides how systemd runs in a container
+          uname -r
+          stat -fc 'cgroup fs: %T' /sys/fs/cgroup
+          sudo podman info --format 'podman: cgroup v{{.Host.CgroupsVersion}}, manager {{.Host.CgroupManager}}, {{.Host.OCIRuntime.Name}} {{.Host.OCIRuntime.Version}}' |
+            head -2
 
       - name: Record
         env:
           GH_TOKEN: ${{ github.token }}
           KIT_COMMIT: ${{ github.event_name == 'push' && 'newest' || github.event.workflow_run.head_sha || github.sha }}
           PODMAN: /usr/local/bin/podman-root
+          SYSTEMD_LOG_LEVEL: debug
         run: test/record-demos.sh "${{ matrix.server }}"
 
       - uses: actions/upload-artifact@v7

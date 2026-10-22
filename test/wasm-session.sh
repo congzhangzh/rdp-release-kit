@@ -164,6 +164,7 @@ fi
 # systemd's own messages on the console too: when it stops, podman logs says why
 "$ENGINE" run -d --name "$NAME" --hostname "$HOST" --systemd=always --cap-add SYS_ADMIN,SYS_NICE \
     --pids-limit 4096 --shm-size=1g "${DEVICES[@]}" -e SYSTEMD_LOG_TARGET=console \
+    -e SYSTEMD_LOG_LEVEL="${SYSTEMD_LOG_LEVEL:-info}" \
     -p 127.0.0.1:2223:22 -v "$OUT/ssh/key.pub":/key.pub:ro "${DEMO_MOUNTS[@]}" "$IMAGE" > /dev/null
 # shellcheck disable=SC2016 # for the container's shell
 "$ENGINE" exec "$NAME" bash -c '
