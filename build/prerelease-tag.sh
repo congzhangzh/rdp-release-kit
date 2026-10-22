@@ -1,7 +1,7 @@
 #!/bin/bash
 # Prints the tag of a pre-release (docs/RELEASE.md, "Frozen releases"):
 #
-#   prerelease-tag.sh <kind> <title>      kind: web, xrdp-preview, pipewire-module-xrdp
+#   prerelease-tag.sh <kind> <title>      kind: web, xrdp-preview, pipewire-module-xrdp, demo
 #
 # - A release with this title, published or a draft an earlier run left,
 #   keeps its tag: the title names the inputs and the kit commit, so a
@@ -11,14 +11,15 @@
 #   (drafts too) and the tags (a tag can outlive its release). The date
 #   says how new a build is; N orders the builds of one day.
 #
-# Expects GH_TOKEN, GITHUB_REPOSITORY and GITHUB_SHA; DAY=<YYYYMMDD>
-# replaces today (tests).
+# Expects GH_TOKEN, GITHUB_REPOSITORY and GITHUB_SHA (KIT_SHA instead: a
+# workflow started by another run builds that run's commit, and GitHub keeps
+# GITHUB_SHA its own); DAY=<YYYYMMDD> replaces today (tests).
 set -euo pipefail
 
 KIND=$1 TITLE=$2
-REPO=${GITHUB_REPOSITORY:?} SHA=${GITHUB_SHA:?}
+REPO=${GITHUB_REPOSITORY:?} SHA=${KIT_SHA:-${GITHUB_SHA:?}}
 case $KIND in
-    web | xrdp-preview | pipewire-module-xrdp) ;;
+    web | xrdp-preview | pipewire-module-xrdp | demo) ;;
     *) echo "prerelease-tag.sh: unknown kind: $KIND" >&2; exit 1 ;;
 esac
 

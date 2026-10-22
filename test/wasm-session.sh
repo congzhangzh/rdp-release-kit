@@ -26,6 +26,13 @@
 # packages dir then holds the preview's Fedora 45 packages (default
 # dist/xrdp-preview/fedora-45).
 #
+# SERVER=xrdp-kde: KDE Plasma on Wayland through the xrdp preview, with AV1
+# (test/xrdp-kde/: Arch with KWin 6.8, xrdp compiled there from the pinned
+# sources). KWin renders in software with the host's /dev/udmabuf: no GPU,
+# no DRM node, no vgem; the user running podman must be able to open it
+# (group kvm). PODMAN=<command> runs another podman for both, e.g. a
+# rootful one on a CI runner.
+#
 # DEMO_VIDEO=<file.mp4> records a demo instead of the plain login: the server
 # gets a desktop (Xfce for xrdp) and test/wasm-demo.mjs plays a user's visit,
 # with a pointer, captions and the sound. Everything in it is synthetic: the
@@ -41,11 +48,14 @@ PAGE=$1
 GATEWAY=$(cd "$(dirname "$2")" && pwd)/$(basename "$2")
 PKGS=${3:-$KIT/dist/xrdp/debian-13}
 ENGINE=${ENGINE:-$(command -v docker || command -v podman)}
-# GNOME through the xrdp preview needs systemd in its container: rootless podman
-if [ "${SERVER:-}" = xrdp-gnome ]; then
-    ENGINE=$(command -v podman) || { echo "SERVER=xrdp-gnome needs podman (rootless: systemd without privileges)" >&2; exit 1; }
-    PKGS=${3:-$KIT/dist/xrdp-preview/fedora-45}
-fi
+# GNOME and KDE through the xrdp preview need systemd in their container:
+# podman, which runs it without privileges
+case ${SERVER:-} in
+xrdp-gnome | xrdp-kde)
+    ENGINE=${PODMAN:-$(command -v podman)} ||
+        { echo "SERVER=$SERVER needs podman (systemd without privileges)" >&2; exit 1; }
+    PKGS=${3:-$KIT/dist/xrdp-preview/fedora-45} ;;
+esac
 OUT=$KIT/dist/test/wasm
 NAME=kit-wasm-server
 rm -rf "$OUT"; mkdir -p "$OUT/ssh"
@@ -110,31 +120,59 @@ echo "== server: GNOME on Wayland (headless) + gnome-remote-desktop, unprivilege
     for _ in $(seq 90); do grep -qiE ":0D3D [0:]+ 0A" /proc/net/tcp /proc/net/tcp6 && exit 0; sleep 1; done
     exit 1' || { echo "gnome-remote-desktop did not start:" >&2
                  "$ENGINE" exec "$NAME" sh -c "tail -n 20 /tmp/gnome-shell.log /tmp/grd.log" >&2; exit 1; }
-elif [ "$SERVER" = xrdp-gnome ]; then
-echo "== server: GNOME on Wayland through the xrdp preview (AV1), Fedora 45, systemd under rootless podman"
-ls "$PKGS"/xrdp-*.fc45.x86_64.rpm > /dev/null 2>&1 || { echo "no Fedora 45 xrdp preview packages in $PKGS" \
-    "(./build-xrdp.sh --preview fedora:45, or the *fc45* files of an xrdp-preview-* pre-release)" >&2; exit 1; }
+elif [ "$SERVER" = xrdp-gnome ] || [ "$SERVER" = xrdp-kde ]; then
 "$ENGINE" rm -f "$NAME" > /dev/null 2>&1
-# the build context: the image's file and the packages
-mkdir -p "$OUT/xrdp-gnome/pkgs"
-cp "$KIT/test/xrdp-gnome/Dockerfile" "$OUT/xrdp-gnome/"
-cp "$PKGS"/xrdp-*.fc45.x86_64.rpm "$OUT/xrdp-gnome/pkgs/"
-# PipeWire's xrdp module, the session's sound (the kit's package; Fedora has none)
-cp "$PKGS"/pipewire-module-xrdp-*.fc45.x86_64.rpm "$OUT/xrdp-gnome/pkgs/" 2> /dev/null ||
-    { echo "no pipewire-module-xrdp *fc45* package in $PKGS (a pipewire-module-xrdp-* pre-release)" >&2; exit 1; }
-"$ENGINE" build -q -t kit-xrdp-gnome:f45 "$OUT/xrdp-gnome" > "$OUT/xrdp-gnome-build.log" 2>&1 ||
-    { tail -20 "$OUT/xrdp-gnome-build.log" >&2; echo "the GNOME + xrdp image did not build" >&2; exit 1; }
-# room for a whole GNOME session with Firefox playing video next to WebGL:
-# tasks (podman's default is 2048; see the Dockerfile) and the shared
+ctx=$OUT/$SERVER
+mkdir -p "$ctx"
+cp "$KIT/test/$SERVER/Dockerfile" "$ctx/"
+DEVICES=()
+if [ "$SERVER" = xrdp-gnome ]; then
+    echo "== server: GNOME on Wayland through the xrdp preview (AV1), Fedora 45, systemd under podman"
+    IMAGE=kit-xrdp-gnome:f45 HOST=rdp-gnome
+    ls "$PKGS"/xrdp-*.fc45.x86_64.rpm > /dev/null 2>&1 || { echo "no Fedora 45 xrdp preview packages in $PKGS" \
+        "(./build-xrdp.sh --preview fedora:45, or the *fc45* files of an xrdp-preview-* pre-release)" >&2; exit 1; }
+    mkdir -p "$ctx/pkgs"
+    cp "$PKGS"/xrdp-*.fc45.x86_64.rpm "$ctx/pkgs/"
+    # PipeWire's xrdp module, the session's sound (the kit's package; Fedora has none)
+    cp "$PKGS"/pipewire-module-xrdp-*.fc45.x86_64.rpm "$ctx/pkgs/" 2> /dev/null ||
+        { echo "no pipewire-module-xrdp *fc45* package in $PKGS (a pipewire-module-xrdp-* pre-release)" >&2; exit 1; }
+else
+    echo "== server: KDE Plasma on Wayland through the xrdp preview (AV1), Arch (KWin 6.8), systemd under podman"
+    IMAGE=kit-xrdp-kde:arch HOST=rdp-kde
+    # KWin 6.8 renders in software with /dev/udmabuf (no GPU, no DRM, no vgem);
+    # a rootless podman opens it as this user
+    if [ -z "${PODMAN:-}" ] && ! { [ -r /dev/udmabuf ] && [ -w /dev/udmabuf ]; }; then
+        echo "SERVER=xrdp-kde: this user cannot open /dev/udmabuf (KWin 6.8 renders with it); add it to" \
+            "the device's group ($(stat -c %G /dev/udmabuf 2> /dev/null || echo "no /dev/udmabuf"))" >&2
+        exit 1
+    fi
+    DEVICES=(--device /dev/udmabuf)
+    # xrdp is compiled in the image from the pinned sources, checked as every build's are
+    mkdir -p "$ctx/src"
+    for src in xrdp_preview librfxcodec libpainter pipewire_xrdp; do
+        # shellcheck disable=SC2016 # for the inner shell
+        file=$(KIT=$KIT SOURCES=${SOURCES:-$HOME/.cache/rdp-release-kit/sources} WORK=$ctx/work SRC=$src \
+            bash -c '. "$KIT/build/lib.sh" && fetch "$SRC"') || { echo "$src: no checked source" >&2; exit 1; }
+        cp "$file" "$ctx/src/$src.tar"
+    done
+fi
+"$ENGINE" build -q -t "$IMAGE" "$ctx" > "$OUT/$SERVER-build.log" 2>&1 ||
+    { tail -20 "$OUT/$SERVER-build.log" >&2; echo "the $SERVER image did not build" >&2; exit 1; }
+# room for a whole desktop session with Firefox playing video next to WebGL:
+# tasks (podman's default is 2048; see the Dockerfiles) and the shared
 # memory of Firefox's processes (default 64 MB)
-"$ENGINE" run -d --name "$NAME" --hostname rdp-gnome --systemd=always --cap-add SYS_ADMIN,SYS_NICE \
-    --pids-limit 4096 --shm-size=1g \
-    -p 127.0.0.1:2223:22 -v "$OUT/ssh/key.pub":/key.pub:ro "${DEMO_MOUNTS[@]}" kit-xrdp-gnome:f45 > /dev/null
+"$ENGINE" run -d --name "$NAME" --hostname "$HOST" --systemd=always --cap-add SYS_ADMIN,SYS_NICE \
+    --pids-limit 4096 --shm-size=1g "${DEVICES[@]}" \
+    -p 127.0.0.1:2223:22 -v "$OUT/ssh/key.pub":/key.pub:ro "${DEMO_MOUNTS[@]}" "$IMAGE" > /dev/null
 # shellcheck disable=SC2016 # for the container's shell
 "$ENGINE" exec "$NAME" bash -c '
     install -d -m 700 -o tester -g tester /home/tester/.ssh
     install -m 600 -o tester -g tester /key.pub /home/tester/.ssh/authorized_keys
     [ ! -d /demo-setup ] || install -m 755 /demo-setup/webdemo /usr/local/bin/
+    # the session opens it as its user: a session without a seat gets no
+    # device access from logind (a rootful podman made this node for the
+    # container alone; a rootless one shows the host'"'"'s, unchanged)
+    [ ! -e /dev/udmabuf ] || chmod 666 /dev/udmabuf 2> /dev/null || true
     # xrdp listens on 3389 (0D3D) and sshd runs once systemd has started them
     for _ in $(seq 60); do
         grep -qiE ":0D3D [0:]+ 0A" /proc/net/tcp /proc/net/tcp6 && systemctl -q is-active sshd && exit 0
@@ -193,7 +231,7 @@ DRIVER=$KIT/test/wasm-session.mjs
 DRIVER=${WASM_DRIVER:-$DRIVER}   # another driver, e.g. while debugging
 # what xrdp says it encodes, for the demo's caption: the web client reports no
 # codec of its own yet (its build has no codec statistics)
-[ "$SERVER" != xrdp-gnome ] ||
+[ "$SERVER" != xrdp-gnome ] && [ "$SERVER" != xrdp-kde ] ||
     export DEMO_CODEC_CMD="$ENGINE exec $NAME grep -h 'xrdp_encoder_av1: encoder for' /var/log/xrdp.log"
 node "$DRIVER" "${PAGE_URL:-http://127.0.0.1:8199/index.html}$QUERY" 127.0.0.1:"$LOCAL_WS_PORT" \
     tester kit-test-pw "$OUT" ${DEMO_VIDEO:+"$DEMO_VIDEO"}
@@ -205,6 +243,12 @@ if [ "$SERVER" = xrdp-gnome ]; then
 check "sesman started GNOME for tester (gnome-session, GNOME Shell)" \
     '"$ENGINE" exec "$NAME" pgrep -u tester -f "gnome-session-service --session=gnome" > /dev/null &&
      "$ENGINE" exec "$NAME" pgrep -u tester -x gnome-shell > /dev/null'
+check "xrdp encodes the session in AV1" \
+    '"$ENGINE" exec "$NAME" grep -q "starting AV1 codec session" /var/log/xrdp.log'
+elif [ "$SERVER" = xrdp-kde ]; then
+check "sesman started Plasma for tester (KWin, the Plasma shell)" \
+    '"$ENGINE" exec "$NAME" pgrep -u tester -x kwin_wayland > /dev/null &&
+     "$ENGINE" exec "$NAME" pgrep -u tester -x plasmashell > /dev/null'
 check "xrdp encodes the session in AV1" \
     '"$ENGINE" exec "$NAME" grep -q "starting AV1 codec session" /var/log/xrdp.log'
 elif [ "$SERVER" = gnome ]; then
@@ -220,6 +264,10 @@ check "the screenshot shows more than one colour" \
     '[ "$(uvx -q --with pillow python -c "import sys; from PIL import Image; print(len(Image.open(sys.argv[1]).convert(\"RGB\").getcolors(1 << 24)))" "$OUT/wasm-session.png" 2> /dev/null || echo 0)" -gt 2 ]'
 if [ "$SERVER" = gnome ] && [ "$fail" != 0 ]; then
     echo "== GNOME logs"; "$ENGINE" exec "$NAME" sh -c 'tail -n 25 /tmp/grd.log /tmp/gnome-shell.log; cat /tmp/session-ended 2> /dev/null'
+fi
+if { [ "$SERVER" = xrdp-gnome ] || [ "$SERVER" = xrdp-kde ]; } && [ "$fail" != 0 ]; then
+    echo "== xrdp and the session's logs"
+    "$ENGINE" exec "$NAME" sh -c 'tail -n 25 /var/log/xrdp.log /var/log/xrdp-sesman.log; journalctl -b --no-pager -n 40 _UID=1000'
 fi
 echo "passed $pass, failed $fail (screenshot, page log: $OUT)"
 [ "$fail" = 0 ]

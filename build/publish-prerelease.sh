@@ -12,12 +12,13 @@
 #   published release must then hold exactly these files: the same names,
 #   and the same SHA-256 (GitHub's digest of each asset).
 #
-# Expects GH_TOKEN, GITHUB_REPOSITORY and GITHUB_SHA.
+# Expects GH_TOKEN, GITHUB_REPOSITORY and GITHUB_SHA (or KIT_SHA, as
+# prerelease-tag.sh).
 set -euo pipefail
 
 TAG=$1 TITLE=$2 NOTES=$3
 shift 3
-REPO=${GITHUB_REPOSITORY:?} SHA=${GITHUB_SHA:?}
+REPO=${GITHUB_REPOSITORY:?} SHA=${KIT_SHA:-${GITHUB_SHA:?}}
 [ $# -gt 0 ] || { echo "publish-prerelease.sh: no files for $TAG" >&2; exit 1; }
 for f in "$@"; do
     [ -f "$f" ] || { echo "publish-prerelease.sh: $f: no such file" >&2; exit 1; }

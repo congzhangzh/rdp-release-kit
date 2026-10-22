@@ -27,9 +27,11 @@ const W = 1920, H = 1080;
 // wasm-session.sh's server: xrdp (Xfce), gnome (gnome-remote-desktop) or xrdp-gnome
 // (GNOME through the xrdp preview, in AV1); both GNOMEs start in the overview
 const XRDP_GNOME = process.env.SERVER === "xrdp-gnome";
+const XRDP_KDE = process.env.SERVER === "xrdp-kde";   // KDE Plasma through the xrdp preview, in AV1
 const GNOME = process.env.SERVER === "gnome" || XRDP_GNOME;
 const LABEL = process.env.DEMO_LABEL ||
   (XRDP_GNOME ? "xrdp preview + GNOME 51 Wayland, AV1"
+    : XRDP_KDE ? "xrdp preview + KDE Plasma 6 Wayland, AV1"
     : GNOME ? "gnome-remote-desktop + GNOME Wayland" : "xrdp + Xfce");
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 // What the server says it encodes (DEMO_CODEC_CMD, from wasm-session.sh): the
@@ -259,6 +261,15 @@ if (GNOME) {   // GNOME starts in the overview: typing searches, Enter starts th
   }
   // typing goes to the overview's search; Fedora's terminal is Ptyxis, Debian's Console
   await typeRemote(XRDP_GNOME ? "terminal\n" : "console\n");
+  await sleep(4000);
+} else if (XRDP_KDE) {   // Plasma starts on its desktop: Meta opens the launcher, typing searches it
+  await ev("document.getElementById('canvas').focus(), true");
+  await caption(`KDE Plasma on Wayland through xrdp, in AV1${serverCodec()}`);
+  await sleep(3500);
+  await caption("KDE Plasma: the launcher searches as you type, Enter starts");
+  await typeRemote("\u2318");
+  await sleep(1500);
+  await typeRemote("konsole\n");
   await sleep(4000);
 } else {
   await click(Math.round(canvas.x + 300), Math.round(canvas.y + 200));
