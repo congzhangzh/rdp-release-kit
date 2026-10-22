@@ -284,6 +284,10 @@ await typeRemote("hostname\n");
 await sleep(2400);
 const shot = await send("Page.captureScreenshot", { format: "png" });   // for wasm-session.sh's check
 writeFileSync(join(out, "wasm-session.png"), Buffer.from(shot.data, "base64"));
+// where the remote desktop is in that screenshot, in its pixels: wasm-session.sh checks it shows detail
+writeFileSync(join(out, "canvas.json"), JSON.stringify(await ev(`(() => {
+  const r = document.getElementById('canvas').getBoundingClientRect(), d = window.devicePixelRatio || 1;
+  return { x: Math.round(r.left * d), y: Math.round(r.top * d), w: Math.round(r.width * d), h: Math.round(r.height * d) }; })()`)));
 // the page's log and console, for wasm-session.sh's checks
 writeFileSync(join(out, "page.log"),
   (await ev("document.getElementById('log')?.textContent ?? ''")) + "\n--- console ---\n" + logs.join("\n"));

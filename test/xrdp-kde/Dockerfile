@@ -64,7 +64,7 @@ RUN test -L /usr/sbin && test -L /bin && command -v xrdp xrdp-sesman > /dev/null
 # device events
 RUN systemctl mask systemd-udev-trigger.service systemd-udevd.service systemd-oomd.service \
         systemd-oomd.socket systemd-resolved.service systemd-networkd.service \
-        systemd-homed.service rtkit-daemon.service > /dev/null 2>&1; \
+        systemd-homed.service rtkit-daemon.service systemd-firstboot.service > /dev/null 2>&1; \
     useradd -m tester && echo tester:kit-test-pw | chpasswd
 # systemd sizes its task limits from the container's: the user's slice
 # would get a third (see test/xrdp-gnome/Dockerfile)

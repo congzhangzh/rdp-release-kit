@@ -29,7 +29,7 @@ RUN dnf -y -q install /pkgs/*.rpm && dnf clean all > /dev/null && rm -rf /pkgs
 # what a container has no use for, and what would fail in one
 RUN systemctl mask systemd-oomd.service systemd-oomd.socket systemd-resolved.service \
         systemd-resolved-varlink.socket systemd-resolved-monitor.socket systemd-networkd.service \
-        systemd-homed.service rtkit-daemon.service > /dev/null 2>&1; \
+        systemd-homed.service rtkit-daemon.service systemd-firstboot.service > /dev/null 2>&1; \
     useradd -m tester && echo tester:kit-test-pw | chpasswd 2> /dev/null
 # systemd sizes its task limits from the container's (podman: 2048): the
 # user's slice would get 33 %, 675 tasks, too few for a GNOME session with

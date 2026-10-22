@@ -268,14 +268,20 @@ check "an Xorg session started for tester" \
 fi
 check "RDP for a native client on 127.0.0.1:$LOCAL_RDP_PORT" 'timeout 3 bash -c "exec 3<> /dev/tcp/127.0.0.1/$LOCAL_RDP_PORT"'
 [ "$SERVER" != xrdp ] || check "the session runs its $SHELL_PROC" '"$ENGINE" exec "$NAME" pgrep -u tester "$SHELL_PROC" > /dev/null'
+# a demo's screenshot has a terminal with typed text on the remote desktop:
+# a picture that never arrived (one flat colour) has next to no colours there
+[ -z "${DEMO_VIDEO:-}" ] || check "the remote desktop shows detail (at least 64 colours)" \
+    '[ "$(uvx -q --with pillow python -c "import json, sys; from PIL import Image; c = json.load(open(sys.argv[2])); print(len(Image.open(sys.argv[1]).convert(\"RGB\").crop((c[\"x\"], c[\"y\"], c[\"x\"] + c[\"w\"], c[\"y\"] + c[\"h\"])).getcolors(1 << 24)))" "$OUT/wasm-session.png" "$OUT/canvas.json" 2> /dev/null || echo 0)" -ge 64 ]'
 check "the screenshot shows more than one colour" \
     '[ "$(uvx -q --with pillow python -c "import sys; from PIL import Image; print(len(Image.open(sys.argv[1]).convert(\"RGB\").getcolors(1 << 24)))" "$OUT/wasm-session.png" 2> /dev/null || echo 0)" -gt 2 ]'
 if [ "$SERVER" = gnome ] && [ "$fail" != 0 ]; then
     echo "== GNOME logs"; "$ENGINE" exec "$NAME" sh -c 'tail -n 25 /tmp/grd.log /tmp/gnome-shell.log; cat /tmp/session-ended 2> /dev/null'
 fi
-if { [ "$SERVER" = xrdp-gnome ] || [ "$SERVER" = xrdp-kde ]; } && [ "$fail" != 0 ]; then
-    echo "== xrdp and the session's logs"
-    "$ENGINE" exec "$NAME" sh -c 'tail -n 25 /var/log/xrdp.log /var/log/xrdp-sesman.log; journalctl -b --no-pager -n 40 _UID=1000'
+if [ "$SERVER" = xrdp-gnome ] || [ "$SERVER" = xrdp-kde ]; then
+    # kept with the test's output (a CI run's artifact): what the server did
+    "$ENGINE" exec "$NAME" sh -c 'tail -n 200 /var/log/xrdp.log /var/log/xrdp-sesman.log; echo "== the session";
+        journalctl -b --no-pager -n 300 _UID=1000' > "$OUT/server.log" 2>&1
+    if [ "$fail" != 0 ]; then echo "== xrdp and the session's logs (all: $OUT/server.log)"; tail -n 40 "$OUT/server.log"; fi
 fi
 echo "passed $pass, failed $fail (screenshot, page log: $OUT)"
 [ "$fail" = 0 ]

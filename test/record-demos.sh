@@ -86,12 +86,14 @@ for server in "${SERVERS[@]}"; do
     [ "$server" = xrdp ] && pkgs=$IN/xrdp
     if ! SERVER=$server DEMO_VIDEO=$raw "$KIT/test/wasm-session.sh" "$IN/client" "$IN/rdp-gateway.sh" "$pkgs" \
             > "$OUT/$server.log" 2>&1; then
-        tail -20 "$OUT/$server.log"
+        grep -v -E '^\[|systemd|^ *$' "$OUT/$server.log" | tail -30
+        [ ! -f "$KIT/dist/test/wasm/server.log" ] || cp "$KIT/dist/test/wasm/server.log" "$OUT/$server-server.log"
         echo "FAIL  the $server demo"
         status=1
         continue
     fi
     grep -E '^(PASS|demo:)' "$OUT/$server.log"
+    [ ! -f "$KIT/dist/test/wasm/server.log" ] || cp "$KIT/dist/test/wasm/server.log" "$OUT/$server-server.log"
     # as the site's videos: 720p, H.264 CRF 28, AAC 96 kbit/s, a poster from 70 %
     ffmpeg -v error -y -i "$raw" -vf "scale=1280:720:flags=lanczos,format=yuv420p" -c:v libx264 -crf 28 \
         -preset slow -profile:v high -c:a aac -b:a 96k -movflags +faststart "$OUT/demo-$server.mp4"
