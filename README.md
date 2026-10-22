@@ -152,7 +152,14 @@ client connects without the clipboard channel, because gnome-remote-desktop
 aborts when it cannot mount its FUSE clipboard, and a container has no
 `/dev/fuse`.
 
-`DEMO_VIDEO=demo.mp4 test/wasm-session.sh …` (with or without `SERVER=gnome`)
+`SERVER=xrdp-gnome` and `SERVER=xrdp-kde` log in through the xrdp preview, in
+AV1, to GNOME (Fedora 45, `test/xrdp-gnome/`) and to KDE Plasma (Arch with
+KWin 6.8, `test/xrdp-kde/`, xrdp compiled there from the pinned sources). Both
+run systemd as PID 1, so they need podman (rootless here; `PODMAN=` another).
+KWin 6.8 renders in software with `/dev/udmabuf`, no GPU, DRM node or vgem;
+the user running podman must be able to open it (group `kvm`).
+
+`DEMO_VIDEO=demo.mp4 test/wasm-session.sh …` (with any `SERVER=`)
 records a demo instead, at 1920 × 1080 with sound: `test/wasm-demo.mjs`
 plays a visit (the page, the SSH line, the form, the settings, a session,
 typing in a terminal, then `webdemo`: Firefox on the server with web video
@@ -166,14 +173,21 @@ into the repository. Everything else is synthetic: the user, the password,
 the throwaway server. Chrome runs muted, so nothing plays on this
 computer's speakers; `KEEP=1` leaves the server running to look inside.
 
+The demo videos are a kit product. `test/record-demos.sh [server …]` records
+them with what a kit commit published (its web client and xrdp preview,
+checked against their `SHA256SUMS`; `KIT_COMMIT=newest` for the newest),
+encodes them at 720p, and writes `demo.json`. A recording passes only if
+the session sent its picture, the remote desktop shows detail, and the web
+video can be heard. After every green build on main, the `demo` workflow
+records Xfce, GNOME (gnome-remote-desktop), and GNOME and KDE through the
+xrdp preview, each on its own runner, and publishes them once as
+`demo-<YYYYMMDD>.<N>-<kit commit>`; freerdp-web's splash takes the newest
+set every time it publishes. A push to the branch `demo-ci` records
+without publishing.
+
 To come: `test/fetch-release.sh <tag>`, fetching a release's web client and
-xrdp packages (checked against `SHA256SUMS`), so the tests and the demos
-run on released builds as easily as on local ones; and the demo videos as a
-kit product, recorded here and handed to freerdp-web with the client (until
-then freerdp-web pins its own copies, in its `demo-media-1` release). Demos to come: xrdp with GNOME on Xorg (its session needs systemd as PID 1:
-Podman, or more privileges than these containers get), and the next xrdp,
-with Xfce and with GNOME headless (gnome-shell without changes), next to
-today's gnome-remote-desktop baseline.
+xrdp packages (checked against `SHA256SUMS`), so the tests run on released
+builds as easily as on local ones; xrdp with GNOME on Xorg.
 
 The web client is published on freerdp-web's own GitHub Pages; this kit
 builds and tests it. On each push the wasm job hands the tested client of

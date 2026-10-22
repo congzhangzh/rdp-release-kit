@@ -14,7 +14,7 @@ verify them; they never compile.
 | xrdp + xorgxrdp, `.deb` / `.rpm` for every release in `distros.list` | xrdp, xorgxrdp signed release tags | stable | `v<YYYY>.<MM>.<N>` |
 | Web client (WebAssembly) + the freerdp-web page | FreeRDP master + open pull requests, frozen on a fork branch; the page by a freerdp-web release (`vYYYYMMDD.N`, earlier `vX.Y.Z`) | preview | `web-<YYYYMMDD>.<N>-<kit commit, 12>` on every push to main that changes a build; also inside `v*` |
 | xrdp preview packages: Wayland sessions, AV1, pacing | a frozen xrdp development commit + xorgxrdp devel | preview | `xrdp-preview-<YYYYMMDD>.<N>-<kit commit, 12>` |
-| Demo videos (planned) | recorded by `test/wasm-session.sh` | with the web client | `web-<YYYYMMDD>.<N>-<kit commit, 12>` |
+| Demo videos: Xfce, GNOME, and GNOME and KDE through the xrdp preview | recorded by `test/record-demos.sh` with that build's web client and xrdp preview (the `demo` workflow, after a green build on main) | preview | `demo-<YYYYMMDD>.<N>-<kit commit, 12>`; freerdp-web's splash takes the newest |
 
 **Stable** means: upstream release tags only, hashes (and signatures where
 upstream signs) checked, no patches. **Preview** means: a fixed commit of
