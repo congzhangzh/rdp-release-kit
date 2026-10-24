@@ -72,7 +72,10 @@ fi
 
 # The client runs on the browser's main thread and yields to its event loop
 # while it waits (ASYNCIFY); the page starts it with callMain() and calls
-# into it with ccall, _malloc and _free
+# into it with ccall, _malloc, _free and HEAPU8. MODULARIZE: the script
+# defines createFreeRDP(), and each call is a new runtime (memory, threads,
+# C globals), so the page reconnects with a fresh client instead of a reload
+# (freerdp-web 20261024.1 and later; older pages expect the global Module)
 echo "== freerdp ${VERSION[freerdp_preview]} (preview)"
 src=$(unpack freerdp_preview)
 overridden freerdp_preview || rm -rf "$WORK/build/freerdp"
@@ -100,7 +103,8 @@ configure "$WORK/build/freerdp" \
 -sALLOW_MEMORY_GROWTH=1 -sINITIAL_MEMORY=134217728 -sMAXIMUM_MEMORY=1073741824 \
 -sSTACK_SIZE=1048576 -sPTHREAD_POOL_SIZE=32 -sWEBSOCKET_SUBPROTOCOL=binary \
 -sENVIRONMENT=web,worker -sINVOKE_RUN=0 -sEXIT_RUNTIME=1 -sFORCE_FILESYSTEM=1 \
--sEXPORTED_RUNTIME_METHODS=callMain,FS,ENV,ccall -sEXPORTED_FUNCTIONS=_main,_malloc,_free" \
+-sMODULARIZE=1 -sEXPORT_NAME=createFreeRDP \
+-sEXPORTED_RUNTIME_METHODS=callMain,FS,ENV,ccall,HEAPU8 -sEXPORTED_FUNCTIONS=_main,_malloc,_free" \
     "${DEV[@]}" > "$WORK/log/freerdp.log" 2>&1
 grep -q -e "AV1 decoder: dav1d" -e "configuration kept" "$WORK/log/freerdp.log"
 cmake --build "$WORK/build/freerdp" --target sdl3-freerdp >> "$WORK/log/freerdp.log" 2>&1
