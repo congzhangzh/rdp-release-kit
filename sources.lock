@@ -30,10 +30,13 @@ llvm_mingw  20261020 https://github.com/mstorsjo/llvm-mingw/releases/download/20
 # fork branch named wasm-preview-<preview number>-<commit>: sound (#13732),
 # clipboard (#13733), microphone (#13811), H.264 (#13812); AV1 (#13731) and
 # the Opus microphone fix (#13810) are in master since 2026-10-21;
-# the web page with its passkey vault, and the SDL release the Emscripten
-# build was tested with
+# the web page with its passkey vault, and SDL for the Emscripten build:
+# 3.2.30 plus the fix that keeps its timers on the main thread (with threads,
+# a timer removed from another thread fired through a freed entry, "table
+# index is out of bounds" in SDL_Emscripten_TimerHelper), on a fork branch
+# named emscripten-timer-threads
 freerdp_preview 20261021.1 git+https://github.com/congzhangzh/FreeRDP.git                                    79f10e8ae52c60060440513fd35b972628aef0ec
-sdl3_wasm   3.2.30   https://github.com/libsdl-org/SDL/releases/download/release-3.2.30/SDL3-3.2.30.tar.gz        4c3b09330d866dc52eb65b66259a6684ad387252ca8c57901b3a2b534eb42e3d
+sdl3_wasm   3.2.30+timer git+https://github.com/congzhangzh/SDL.git                                      97fd4fe89f52d14b3d7a1a6a202d0a381ba358b1
 freerdp_web 20261024.1 git+https://github.com/congzhangzh/freerdp-web.git                                     3eb0102fbaa0537201d9f332d3adbfa4bb96b35a
 xrdp_preview     20261021.1 git+https://github.com/congzhangzh/xrdp.git                                          bfba3d7f185f5d2ba9c2281dfcab8ceba44b7280
 librfxcodec      0badc06  git+https://github.com/neutrinolabs/librfxcodec.git                                  0badc062e96d170af57870480a4aa7cf469302b0
