@@ -77,6 +77,11 @@ jobs:
           # refused every login to the Fedora servers (2026-10-24). Ubuntu
           # runners have no SELinux.
           sudo aa-teardown > /dev/null && echo "AppArmor profiles unloaded"
+          # docker-default went with them, and dockerd loads it only when it
+          # starts: until then runc refuses every container, the RUN steps of
+          # an image build too (the GNOME image: "apt-get ... exit code: 1")
+          sudo systemctl restart docker
+          sudo aa-status --profiled 2> /dev/null | sed 's/$/ AppArmor profile(s) loaded/'
           podman --version
           ls -l /dev/udmabuf || true
           # what decides how systemd runs in a container

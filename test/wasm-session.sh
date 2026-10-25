@@ -109,7 +109,8 @@ SERVER=${SERVER:-xrdp}
 if [ "$SERVER" = gnome ]; then
 echo "== server: GNOME on Wayland (headless) + gnome-remote-desktop, unprivileged, sshd on 127.0.0.1 only"
 "$ENGINE" rm -f "$NAME" > /dev/null 2>&1
-"$ENGINE" build -q -t kit-gnome-server "$KIT/test/gnome" > /dev/null || { echo "the GNOME image did not build" >&2; exit 1; }
+"$ENGINE" build -q -t kit-gnome-server "$KIT/test/gnome" > "$OUT/gnome-build.log" 2>&1 ||
+    { tail -20 "$OUT/gnome-build.log" >&2; echo "the GNOME image did not build" >&2; exit 1; }
 "$ENGINE" run -d --name "$NAME" --hostname rdp-gnome -p 127.0.0.1:2223:22 --tmpfs /run --tmpfs /run/lock \
     -v "$OUT/ssh/key.pub":/key.pub:ro "${DEMO_MOUNTS[@]}" kit-gnome-server > /dev/null
 # shellcheck disable=SC2016 # for the container's shell
