@@ -12,6 +12,9 @@
 #   published release must then hold exactly these files: the same names,
 #   and the same SHA-256 (GitHub's digest of each asset).
 #
+# LATEST=1 publishes a release instead (the kit's rolling release): not
+# marked pre-release, and made GitHub's latest, so releases/latest leads to it.
+#
 # Expects GH_TOKEN, GITHUB_REPOSITORY and GITHUB_SHA (or KIT_SHA, as
 # prerelease-tag.sh).
 set -euo pipefail
@@ -54,7 +57,9 @@ for id in $(drafts); do
     echo "$TAG: deleted the draft $id an earlier run left"
 done
 
-gh release create "$TAG" --repo "$REPO" --draft --prerelease --target "$SHA" \
+KIND=(--prerelease) latest=false
+[ "${LATEST:-}" = 1 ] && KIND=() latest=true
+gh release create "$TAG" --repo "$REPO" --draft "${KIND[@]}" --target "$SHA" \
     --title "$TITLE" --notes "$NOTES" "$@" > /dev/null
 # a list read right after a write can lag behind it: a few tries
 for try in 1 2 3 4 5; do
@@ -63,7 +68,7 @@ for try in 1 2 3 4 5; do
     sleep "$try"
 done
 [ "$(wc -w <<< "$id")" = 1 ] || { echo "$TAG: expected one draft, found: ${id:-none}" >&2; exit 1; }
-gh api -X PATCH "repos/$REPO/releases/$id" -F draft=false -f make_latest=false --silent
+gh api -X PATCH "repos/$REPO/releases/$id" -F draft=false -f make_latest=$latest --silent
 
 # what was published is what was meant: every file, byte for byte
 want=$(for f in "$@"; do echo "$(basename "$f") sha256:$(sha256sum < "$f" | cut -d' ' -f1)"; done | sort)

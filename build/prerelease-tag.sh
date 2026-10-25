@@ -1,7 +1,7 @@
 #!/bin/bash
 # Prints the tag of a pre-release (docs/RELEASE.md, "Frozen releases"):
 #
-#   prerelease-tag.sh <kind> <title>      kind: web, xrdp-preview, pipewire-module-xrdp, demo
+#   prerelease-tag.sh <kind> <title>      kind: web, xrdp-preview, pipewire-module-xrdp, demo, release
 #
 # - A release with this title, published or a draft an earlier run left,
 #   keeps its tag: the title names the inputs and the kit commit, so a
@@ -10,6 +10,8 @@
 #   one more than the highest N of that kind and day among the releases
 #   (drafts too) and the tags (a tag can outlive its release). The date
 #   says how new a build is; N orders the builds of one day.
+# - The kit's own rolling release (kind release) is <YYYYMMDD>.<N> alone:
+#   no kind, and the kit commit only in its title.
 #
 # Expects GH_TOKEN, GITHUB_REPOSITORY and GITHUB_SHA (KIT_SHA instead: a
 # workflow started by another run builds that run's commit, and GitHub keeps
@@ -19,7 +21,7 @@ set -euo pipefail
 KIND=$1 TITLE=$2
 REPO=${GITHUB_REPOSITORY:?} SHA=${KIT_SHA:-${GITHUB_SHA:?}}
 case $KIND in
-    web | xrdp-preview | pipewire-module-xrdp | demo) ;;
+    web | xrdp-preview | pipewire-module-xrdp | demo | release) ;;
     *) echo "prerelease-tag.sh: unknown kind: $KIND" >&2; exit 1 ;;
 esac
 
@@ -32,7 +34,9 @@ fi
 
 day=${DAY:-$(date -u +%Y%m%d)}
 # matching-refs answers [] when nothing matches; any failure stops here
-tags=$(gh api "repos/$REPO/git/matching-refs/tags/$KIND-$day." -q '.[].ref | sub("^refs/tags/"; "")')
+prefix=$KIND- suffix=-${SHA:0:12} pattern="-[0-9a-f]{12}"
+[ "$KIND" = release ] && prefix='' suffix='' pattern=''
+tags=$(gh api "repos/$REPO/git/matching-refs/tags/$prefix$day." -q '.[].ref | sub("^refs/tags/"; "")')
 n=$({ cut -f1 <<< "$releases"; echo "$tags"; } |
-    sed -nE "s/^$KIND-$day\.([0-9]+)-[0-9a-f]{12}\$/\1/p" | sort -n | tail -1)
-echo "$KIND-$day.$((${n:-0} + 1))-${SHA:0:12}"
+    sed -nE "s/^$prefix$day\.([0-9]+)$pattern\$/\1/p" | sort -n | tail -1)
+echo "$prefix$day.$((${n:-0} + 1))$suffix"

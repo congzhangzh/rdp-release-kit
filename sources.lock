@@ -26,6 +26,15 @@ pipewire_xrdp 0.2    git+https://github.com/neutrinolabs/pipewire-module-xrdp.gi
 # equals the digest GitHub shows for the release asset)
 libressl    4.3.3    https://ftp.openbsd.org/pub/OpenBSD/LibreSSL/libressl-4.3.3.tar.gz                         ff97c432457f349e6ba3d416ab903bc7468f1436f0f32efe5fff808de292c7b8
 llvm_mingw  20261020 https://github.com/mstorsjo/llvm-mingw/releases/download/20261020/llvm-mingw-20261020-ucrt-ubuntu-22.04-x86_64.tar.xz 55064b60b991a1e1e8090b8c2f84e82b22cfe5903d12c159d65064cf5e8ae335
+# The connection window shipped with the Linux and Windows clients:
+# freerdp-tk (Tkinter) by its release tag's commit, and the standalone
+# CPython with Tk that runs it (python-build-standalone, as uv installs it;
+# the hash is the digest GitHub shows for the release asset)
+freerdp_tk  0.1.1    git+https://github.com/congzhangzh/freerdp-tk.git                                        167afad977b38f6ae51a86921b601f07472dca15
+python_linux_x86_64   3.13.17+20261021 https://github.com/astral-sh/python-build-standalone/releases/download/20261021/cpython-3.13.17+20261021-x86_64-unknown-linux-gnu-install_only_stripped.tar.gz f829adc9d888e76c8801b4799ed444188d35239fcae3a9808a99ec5cb0d8d92c
+python_linux_aarch64  3.13.17+20261021 https://github.com/astral-sh/python-build-standalone/releases/download/20261021/cpython-3.13.17+20261021-aarch64-unknown-linux-gnu-install_only_stripped.tar.gz c6857c65b996701a5da104cbb49b35249c0c026dc0664239b04f7156aa88326a
+python_windows_x86_64 3.13.17+20261021 https://github.com/astral-sh/python-build-standalone/releases/download/20261021/cpython-3.13.17+20261021-x86_64-pc-windows-msvc-install_only_stripped.tar.gz 56cde3b1a1dcc36576753cb408ee0c3568d211baafa0eee40423adc147c480f2
+python_windows_aarch64 3.13.17+20261021 https://github.com/astral-sh/python-build-standalone/releases/download/20261021/cpython-3.13.17+20261021-aarch64-pc-windows-msvc-install_only_stripped.tar.gz 9287d32654828930872c8225f53618dac9b06dd3af5d4c3e9ab1c576e0741c96
 # WASM client (preview): FreeRDP master plus open pull requests, frozen on a
 # fork branch named wasm-preview-<preview number>-<commit>: sound (#13732),
 # clipboard (#13733), microphone (#13811), H.264 (#13812); AV1 (#13731) and

@@ -134,6 +134,9 @@ cp "$EXE" "$PKG/"
 /llvm-mingw/bin/llvm-strip --strip-debug "$PKG/$(basename "$EXE")"
 licenses "$PKG/licenses" freerdp sdl3 sdl3_ttf freetype libressl opus dav1d zlib jansson \
     llvm_mingw
+# shellcheck source=build/launcher.sh
+. "$KIT/build/launcher.sh"
+add_launcher "$PKG" windows "$ARCH"
 {
     echo "$(basename "$EXE") ${VERSION[freerdp]} for Windows $ARCH, built $(date -u +%F)"
     echo "toolchain: llvm-mingw ${VERSION[llvm_mingw]} (clang, libc++, UCRT)"
@@ -142,6 +145,7 @@ licenses "$PKG/licenses" freerdp sdl3 sdl3_ttf freetype libressl opus dav1d zlib
     for name in freerdp sdl3 sdl3_ttf freetype libressl opus dav1d zlib jansson llvm_mingw; do
         printf '  %-10s %-8s %s\n' "$name" "${VERSION[$name]}" "${SHA[$name]}"
     done
+    echo "$LAUNCHER_MANIFEST"
     override_manifest
     [ "${DEV[0]:-}" != -DCMAKE_INTERPROCEDURAL_OPTIMIZATION=OFF ] || echo "LTO off (local build)"
 } > "$PKG/MANIFEST"

@@ -32,10 +32,11 @@ echo "$*" >> "$S/gh.log"
 [ -f "$S/offline" ] && { echo "error connecting to api.github.com" >&2; exit 1; }
 notfound() { echo "gh: Not Found (HTTP 404)" >&2; exit 1; }
 if [ "$1 $2" = "release create" ]; then
-    tag=$3; shift 3; files=() title=
+    tag=$3; shift 3; files=() title= pre=false
     while [ $# -gt 0 ]; do
         case $1 in
             --title) title=$2; shift 2 ;;
+            --prerelease) pre=true; shift ;;
             --repo | --target | --notes) shift 2 ;;
             --*) shift ;;
             *) files+=("$(basename "$1") sha256:$(sha256sum < "$1" | cut -d' ' -f1)"); shift ;;
@@ -44,8 +45,8 @@ if [ "$1 $2" = "release create" ]; then
     [ -f "$S/drop" ] && unset 'files[-1]'
     [ -f "$S/corrupt" ] && files[-1]="${files[-1]% *} sha256:0000"
     id=$((100 + $(jq length "$S/releases.json")))
-    jq --arg t "$tag" --arg n "$title" --argjson id "$id" \
-        '. + [{id: $id, tag_name: $t, name: $n, draft: true,
+    jq --arg t "$tag" --arg n "$title" --argjson id "$id" --argjson pre "$pre" \
+        '. + [{id: $id, tag_name: $t, name: $n, draft: true, prerelease: $pre,
                assets: [$ARGS.positional[] | split(" ") | {name: .[0], digest: .[1]}]}]' \
         "$S/releases.json" --args "${files[@]}" > "$S/r" && mv "$S/r" "$S/releases.json"
     exit 0
@@ -101,7 +102,7 @@ publish() { # <tag> <file>...; output in $out, exit status in $rc
     local tag=$1
     shift
     out=$(cd "$TMP" && PATH="$TMP/bin:$PATH" STATE="$TMP/state" GH_TOKEN=x \
-        GITHUB_REPOSITORY=o/r GITHUB_SHA=0123456789abcdef \
+        GITHUB_REPOSITORY=o/r GITHUB_SHA=0123456789abcdef LATEST=${LATEST:-} \
         "$KIT/build/publish-prerelease.sh" "$tag" "${TITLE:-title}" notes "$@" 2>&1)
     rc=$?
 }
@@ -160,6 +161,15 @@ publish web-a-b client.zip SHA256SUMS
 check "a file whose bytes changed on the way fails the step" '[ $rc != 0 ] && grep -q "differ" <<< "$out"'
 
 fresh
+publish web-a-b client.zip
+check "a pre-release is marked so, and never made latest" \
+    '[ "$(jq -r ".[0].prerelease" "$TMP/state/releases.json")" = true ] && grep -q "PATCH .*make_latest=false" "$TMP/state/gh.log"'
+fresh
+LATEST=1 publish 20261021.1 client.zip
+check "LATEST=1: a release, not a pre-release, made latest" \
+    '[ $rc = 0 ] && [ "$(jq -r ".[0].prerelease" "$TMP/state/releases.json")" = false ] && grep -q "PATCH .*make_latest=true" "$TMP/state/gh.log"'
+
+fresh
 publish web-a-b client.zip missing.deb
 check "a missing file stops it before any call" '[ $rc != 0 ] && [ ! -s "$TMP/state/gh.log" ]'
 
@@ -198,6 +208,13 @@ name web "Web client for freerdp-web 06593c161e5d (kit 68feb5b6f42a)"
 check "a build published under the older name keeps it" '[ "$out" = web-06593c161e5d-68feb5b6f42a ]'
 name web "Web client for freerdp-web 06593c161e5d (kit k9)"
 check "older names don't count for N" '[ "$out" = web-20261021.1-0123456789ab ]'
+fresh
+name release "FreeRDP 3.32.2 clients, xrdp 0.10.6.1 (kit k1)"
+check "the kit's release is <YYYYMMDD>.<N> alone" '[ $rc = 0 ] && [ "$out" = 20261021.1 ]'
+echo 20261021.1 >> "$TMP/state/tags"
+echo web-20261021.5-aaaaaaaaaaaa >> "$TMP/state/tags"
+name release "FreeRDP 3.32.2 clients, xrdp 0.10.6.1 (kit k2)" fedcba9876543210
+check "the next one that day is .2; other kinds don't count" '[ "$out" = 20261021.2 ]'
 name stable "x"
 check "an unknown kind is refused" '[ $rc != 0 ]'
 fresh

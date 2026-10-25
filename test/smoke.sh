@@ -1,7 +1,8 @@
 #!/bin/bash
 # Runs a client archive in clean containers of the distributions it claims
 # to support: it must start, report its version and build options, and
-# find every library it needs.
+# find every library it needs; its connection window's Python and Tk must
+# load.
 #
 #   test/smoke.sh <sdl3-freerdp-*.tar.xz> [image ...]
 set -uo pipefail
@@ -42,6 +43,10 @@ if ldd "$bin" | grep -q "not found"; then
 fi
 "$bin" /version | head -1
 "$bin" /buildconfig | tr ' ' '\n' | grep -c '^WITH_' | sed 's/$/ build options/'
+# the connection window's Python, with Tk, and freerdp-tk (build/launcher.sh)
+pkg=$(dirname "$(dirname "$bin")")
+PYTHONPATH=$pkg/freerdp-tk "$pkg/python/bin/python3" -s -c \
+    'import _tkinter, tkinter, freerdp_tk.app; print("launcher: Tk", _tkinter.TK_VERSION)'
 EOF
 
 fail=0

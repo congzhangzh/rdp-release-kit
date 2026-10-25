@@ -4,15 +4,15 @@ name: kit
 # on the supported distributions) and Windows (x86_64, aarch64); builds the
 # xrdp packages for every release in distros.list, checks their
 # dependencies and logs in to each over RDP with that client; builds the web
-# client and logs in from a browser. A v* tag publishes everything as a
-# release; a push to main only builds and tests. The web client itself is
+# client and logs in from a browser. Every push to main that passes
+# publishes the rolling release <YYYYMMDD>.<N> (and the pre-releases of the
+# previews); a pull request only builds and tests. The web client itself is
 # published on freerdp-web's own Pages; this repository has none.
 on:
   push:
     branches: [main]
-    tags: ['v*']
-    # a change no build reads makes no new pre-release (docs/RELEASE.md,
-    # "Frozen releases"); tag pushes are never filtered by path
+    # a change no build reads makes no new release (docs/RELEASE.md,
+    # "Frozen releases")
     paths-ignore: ['**.md', 'docs/**', '.github/workflows/upstream.yml', '.github/workflows/pins.yml', 'check-upstream.sh', 'pins.notes', 'build/pins-table.sh', 'build/release-notes.sh', 'LICENSE', 'NOTICE']
   pull_request:
   workflow_dispatch:
@@ -50,9 +50,8 @@ jobs:
           key: sources-${{ hashFiles('sources.lock') }}
 
       # compiled objects from the last run (a pull request's own cache is
-      # never restored on main); a v* release builds without them
+      # never restored on main)
       - name: Cache compiled objects
-        if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
         uses: actions/cache@v6
         with:
           path: ~/.cache/rdp-release-kit/ccache
@@ -63,7 +62,6 @@ jobs:
 
       - name: Build
         env:
-          CCACHE: ${{ startsWith(github.ref, 'refs/tags/v') && 'off' || '' }}
           CCACHE_MAXSIZE: 1G
         run: ./build.sh dist
 
@@ -92,7 +90,6 @@ jobs:
           key: sources-${{ hashFiles('sources.lock') }}
 
       - name: Cache compiled objects
-        if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
         uses: actions/cache@v6
         with:
           path: ~/.cache/rdp-release-kit/ccache
@@ -101,7 +98,6 @@ jobs:
 
       - name: Build
         env:
-          CCACHE: ${{ startsWith(github.ref, 'refs/tags/v') && 'off' || '' }}
           CCACHE_MAXSIZE: 1G
         run: ./build-windows.sh ${{ matrix.arch }}
 
@@ -129,7 +125,10 @@ jobs:
       fail-fast: false
       matrix:
         image: ${{ fromJSON(needs.releases.outputs.images) }}
-    runs-on: ubuntu-24.04
+        # x86_64 and ARM64 packages, each built and logged in to on its own
+        # architecture with that architecture's client
+        runner: [ubuntu-24.04, ubuntu-24.04-arm]
+    runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -144,15 +143,15 @@ jobs:
       - name: The client, for the login test
         uses: actions/download-artifact@v8
         with:
-          name: sdl3-freerdp-ubuntu-24.04
+          name: sdl3-freerdp-${{ matrix.runner }}
           path: dist
 
       - name: Name the artifact
         id: name
-        run: echo "name=xrdp-$(echo '${{ matrix.image }}' | tr ':/' '--')" >> "$GITHUB_OUTPUT"
+        # x86_64 keeps its name: the web login test and the demos take xrdp-debian-13
+        run: echo "name=xrdp-$(echo '${{ matrix.image }}' | tr ':/' '--')${{ runner.arch == 'ARM64' && '-arm64' || '' }}" >> "$GITHUB_OUTPUT"
 
       - name: Cache compiled objects
-        if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
         uses: actions/cache@v6
         with:
           path: ~/.cache/rdp-release-kit/ccache
@@ -161,7 +160,6 @@ jobs:
 
       - name: Build
         env:
-          CCACHE: ${{ startsWith(github.ref, 'refs/tags/v') && 'off' || '' }}
           CCACHE_MAXSIZE: 1G
         run: ./build-xrdp.sh "${{ matrix.image }}"
 
@@ -195,7 +193,10 @@ jobs:
       fail-fast: false
       matrix:
         image: ${{ fromJSON(needs.releases.outputs.preview) }}
-    runs-on: ubuntu-24.04
+        # x86_64 and ARM64 packages, each built and logged in to on its own
+        # architecture with that architecture's client
+        runner: [ubuntu-24.04, ubuntu-24.04-arm]
+    runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -210,15 +211,14 @@ jobs:
       - name: The client, for the login test
         uses: actions/download-artifact@v8
         with:
-          name: sdl3-freerdp-ubuntu-24.04
+          name: sdl3-freerdp-${{ matrix.runner }}
           path: dist
 
       - name: Name the artifact
         id: name
-        run: echo "name=xrdp-preview-$(echo '${{ matrix.image }}' | tr ':/' '--')" >> "$GITHUB_OUTPUT"
+        run: echo "name=xrdp-preview-$(echo '${{ matrix.image }}' | tr ':/' '--')${{ runner.arch == 'ARM64' && '-arm64' || '' }}" >> "$GITHUB_OUTPUT"
 
       - name: Cache compiled objects
-        if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
         uses: actions/cache@v6
         with:
           path: ~/.cache/rdp-release-kit/ccache
@@ -227,7 +227,6 @@ jobs:
 
       - name: Build
         env:
-          CCACHE: ${{ startsWith(github.ref, 'refs/tags/v') && 'off' || '' }}
           CCACHE_MAXSIZE: 1G
         run: ./build-xrdp.sh --preview "${{ matrix.image }}"
 
@@ -311,8 +310,9 @@ jobs:
         run: |
           read -r version sha < <(awk '$1 == "pipewire_xrdp" { print $2, $4 }' sources.lock)
           fedora=$(awk '/^fedora:/ { sub("fedora:", "", $1); print $1 }' distros-preview.list | sort -n | paste -sd, -)
-          # the source, the Fedora releases, their build dependencies, the packaging
-          inputs=$({ grep '^pipewire_xrdp ' sources.lock; echo "$fedora"; cat deps/rpm.txt build/package-rpm.sh; } |
+          # the source, the Fedora releases and architectures, their build
+          # dependencies, the packaging
+          inputs=$({ grep '^pipewire_xrdp ' sources.lock; echo "$fedora x86_64 aarch64"; cat deps/rpm.txt build/package-rpm.sh; } |
               sha256sum | cut -c1-12)
           title="pipewire-module-xrdp $version (${sha:0:12}) for Fedora $fedora (inputs $inputs)"
           tag=$(build/prerelease-tag.sh pipewire-module-xrdp "$title")
@@ -336,7 +336,6 @@ jobs:
           key: sources-${{ hashFiles('sources.lock') }}
 
       - name: Cache compiled objects
-        if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
         uses: actions/cache@v6
         with:
           path: ~/.cache/rdp-release-kit/ccache
@@ -345,7 +344,6 @@ jobs:
 
       - name: Build
         env:
-          CCACHE: ${{ startsWith(github.ref, 'refs/tags/v') && 'off' || '' }}
           CCACHE_MAXSIZE: 1G
         run: |
           ./build-wasm.sh
@@ -433,10 +431,16 @@ jobs:
           path: dist/test/
           if-no-files-found: ignore
 
+  # The kit's rolling release <YYYYMMDD>.<N>: every push to main whose
+  # products all pass publishes FreeRDP's clients (with their connection
+  # window), the xrdp packages and the web client, once and never replaced,
+  # as GitHub's latest release, so releases/latest always leads to a tested
+  # download (docs/RELEASE.md, "Products and channels")
   release:
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs: [build, windows, xrdp, wasm]
     runs-on: ubuntu-24.04
+    concurrency: publish-release-${{ github.sha }}
     permissions:
       contents: write
       id-token: write
@@ -445,23 +449,22 @@ jobs:
       - uses: actions/checkout@v7
       - uses: actions/download-artifact@v8
         with:
+          pattern: sdl3-freerdp-*
           path: dist
           merge-multiple: true
-
-      - name: Attest build provenance
-        uses: actions/attest-build-provenance@v4
+      # the preview's packages have their own pre-release: left out below
+      - uses: actions/download-artifact@v8
         with:
-          subject-path: |
-            dist/**/*.tar.xz
-            dist/**/*.zip
-            dist/**/*.deb
-            dist/**/*.rpm
+          pattern: xrdp-*
+          path: dist
+          merge-multiple: true
+      - uses: actions/download-artifact@v8
+        with:
+          name: wasm-build
+          path: dist
 
-      - name: Publish
-        env:
-          GH_TOKEN: ${{ github.token }}
+      - name: The files
         run: |
-          # the xrdp preview has its own pre-release, never a kit release;
           # assets are flat and GitHub turns '~' into '.': name the files
           # so first, so SHA256SUMS matches what is downloaded
           mkdir -p upload
@@ -470,7 +473,33 @@ jobs:
             cp "$f" "upload/$(basename "$f" | tr '~' '.')"
           done
           (cd upload && sha256sum -- * > ../SHA256SUMS) && mv SHA256SUMS upload/
-          gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" \
-              --title "$GITHUB_REF_NAME" \
-              --notes "$(build/release-notes.sh "rdp-release-kit $GITHUB_REF_NAME. Each client archive's MANIFEST lists what it was built from." linux windows web xrdp)" \
-              upload/*
+          ls upload
+
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@v4
+        with:
+          subject-path: upload/*
+
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          freerdp=$(awk '$1 == "freerdp" { print $2 }' sources.lock)
+          xrdp=$(awk '$1 == "xrdp" { print $2 }' sources.lock)
+          title="FreeRDP $freerdp clients, xrdp $xrdp packages (kit ${GITHUB_SHA:0:12})"
+          tag=$(build/prerelease-tag.sh release "$title")
+          summary="Rolling release $tag of rdp-release-kit, built and tested from $GITHUB_SHA: FreeRDP's SDL3 client for Linux and Windows, each with freerdp-tk (a window to save and open connections) and the Python that runs it, and xrdp packages for Debian, Ubuntu and Fedora, on x86_64 and ARM64. Published once, never replaced.
+
+          ## Download and run
+
+          | Platform | File | Start |
+          |---|---|---|
+          | Linux x86_64 | \`sdl3-freerdp-$freerdp-linux-x86_64.tar.xz\` | \`tar -xJf sdl3-freerdp-*.tar.xz\`, then \`sdl3-freerdp-*/freerdp-tk\` (or \`bin/sdl-freerdp /v:server /u:user\`) |
+          | Linux ARM64 | \`sdl3-freerdp-$freerdp-linux-aarch64.tar.xz\` | the same |
+          | Windows x86_64 | \`sdl3-freerdp-$freerdp-windows-x86_64.zip\` | unzip, then double-click \`freerdp-tk.cmd\` (or \`sdl-freerdp.exe /v:server /u:user\`) |
+          | Windows ARM64 | \`sdl3-freerdp-$freerdp-windows-aarch64.zip\` | the same |
+          | xrdp server | \`xrdp_*~<release>_<arch>.deb\` + \`xorgxrdp_*\` (Debian, Ubuntu), \`xrdp-*.fc<N>.<arch>.rpm\` + \`xorgxrdp-*\` (Fedora) | \`sudo apt install ./xrdp_*.deb ./xorgxrdp_*.deb\` or \`sudo dnf install ./xrdp-*.rpm ./xorgxrdp-*.rpm\` |
+
+          The Linux client runs on glibc 2.34 and newer (RHEL 9, Debian 12, Ubuntu 22.04, Fedora 35 and newer) with PulseAudio's or PipeWire's libpulse; nothing else to install. Check a download: \`sha256sum -c --ignore-missing SHA256SUMS\`; its origin: \`gh attestation verify <file> -R $GITHUB_REPOSITORY\`. Each archive's MANIFEST lists what it was built from."
+          notes=$(build/release-notes.sh "$summary" linux windows web xrdp)
+          LATEST=1 build/publish-prerelease.sh "$tag" "$title" "$notes" upload/*

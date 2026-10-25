@@ -117,6 +117,10 @@ mkdir -p "$PKG/bin" "$PKG/licenses"
 cp "$STAGE/opt/freerdp/bin/sdl-freerdp" "$PKG/bin/"
 strip --strip-debug "$PKG/bin/sdl-freerdp"
 licenses "$PKG/licenses" freerdp sdl3 sdl3_ttf freetype openssl opus dav1d zlib jansson
+# shellcheck source=build/launcher.sh
+. "$KIT/build/launcher.sh"
+add_launcher "$PKG" linux "$ARCH"
+check_launcher "$PKG"
 {
     echo "sdl3-freerdp ${VERSION[freerdp]} for Linux $ARCH, built $(date -u +%F)"
     # shellcheck source=/dev/null
@@ -128,6 +132,7 @@ licenses "$PKG/licenses" freerdp sdl3 sdl3_ttf freetype openssl opus dav1d zlib 
     for name in freerdp sdl3 sdl3_ttf freetype openssl opus dav1d zlib jansson; do
         printf '  %-9s %-8s %s\n' "$name" "${VERSION[$name]}" "${SHA[$name]}"
     done
+    echo "$LAUNCHER_MANIFEST"
     echo
     "$PKG/bin/sdl-freerdp" /buildconfig 2> /dev/null | tr ' ' '\n' | grep -E '^WITH_' | sort
 } > "$PKG/MANIFEST"

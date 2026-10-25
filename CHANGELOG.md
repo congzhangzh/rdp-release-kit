@@ -13,6 +13,25 @@ toolchain) gets an entry here in the same commit.
 
 ## 2026-10-25
 
+**Releases: rolling, by date**
+
+- Every push to main that changes a build and passes every test publishes
+  the release `<YYYYMMDD>.<N>`, made GitHub's latest: the Linux and
+  Windows clients, the xrdp packages and the web client, with
+  `SHA256SUMS` and build provenance. The never-used `v<YYYY>.<MM>.<N>` tag
+  release is gone: the kit is rolling, and the date is the version. Until
+  now the native clients were only CI artifacts; this makes them a download.
+- The clients come ready to use: with freerdp-tk 0.1.1 (a Tkinter window
+  to save and open connections, pinned by its release's commit) and a
+  standalone CPython 3.13.17 with Tk (python-build-standalone 20261021,
+  pinned per platform by GitHub's digest), started by `freerdp-tk`
+  (Windows: `freerdp-tk.cmd`), which puts the archive's own `sdl-freerdp`
+  first. No Python or Tk needed on the machine. The smoke test loads the
+  bundled Python, Tk and freerdp-tk on every distribution it runs on.
+- xrdp packages and the xrdp preview for ARM64 too (`ubuntu-24.04-arm`
+  runners, each logged in to with the ARM64 client); the x86_64 artifacts
+  keep their names.
+
 **Docs and releases**
 
 - Our changes upstream: every `change` line in `pins.notes` names the pull

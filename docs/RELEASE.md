@@ -9,10 +9,10 @@ verify them; they never compile.
 
 | Product | Source | Channel | Release name |
 |---|---|---|---|
-| `sdl-freerdp`, Linux x86_64 / aarch64 | FreeRDP release tag | stable | `v<YYYY>.<MM>.<N>` |
-| `sdl-freerdp.exe`, Windows x86_64 / ARM64 | FreeRDP release tag | stable | `v<YYYY>.<MM>.<N>` |
-| xrdp + xorgxrdp, `.deb` / `.rpm` for every release in `distros.list` | xrdp, xorgxrdp signed release tags | stable | `v<YYYY>.<MM>.<N>` |
-| Web client (WebAssembly) + the freerdp-web page | FreeRDP master + open pull requests, frozen on a fork branch; the page by a freerdp-web release (`vYYYYMMDD.N`, earlier `vX.Y.Z`) | preview | `web-<YYYYMMDD>.<N>-<kit commit, 12>` on every push to main that changes a build; also inside `v*` |
+| `sdl-freerdp`, Linux x86_64 / aarch64, with freerdp-tk and its Python | FreeRDP release tag; freerdp-tk by its release; python-build-standalone release | stable | `<YYYYMMDD>.<N>` |
+| `sdl-freerdp.exe`, Windows x86_64 / ARM64, with freerdp-tk and its Python | the same | stable | `<YYYYMMDD>.<N>` |
+| xrdp + xorgxrdp, `.deb` / `.rpm` for every release in `distros.list`, x86_64 and ARM64 | xrdp, xorgxrdp signed release tags | stable | `<YYYYMMDD>.<N>` |
+| Web client (WebAssembly) + the freerdp-web page | FreeRDP master + open pull requests, frozen on a fork branch; the page by a freerdp-web release (`vYYYYMMDD.N`, earlier `vX.Y.Z`) | preview | `web-<YYYYMMDD>.<N>-<kit commit, 12>` on every push to main that changes a build; also inside every release |
 | xrdp preview packages: Wayland sessions, AV1, pacing | a frozen xrdp development commit + xorgxrdp devel | preview | `xrdp-preview-<YYYYMMDD>.<N>-<kit commit, 12>` |
 | Demo videos: Xfce, GNOME, and GNOME and KDE through the xrdp preview | recorded by `test/record-demos.sh` with that build's web client and xrdp preview (the `demo` workflow, after a green build on main) | preview | `demo-<YYYYMMDD>.<N>-<kit commit, 12>`; freerdp-web's splash takes the newest |
 
@@ -21,7 +21,10 @@ upstream signs) checked, no patches. **Preview** means: a fixed commit of
 a public branch that is never rewritten, labelled preview everywhere it
 appears, never mixed into a stable package's name or version.
 
-A stable release is named by date, `v2026.10.0`, because it bundles
+The kit is rolling: every push to main that changes a build and passes
+every gate publishes a release, named by its UTC date and that day's
+number, `20261025.1` (no `v`: the date is the version), made GitHub's
+latest, so `releases/latest` always leads to a tested download. It bundles
 several upstream versions; each archive's `MANIFEST` and the release notes
 list them. Packages keep the upstream version with a `0kit<N>` suffix, N
 the number of kit commits. Every pre-release and release is published
@@ -80,9 +83,9 @@ a negative test (a wrong hash, a wrong key, a tampered tarball).
 ```
 upstream tag / frozen branch
   → bump commit in sources.lock (a pull request: build + all gates)
-  → main: CI again; the web client goes to pre-release web-<YYYYMMDD>.<N>-<kit>
-  → tag v<YYYY>.<MM>.<N> on a green main commit
-  → release: every artifact, SHA256SUMS, build provenance attestations
+  → main: CI again; the previews go to their pre-releases (web-…, xrdp-preview-…)
+  → all green: the release <YYYYMMDD>.<N>, made latest: every product,
+    SHA256SUMS, build provenance attestations
   → consumers download and verify (freerdp-web publishes on purpose)
 ```
 
@@ -97,12 +100,14 @@ upstream tag / frozen branch
   page over the kit's newest tested client (its `kit-release.sh` finds
   it), at any time. The kit pins a freerdp-web release when one comes out
   (the upstream check opens the issue), tests the client with it, and
-  makes `web-<YYYYMMDD>.<N>-<kit commit>`; a kit `v*` release carries the
+  makes `web-<YYYYMMDD>.<N>-<kit commit>`; the kit's release carries the
   client and that freerdp-web release as one whole.
 - **Pages**: only freerdp-web has them; the kit publishes none (its old
   address kept the redirect GitHub last deployed).
-- **Releases are never automatic**: a push builds and tests; publishing
-  needs a tag or a manual run.
+- **Releases are automatic, and frozen**: every push to main that changes
+  a build and passes publishes one; a pull request only builds and tests.
+  What reaches people is still gated: the release holds only what every
+  test passed, and freerdp-web's site changes only when it publishes.
 
 ## Frozen releases
 
@@ -168,7 +173,7 @@ move while builds don't, and versions that only go up.
    |---|---|
    | Web client | `web-<YYYYMMDD>.<N>-<kit commit, 12>`, titled "Web client for freerdp-web <page commit, 12> (kit <kit commit, 12>)" |
    | xrdp preview | `xrdp-preview-<YYYYMMDD>.<N>-<kit commit, 12>`, titled "xrdp preview <xrdp commit, 12> (kit <kit commit, 12>)" |
-   | Stable | `v<YYYY>.<MM>.<N>`, a tag on one kit commit (already the case) |
+   | Stable | `<YYYYMMDD>.<N>`, titled "FreeRDP <version> clients, xrdp <version> packages (kit <kit commit, 12>)"; made latest |
 
    Pre-releases are made continuously, so they are named by date (since
    21 October 2026): the UTC date of the build and N, that day's build
@@ -225,7 +230,7 @@ move while builds don't, and versions that only go up.
 | kit `wasm` job, "Hand the tested page to freerdp-web" | `web-<YYYYMMDD>.<N>-<kit, 12>` (`build/prerelease-tag.sh`): the client, `KIT_COMMIT`, the debian-13 xrdp packages, `SHA256SUMS` of them all |
 | kit `xrdp-preview-release` job | `xrdp-preview-<YYYYMMDD>.<N>-<kit, 12>` |
 | both jobs | a `concurrency` group per kit commit: two runs of one commit publish one after the other, and the second finds the release there |
-| kit `release` job (`v*`) | unchanged: it creates the release with every file in one call, and a second run fails because the release exists |
+| kit `release` job | `<YYYYMMDD>.<N>` (`build/prerelease-tag.sh release`), published by `publish-prerelease.sh` with `LATEST=1`: the same rules, but a release, made latest |
 | kit pushes | a push that changes only documentation (or only the upstream check) runs no build, so it makes no new pre-release |
 | package revisions | `0kit<N>`, rule 4 |
 | freerdp-web [`kit-release.sh`](https://github.com/congzhangzh/freerdp-web/blob/main/kit-release.sh) | rule 3: the newest published `web-*`, or the newest build of a page commit; withdrawn ones and drafts skipped; the older names `web-<page, 12>-<kit, 12>` and `web-<page, 12>` are still found. `site.sh` and `pages.yml` use it |
@@ -295,7 +300,7 @@ two weeks.
 ## Consuming a release
 
 ```sh
-gh release download v2026.10.0 -R congzhangzh/rdp-release-kit -p SHA256SUMS -p '*.deb'
+gh release download -R congzhangzh/rdp-release-kit -p SHA256SUMS -p '*.deb'   # the latest; or name one: 20261025.1
 sha256sum -c --ignore-missing SHA256SUMS
 gh attestation verify <file> -R congzhangzh/rdp-release-kit
 ```
@@ -327,7 +332,7 @@ without it, checked for each kind:
 | xrdp packages | every staged file (debian:13) | ccache through its gcc wrapper in `PATH`, not `CC="ccache gcc"`: xrdp records its configure options and `CC` in its binaries |
 
 Local work on a source goes through `SRC_<name>` or `sources.local`
-(see the README), which CI and `v*` tags refuse: the build tree is kept,
+(see the README), which CI refuses: the build tree is kept,
 so an edit to one file rebuilds the Linux client in about 6 s with
 `LTO=off` (21 s before), the Windows client in 5 s (ThinLTO, cached), the
 xrdp preview in 7 s and the web client in about 46 s (55 s), where
