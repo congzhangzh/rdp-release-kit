@@ -107,6 +107,50 @@ jobs:
           path: dist/*.zip
           if-no-files-found: error
 
+  # The macOS client, natively on each architecture: arm64 on macos-15,
+  # x86_64 on macos-15-intel (GitHub's last Intel image), so the x86_64
+  # client and its Python run on Intel, not through Rosetta
+  macos:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: arm64
+            runner: macos-15
+          - arch: x86_64
+            runner: macos-15-intel
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Cache sources
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/rdp-release-kit/sources
+          key: sources-${{ hashFiles('sources.lock') }}
+
+      - name: Cache compiled objects
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/rdp-release-kit/ccache/macos
+          key: ccache-macos-${{ matrix.arch }}-${{ github.sha }}
+          restore-keys: ccache-macos-${{ matrix.arch }}-
+
+      # bash 4.4+ for the build (macOS has 3.2), meson and nasm for dav1d
+      - name: Build tools
+        run: brew install bash meson nasm ccache
+
+      - name: Build
+        env:
+          CCACHE_MAXSIZE: 1G
+        run: ./build-macos.sh ${{ matrix.arch }}
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: sdl3-freerdp-macos-${{ matrix.arch }}
+          path: dist/*.tar.xz
+          if-no-files-found: error
+
   releases:
     runs-on: ubuntu-24.04
     outputs:
@@ -438,7 +482,7 @@ jobs:
   # download (docs/RELEASE.md, "Products and channels")
   release:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    needs: [build, windows, xrdp, wasm]
+    needs: [build, windows, macos, xrdp, wasm]
     runs-on: ubuntu-24.04
     # one at a time across commits: each counts N from the releases before it,
     # so two pushes close together get .1 and .2, not both .1 (the second
@@ -491,7 +535,7 @@ jobs:
           xrdp=$(awk '$1 == "xrdp" { print $2 }' sources.lock)
           title="FreeRDP $freerdp clients, xrdp $xrdp packages (kit ${GITHUB_SHA:0:12})"
           tag=$(build/prerelease-tag.sh release "$title")
-          summary="Rolling release $tag of rdp-release-kit, built and tested from $GITHUB_SHA: FreeRDP's SDL3 client for Linux and Windows, each with freerdp-tk (a window to save and open connections) and the Python that runs it, and xrdp packages for Debian, Ubuntu and Fedora, on x86_64 and ARM64. Published once, never replaced.
+          summary="Rolling release $tag of rdp-release-kit, built and tested from $GITHUB_SHA: FreeRDP's SDL3 client for Linux, Windows and macOS, each with freerdp-tk (a window to save and open connections) and the Python that runs it, and xrdp packages for Debian, Ubuntu and Fedora, on x86_64 and ARM64. Published once, never replaced.
 
           ## Download and run
 
@@ -501,8 +545,10 @@ jobs:
           | Linux ARM64 | \`sdl3-freerdp-$freerdp-linux-aarch64.tar.xz\` | the same |
           | Windows x86_64 | \`sdl3-freerdp-$freerdp-windows-x86_64.zip\` | unzip, then double-click \`freerdp-tk.cmd\` (or \`sdl-freerdp.exe /v:server /u:user\`) |
           | Windows ARM64 | \`sdl3-freerdp-$freerdp-windows-aarch64.zip\` | the same |
+          | macOS Apple Silicon | \`sdl3-freerdp-$freerdp-macos-arm64.tar.xz\` | unpack, then double-click \`freerdp-tk.command\` (or \`bin/sdl-freerdp /v:server /u:user\`); downloaded with a browser, clear macOS's quarantine first: \`xattr -dr com.apple.quarantine sdl3-freerdp-*\` (not notarized) |
+          | macOS Intel | \`sdl3-freerdp-$freerdp-macos-x86_64.tar.xz\` | the same |
           | xrdp server | \`xrdp_*~<release>_<arch>.deb\` + \`xorgxrdp_*\` (Debian, Ubuntu), \`xrdp-*.fc<N>.<arch>.rpm\` + \`xorgxrdp-*\` (Fedora) | \`sudo apt install ./xrdp_*.deb ./xorgxrdp_*.deb\` or \`sudo dnf install ./xrdp-*.rpm ./xorgxrdp-*.rpm\` |
 
-          The Linux client runs on glibc 2.34 and newer (RHEL 9, Debian 12, Ubuntu 22.04, Fedora 35 and newer) with PulseAudio's or PipeWire's libpulse; nothing else to install. Check a download: \`sha256sum -c --ignore-missing SHA256SUMS\`; its origin: \`gh attestation verify <file> -R $GITHUB_REPOSITORY\`. Each archive's MANIFEST lists what it was built from."
-          notes=$(build/release-notes.sh "$summary" linux windows web xrdp)
+          The Linux client runs on glibc 2.34 and newer (RHEL 9, Debian 12, Ubuntu 22.04, Fedora 35 and newer) with PulseAudio's or PipeWire's libpulse; nothing else to install. The macOS client runs on macOS 12 and newer. Check a download: \`sha256sum -c --ignore-missing SHA256SUMS\`; its origin: \`gh attestation verify <file> -R $GITHUB_REPOSITORY\`. Each archive's MANIFEST lists what it was built from."
+          notes=$(build/release-notes.sh "$summary" linux windows macos web xrdp)
           LATEST=1 build/publish-prerelease.sh "$tag" "$title" "$notes" upload/*

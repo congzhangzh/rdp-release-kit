@@ -67,6 +67,20 @@ Or run the client yourself:  bin/sdl-freerdp /v:server /u:user
 Everything it needs is in this folder (Python with Tk included).
 MANIFEST lists what it was built from; licenses/ has every licence.
 EOF
+        if [ "$os" = macos ]; then
+            # Finder opens a .command file in Terminal on a double-click (the $ are
+            # the script's own, written as they are)
+            # shellcheck disable=SC2016
+            printf '#!/bin/sh\nexec "$(dirname "$0")/freerdp-tk" "$@"\n' > "$pkg/freerdp-tk.command"
+            chmod +x "$pkg/freerdp-tk.command"
+            cat >> "$pkg/README.txt" << 'EOF'
+
+In Finder, double-click freerdp-tk.command. The programs are not notarized:
+if the folder came through a browser, macOS quarantines it and refuses to
+start them. Clear that once, in Terminal:
+    xattr -dr com.apple.quarantine <this folder>
+EOF
+        fi
     fi
     # read by the scripts that source this file
     # shellcheck disable=SC2034

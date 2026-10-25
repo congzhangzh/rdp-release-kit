@@ -15,6 +15,17 @@ toolchain) gets an entry here in the same commit.
 
 **Releases: rolling, by date**
 
+- **macOS client**, arm64 and x86_64 (`build-macos.sh`), with freerdp-tk
+  and a standalone CPython 3.13.17 per architecture, like Linux and Windows:
+  built natively with Apple clang for macOS 12 and newer, every library
+  static, only macOS's own libraries and frameworks linked
+  (`build/check-macos.sh`), ad-hoc signed. CI builds arm64 on `macos-15` and
+  x86_64 on `macos-15-intel`; the release waits for both. Two fixes the
+  build needed: FreeType 2.15 found macOS 26's HVF library, which has no
+  plain arm64 slice, and the static link failed (`FT_DISABLE_HVF=ON`); and
+  macOS's own `sha256sum -c` accepts a malformed line, so the hash checks
+  use `shasum`. Not notarized: a browser download needs
+  `xattr -dr com.apple.quarantine` once.
 - Every push to main that changes a build and passes every test publishes
   the release `<YYYYMMDD>.<N>`, made GitHub's latest: the Linux and
   Windows clients, the xrdp packages and the web client, with

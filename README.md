@@ -11,7 +11,8 @@ no upstream source.
 **[The latest release](https://github.com/congzhangzh/rdp-release-kit/releases/latest)**:
 the newest build that passed every test, named by its date (`20261025.1`).
 Unpack the client for your platform and start `freerdp-tk` (Windows:
-double-click `freerdp-tk.cmd`), a window to save and open connections; it
+double-click `freerdp-tk.cmd`; macOS: `freerdp-tk.command`, after clearing
+the download's quarantine, see below), a window to save and open connections; it
 brings its own Python and Tk, nothing to install. Or run the client
 directly: `bin/sdl-freerdp /v:server /u:user` (Windows: `sdl-freerdp.exe`).
 The release notes have a table per platform, the checksums and how to
@@ -23,6 +24,7 @@ verify a file's origin.
 |---|---|---|
 | `sdl-freerdp` (FreeRDP's SDL3 client), with AV1 (dav1d) and Opus, plus [freerdp-tk](https://github.com/congzhangzh/freerdp-tk) and its Python | stable | Linux x86_64 / aarch64 with glibc ≥ 2.34 and PulseAudio's `libpulse.so.0`: RHEL/Rocky/Alma 9, Debian 12, Ubuntu 22.04, Fedora 35 and newer |
 | `sdl-freerdp.exe`, the same client for Windows, with freerdp-tk and its Python | stable | Windows 10 and 11, x86_64 and ARM64 |
+| `sdl-freerdp`, the same client for macOS, with freerdp-tk and its Python | stable | macOS 12 and newer, Apple Silicon (arm64) and Intel (x86_64) |
 | FreeRDP web client (WebAssembly) with the [freerdp-web](https://github.com/congzhangzh/freerdp-web) page | preview: FreeRDP master + open pull requests (see the pins below) | a current browser (tested: Chrome); served from GitHub Pages |
 | xrdp + xorgxrdp native packages (.deb / .rpm) | stable | x86_64 and ARM64: Debian testing, 13, 12; Ubuntu 26.10, 26.04, 24.04; Fedora 45, 44, 43 |
 
@@ -40,7 +42,8 @@ are made for.
 | Linux, no display | freerdp-tk's window | Tk draws through X11 (on a Wayland desktop through XWayland), so it needs a desktop session. The client itself still runs from a terminal with `/v:`. |
 | Linux on Arch, ARM64 | not tested | Arch publishes x86_64 images only, so the smoke test runs Arch on x86_64 alone. |
 | Windows 7, 8, 8.1; 32-bit x86 | not supported; not built | The client uses the Universal C Runtime that is part of Windows 10 and later (llvm-mingw's UCRT target), and the bundled CPython 3.13 is built for Windows 10 and later. 32-bit Windows is not built. |
-| macOS | coming (arm64, x86_64) | The build is being added; nothing is published for macOS yet. |
+| macOS, a browser download | starts only after `xattr -dr com.apple.quarantine <folder>` | The client and its Python are signed ad hoc, not notarized by Apple (that needs a paid developer account), so Gatekeeper refuses a quarantined download. |
+| macOS 11 and older | not supported | The client is built for macOS 12 (`MACOSX_DEPLOYMENT_TARGET`), the oldest release with security updates until 2024 that every Apple Silicon Mac and Intel Macs from 2015 run. |
 | xrdp packages | RHEL/Alma/Rocky, openSUSE; releases older than those listed | Not built (the kit's lists, `distros.list` and `deps/`, cover Debian, Ubuntu and Fedora); EPEL has an xrdp for RHEL's family. xorgxrdp is an Xorg driver that must match its Xorg server exactly, so each release gets its own build. |
 | xrdp preview: GNOME | Debian 12 | GNOME's backend uses Mutter's remote desktop API of GNOME 46 and newer; Debian 12 has GNOME 43. |
 | xrdp preview: sway | Debian 13, Ubuntu 24.04 (Xorg sessions only) | Sway sessions need sway 1.11 (wlroots 0.19) for the `ext-image-copy-capture` protocols; Debian 13 has sway 1.10, Ubuntu 24.04 sway 1.9. |
@@ -69,6 +72,7 @@ same tables are in the notes of every release.
 |---|---|---|
 | Linux client `sdl-freerdp` + `freerdp-tk` | freerdp 3.32.2, sdl3 3.4.18, sdl3_ttf 3.2.2, freetype 2.15.0, openssl 3.5.9, opus 1.6.1, dav1d 1.5.4, zlib 1.3.2, jansson 2.15.1, freerdp_tk 0.1.1, python_linux_x86_64 3.13.17+20261021, python_linux_aarch64 3.13.17+20261021 | `build/check-portable.sh` (only glibc ≥ 2.34, libgcc_s and libpulse from the host), `test/smoke.sh` (starts and finds its libraries on Alma 9, Rocky 10, Debian 12/13, Ubuntu 22.04/24.04, Fedora 43, Tumbleweed, Arch; there the bundled Python loads Tk and freerdp-tk) |
 | Windows client `sdl-freerdp.exe` + `freerdp-tk` | freerdp 3.32.2, sdl3 3.4.18, sdl3_ttf 3.2.2, freetype 2.15.0, libressl 4.3.3, opus 1.6.1, dav1d 1.5.4, zlib 1.3.2, jansson 2.15.1, llvm_mingw 20261020, freerdp_tk 0.1.1, python_windows_x86_64 3.13.17+20261021, python_windows_aarch64 3.13.17+20261021 | `build/check-windows.sh` (needs only Windows' own DLLs) |
+| macOS client `sdl-freerdp` + `freerdp-tk` | freerdp 3.32.2, sdl3 3.4.18, sdl3_ttf 3.2.2, freetype 2.15.0, openssl 3.5.9, opus 1.6.1, dav1d 1.5.4, zlib 1.3.2, jansson 2.15.1, freerdp_tk 0.1.1, python_macos_arm64 3.13.17+20261021, python_macos_x86_64 3.13.17+20261021 | `build/check-macos.sh` (only macOS's own libraries and frameworks, minimum macOS 12.0, an ad-hoc signature); the bundled Python loads Tk and freerdp-tk; arm64 on macos-15, x86_64 on macos-15-intel |
 | Web client + freerdp-web page | freerdp_preview 20261021.1, sdl3_wasm 3.2.30+timer, sdl3_ttf 3.2.2, freetype 2.15.0, libressl 4.3.3, opus 1.6.1, dav1d 1.5.4, zlib 1.3.2, jansson 2.15.1, freerdp_web 20261024.1 | `test/wasm-session.sh`: a browser logs in to xrdp through SSH + websockify, the page served without COOP/COEP headers (as GitHub Pages) |
 | xrdp packages (.deb, .rpm) | xrdp 0.10.6.1, xorgxrdp 0.10.5, x264 b35605a, opus 1.6.1, pipewire_xrdp 0.2 | `check-deps.sh`, then `test/xrdp-session.sh`: install in a fresh container of each release, log in over RDP, an Xorg session with an xterm comes up |
 | xrdp preview packages | xrdp_preview 20261025.1, librfxcodec 0badc06, libpainter 379b8fb, xorgxrdp_preview 20261018.1, x264 b35605a, opus 1.6.1 | `test/xrdp-session.sh --preview`: the Xorg login, then a Wayland one (sway) captured at the client's size |
