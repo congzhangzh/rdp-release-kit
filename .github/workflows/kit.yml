@@ -73,6 +73,9 @@ jobs:
           name: sdl3-freerdp-${{ matrix.runner }}
           path: dist/*
           if-no-files-found: error
+          # only carries files to later jobs and the release; 3 days, not the
+          # default 90, so old runs stop filling the Actions storage
+          retention-days: 3
 
   windows:
     strategy:
@@ -106,6 +109,7 @@ jobs:
           name: sdl3-freerdp-windows-${{ matrix.arch }}
           path: dist/*.zip
           if-no-files-found: error
+          retention-days: 3
 
   # The macOS client, natively on each architecture: arm64 on macos-15,
   # x86_64 on macos-15-intel (GitHub's last Intel image), so the x86_64
@@ -150,6 +154,7 @@ jobs:
           name: sdl3-freerdp-macos-${{ matrix.arch }}
           path: dist/*.tar.xz
           if-no-files-found: error
+          retention-days: 3
 
   releases:
     runs-on: ubuntu-24.04
@@ -220,6 +225,7 @@ jobs:
             dist/xrdp/*/*.deb
             dist/xrdp/*/*.rpm
           if-no-files-found: error
+          retention-days: 3
 
       - name: Keep the login test's logs and screenshot
         if: always()
@@ -228,6 +234,7 @@ jobs:
           name: test-${{ steps.name.outputs.name }}
           path: dist/test/
           if-no-files-found: ignore
+          retention-days: 3
 
   # The xrdp preview (xrdp_preview in sources.lock): the same build and
   # Xorg login as the release, then a Wayland (sway) login
@@ -284,6 +291,7 @@ jobs:
             dist/xrdp-preview/*/*.deb
             dist/xrdp-preview/*/*.rpm
           if-no-files-found: error
+          retention-days: 3
 
       - name: Keep the login test's logs and screenshots
         if: always()
@@ -292,6 +300,7 @@ jobs:
           name: test-${{ steps.name.outputs.name }}
           path: dist/test/
           if-no-files-found: ignore
+          retention-days: 3
 
   # Every release's preview packages, once all of them pass, go to the
   # pre-release xrdp-preview-<YYYYMMDD>.<N>-<kit commit> (pushes only; never
@@ -398,6 +407,7 @@ jobs:
           name: wasm-build
           path: dist/wasm/
           if-no-files-found: error
+          retention-days: 3
           include-hidden-files: true   # the page's .well-known/
 
   wasm:
@@ -466,6 +476,7 @@ jobs:
             dist/wasm/*.zip
             dist/wasm/*.zip.sha256
           if-no-files-found: error
+          retention-days: 3
 
       - name: Keep the browser test's logs and screenshot
         if: always()
@@ -474,6 +485,7 @@ jobs:
           name: test-wasm
           path: dist/test/
           if-no-files-found: ignore
+          retention-days: 3
 
   # The demo videos of this commit's web client and xrdp preview
   # (.github/workflows/demo.yml), published as the pre-release demo-* for
