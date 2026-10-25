@@ -11,6 +11,20 @@ from right now, and what our own changes to a source fix:
 Every change that alters what is built (a pin, a build option, a patch, a
 toolchain) gets an entry here in the same commit.
 
+## 2026-10-25
+
+**Docs and releases**
+
+- Our changes upstream: every `change` line in `pins.notes` names the pull
+  requests and issues that carry it upstream (the README's tables link
+  them). `check-upstream.sh` reports their state, and the daily `upstream`
+  job opens an issue once all of a pin's are merged or fixed, so the pin
+  goes back to an upstream release. On 2026-10-25: FreeRDP #13732 and
+  #13812 are merged, #13733 and #13811 open; SDL #16587 open; the seven xrdp
+  pull requests of the preview open.
+- A change to the notes, the tables or their scripts alone builds nothing
+  and makes no pre-release: the `pins` workflow checks it instead.
+
 ## 2026-10-24
 
 **Web client**

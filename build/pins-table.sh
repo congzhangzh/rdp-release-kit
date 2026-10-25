@@ -26,6 +26,15 @@ tables() {
         return "`" substr(SHA[name], 1, 9) "`"
     }
     # the version, and the commit of a git pin (alone when the version is that commit)
+    # owner/repo#N ... as links, named repo#N
+    function refs(list,   n, r, i, out, parts) {
+        n = split(list, r, " "); out = ""
+        for (i = 1; i <= n; i++) {
+            split(r[i], parts, "#")
+            out = out (i > 1 ? " " : "") "[" substr(parts[1], index(parts[1], "/") + 1) "#" parts[2] "](https://github.com/" parts[1] "/issues/" parts[2] ")"
+        }
+        return out == "" ? "—" : out
+    }
     function pin(name) {
         if (URL[name] !~ /^git\+/) return VER[name]
         return (index(SHA[name], VER[name]) == 1 ? "" : VER[name] " ") commit(name)
@@ -44,7 +53,7 @@ tables() {
             }
         } else {
             if (!(f[1] in VER)) { print "pins.notes: change " f[1] " is not in sources.lock" > "/dev/stderr"; bad = 1 }
-            CH[f[1]] = 1; CBASE[f[1]] = f[2]; CWHAT[f[1]] = f[3]; CTEST[f[1]] = f[4]
+            CH[f[1]] = 1; CBASE[f[1]] = f[2]; CWHAT[f[1]] = f[3]; CTEST[f[1]] = f[4]; CUP[f[1]] = f[5]
         }
     }
     END {
@@ -68,8 +77,8 @@ tables() {
         print ""
         print "Pins that are not a plain upstream release:"
         print ""
-        print "| Source | Pin | Base | What it changes or fixes | How the change is tested |"
-        print "|---|---|---|---|---|"
+        print "| Source | Pin | Base | What it changes or fixes | How the change is tested | Upstream |"
+        print "|---|---|---|---|---|---|"
         # our changes first, then the commit pins taken unchanged
         for (pass = 1; pass <= 2; pass++)
             for (i = 1; i <= nlock; i++) {
@@ -77,7 +86,7 @@ tables() {
                 if (!(name in SEL) || !(name in CH)) continue
                 if ((CWHAT[name] ~ /^unchanged/) != (pass == 2)) continue
                 base = CBASE[name]; gsub(/\{version\}/, VER[name], base)
-                print "| `" name "` | " pin(name) " | " base " | " CWHAT[name] " | " CTEST[name] " |"
+                print "| `" name "` | " pin(name) " | " base " | " CWHAT[name] " | " CTEST[name] " | " refs(CUP[name]) " |"
             }
     }' "$KIT/sources.lock" "$KIT/pins.notes"
 }

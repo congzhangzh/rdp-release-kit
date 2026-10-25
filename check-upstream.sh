@@ -64,3 +64,24 @@ if [ -z "$head" ]; then status="unknown (no branch read)"
 elif [ "$head" = "$have" ]; then status=ok
 else status=update; fi
 printf '%-11s %-10s %-10s %s\n' x264 "${have:0:7}" "${head:0:7}" "$status"
+
+# Our changes on their way upstream: the state of every pull request and
+# issue a pin's change line in pins.notes names (GitHub's API, through gh).
+# "all-upstream" on a pin's last line: every one is merged or fixed, so the
+# pin can go back to an upstream release.
+echo
+printf '%-15s %-34s %s\n' ours upstream state
+awk -F'|' '/^change / { split($1, n, " "); if ($5 ~ /[^ \t]/) print n[2], $5 }' pins.notes |
+	while read -r name refs; do
+		done_all=yes
+		for ref in $refs; do
+			repo=${ref%#*} number=${ref#*#}
+			state=$(gh api "repos/$repo/issues/$number" -q \
+				'if .pull_request then (if .pull_request.merged_at then "merged" else .state end) + " (PR)"
+				 else .state + (if .state_reason then " " + .state_reason else "" end) + " (issue)" end' \
+				2> /dev/null) || state=unknown
+			case $state in "merged (PR)" | "closed completed (issue)") ;; *) done_all=no ;; esac
+			printf '%-15s %-34s %s\n' "$name" "$ref" "$state"
+		done
+		[ $done_all = yes ] && printf '%-15s %-34s %s\n' "$name" all-upstream "move the pin back to an upstream release"
+	done

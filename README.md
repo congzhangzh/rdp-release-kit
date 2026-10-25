@@ -26,8 +26,9 @@ What changed in the kit, and why: [`CHANGELOG.md`](CHANGELOG.md).
 ### The pins at a glance
 
 What each product is built from and how it is tested, and, for every pin
-that is not a plain upstream release, what our change fixes and how that
-was tested. Generated from [`sources.lock`](sources.lock) and
+that is not a plain upstream release, what our change fixes, how that was
+tested, and the pull requests and issues that carry it upstream (their
+state: `./check-upstream.sh`). Generated from [`sources.lock`](sources.lock) and
 [`pins.notes`](pins.notes) by `build/pins-table.sh --readme README.md`; the
 same tables are in the notes of every release.
 
@@ -42,17 +43,17 @@ same tables are in the notes of every release.
 
 Pins that are not a plain upstream release:
 
-| Source | Pin | Base | What it changes or fixes | How the change is tested |
-|---|---|---|---|---|
-| `freerdp_preview` | 20261021.1 [`79f10e8ae`](https://github.com/congzhangzh/FreeRDP/commit/79f10e8ae52c60060440513fd35b972628aef0ec) | FreeRDP master @ 29cb8ef1b (2026-10-21) | 4 commits of open pull requests for Emscripten builds: sound #13732, clipboard #13733, microphone #13811, H.264 through WebCodecs #13812 | the web login test; each pull request's own CI upstream |
-| `sdl3_wasm` | 3.2.30+timer [`97fd4fe89`](https://github.com/congzhangzh/SDL/commit/97fd4fe89f52d14b3d7a1a6a202d0a381ba358b1) | SDL `release-3.2.30` | 1 commit: the Emscripten timers stay on the main thread. Since 3.2.30 a timer removed from another thread fired through a freed entry ("table index is out of bounds" in `SDL_Emscripten_TimerHelper`), in about 1 of 3 first sessions | a first login, repeated, unpatched against patched: 9 of 28 sessions hit the error, then 0 of 16; freerdp-web's `test-reconnect.mjs` (clients quit and start again) 18 of 18; `SDL_timer.c` compiles with `-Werror`, with and without threads |
-| `freerdp_web` | 20261024.1 [`3eb0102fb`](https://github.com/congzhangzh/freerdp-web/commit/3eb0102fbaa0537201d9f332d3adbfa4bb96b35a) | its release v20261024.1 | our own page, taken by its release tag | its unit tests and page checks (freerdp-web CI), then the web login test |
-| `xrdp_preview` | 20261021.1 [`bfba3d7f1`](https://github.com/congzhangzh/xrdp/commit/bfba3d7f185f5d2ba9c2281dfcab8ceba44b7280) | xrdp devel @ 5943357a (2026-10-14) | 113 commits on their way upstream: Wayland sessions (wlup: sway, GNOME), AV1 with 4:4:4, encoder paced by the client's frame acknowledgements, Opus sound fixes | the preview login test, Xorg and Wayland |
-| `x264` | `b35605ace` | x264 `stable` branch | unchanged: x264 has no releases | the xrdp login tests (H.264) |
-| `pipewire_xrdp` | 0.2 [`748f562d6`](https://github.com/neutrinolabs/pipewire-module-xrdp/commit/748f562d616590c678d5b06722f3fe5ae9707465) | release v0.2 | unchanged, pinned by its tag's commit; built for Fedora only, which does not package it | built in the Fedora xrdp jobs |
-| `librfxcodec` | [`0badc062e`](https://github.com/neutrinolabs/librfxcodec/commit/0badc062e96d170af57870480a4aa7cf469302b0) | xrdp's submodule | unchanged: the commit `xrdp_preview` uses | built with the xrdp preview |
-| `libpainter` | [`379b8fbf4`](https://github.com/neutrinolabs/libpainter/commit/379b8fbf40f309829364bf3414d721f9ba77766d) | xrdp's submodule | unchanged: the commit `xrdp_preview` uses | built with the xrdp preview |
-| `xorgxrdp_preview` | 20261018.1 [`59d0735c4`](https://github.com/neutrinolabs/xorgxrdp/commit/59d0735c4321b5baff3feaa980a01f78a1c1e96f) | xorgxrdp devel | unchanged: the development commit whose module interface `xrdp_preview` needs | the preview's Xorg login |
+| Source | Pin | Base | What it changes or fixes | How the change is tested | Upstream |
+|---|---|---|---|---|---|
+| `freerdp_preview` | 20261021.1 [`79f10e8ae`](https://github.com/congzhangzh/FreeRDP/commit/79f10e8ae52c60060440513fd35b972628aef0ec) | FreeRDP master @ 29cb8ef1b (2026-10-21) | 4 commits of open pull requests for Emscripten builds: sound #13732, clipboard #13733, microphone #13811, H.264 through WebCodecs #13812, each as of 2026-10-21 | the web login test; each pull request's own CI upstream | [FreeRDP#13732](https://github.com/FreeRDP/FreeRDP/issues/13732) [FreeRDP#13733](https://github.com/FreeRDP/FreeRDP/issues/13733) [FreeRDP#13811](https://github.com/FreeRDP/FreeRDP/issues/13811) [FreeRDP#13812](https://github.com/FreeRDP/FreeRDP/issues/13812) |
+| `sdl3_wasm` | 3.2.30+timer [`97fd4fe89`](https://github.com/congzhangzh/SDL/commit/97fd4fe89f52d14b3d7a1a6a202d0a381ba358b1) | SDL `release-3.2.30` | 1 commit: the Emscripten timers stay on the main thread. Since 3.2.30 a timer removed from another thread fired through a freed entry ("table index is out of bounds" in `SDL_Emscripten_TimerHelper`), in about 1 of 3 first sessions | a first login, repeated, unpatched against patched: 9 of 28 sessions hit the error, then 0 of 16; freerdp-web's `test-reconnect.mjs` (clients quit and start again) 18 of 18; `SDL_timer.c` compiles with `-Werror`, with and without threads | [SDL#16587](https://github.com/libsdl-org/SDL/issues/16587) |
+| `freerdp_web` | 20261024.1 [`3eb0102fb`](https://github.com/congzhangzh/freerdp-web/commit/3eb0102fbaa0537201d9f332d3adbfa4bb96b35a) | its release v20261024.1 | our own page, taken by its release tag | its unit tests and page checks (freerdp-web CI), then the web login test | — |
+| `xrdp_preview` | 20261021.1 [`bfba3d7f1`](https://github.com/congzhangzh/xrdp/commit/bfba3d7f185f5d2ba9c2281dfcab8ceba44b7280) | xrdp devel @ 5943357a (2026-10-14) | 113 commits on their way upstream: Wayland sessions (wlup: sway, GNOME), AV1 with 4:4:4, encoder paced by the client's frame acknowledgements, Opus sound fixes (#3922: 2 of its 3 commits) | the preview login test, Xorg and Wayland | [xrdp#3904](https://github.com/neutrinolabs/xrdp/issues/3904) [xrdp#3911](https://github.com/neutrinolabs/xrdp/issues/3911) [xrdp#3912](https://github.com/neutrinolabs/xrdp/issues/3912) [xrdp#3913](https://github.com/neutrinolabs/xrdp/issues/3913) [xrdp#3914](https://github.com/neutrinolabs/xrdp/issues/3914) [xrdp#3915](https://github.com/neutrinolabs/xrdp/issues/3915) [xrdp#3922](https://github.com/neutrinolabs/xrdp/issues/3922) |
+| `x264` | `b35605ace` | x264 `stable` branch | unchanged: x264 has no releases | the xrdp login tests (H.264) | — |
+| `pipewire_xrdp` | 0.2 [`748f562d6`](https://github.com/neutrinolabs/pipewire-module-xrdp/commit/748f562d616590c678d5b06722f3fe5ae9707465) | release v0.2 | unchanged, pinned by its tag's commit; built for Fedora only, which does not package it | built in the Fedora xrdp jobs | — |
+| `librfxcodec` | [`0badc062e`](https://github.com/neutrinolabs/librfxcodec/commit/0badc062e96d170af57870480a4aa7cf469302b0) | xrdp's submodule | unchanged: the commit `xrdp_preview` uses | built with the xrdp preview | — |
+| `libpainter` | [`379b8fbf4`](https://github.com/neutrinolabs/libpainter/commit/379b8fbf40f309829364bf3414d721f9ba77766d) | xrdp's submodule | unchanged: the commit `xrdp_preview` uses | built with the xrdp preview | — |
+| `xorgxrdp_preview` | 20261018.1 [`59d0735c4`](https://github.com/neutrinolabs/xorgxrdp/commit/59d0735c4321b5baff3feaa980a01f78a1c1e96f) | xorgxrdp devel | unchanged: the development commit whose module interface `xrdp_preview` needs | the preview's Xorg login | — |
 <!-- pins: end -->
 
 ## Build

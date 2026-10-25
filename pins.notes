@@ -3,10 +3,13 @@
 # notes. Versions and commits come from sources.lock only, never from here.
 #
 #   product <id> | <name> | <sources> | <how it is tested>
-#   change  <source> | <base> | <what it changes or fixes> | <how the change is tested>
+#   change  <source> | <base> | <what it changes or fixes> | <how the change is tested> | <upstream>
 #
 # A "change" line is for every pin that is not a plain upstream release: a
 # fork commit or a development commit. Fields are Markdown, one line each.
+# <upstream>: the pull requests and issues (owner/repo#N, space-separated)
+# that carry the change upstream; check-upstream.sh reports their state, and
+# once all are merged or fixed the pin can go back to an upstream release.
 
 product linux        | Linux client `sdl-freerdp` | freerdp sdl3 sdl3_ttf freetype openssl opus dav1d zlib jansson | `build/check-portable.sh` (only glibc ≥ 2.34, libgcc_s and libpulse from the host), `test/smoke.sh` (starts and finds its libraries on Alma 9, Rocky 10, Debian 12/13, Ubuntu 22.04/24.04, Fedora 43, Tumbleweed)
 product windows      | Windows client `sdl-freerdp.exe` | freerdp sdl3 sdl3_ttf freetype libressl opus dav1d zlib jansson llvm_mingw | `build/check-windows.sh` (needs only Windows' own DLLs)
@@ -14,10 +17,10 @@ product web          | Web client + freerdp-web page | freerdp_preview sdl3_wasm
 product xrdp         | xrdp packages (.deb, .rpm) | xrdp xorgxrdp x264 opus pipewire_xrdp | `check-deps.sh`, then `test/xrdp-session.sh`: install in a fresh container of each release, log in over RDP, an Xorg session with an xterm comes up
 product xrdp-preview | xrdp preview packages | xrdp_preview librfxcodec libpainter xorgxrdp_preview x264 opus | `test/xrdp-session.sh --preview`: the Xorg login, then a Wayland one (sway) captured at the client's size
 
-change freerdp_preview  | FreeRDP master @ 29cb8ef1b (2026-10-21) | 4 commits of open pull requests for Emscripten builds: sound #13732, clipboard #13733, microphone #13811, H.264 through WebCodecs #13812 | the web login test; each pull request's own CI upstream
-change sdl3_wasm        | SDL `release-3.2.30` | 1 commit: the Emscripten timers stay on the main thread. Since 3.2.30 a timer removed from another thread fired through a freed entry ("table index is out of bounds" in `SDL_Emscripten_TimerHelper`), in about 1 of 3 first sessions | a first login, repeated, unpatched against patched: 9 of 28 sessions hit the error, then 0 of 16; freerdp-web's `test-reconnect.mjs` (clients quit and start again) 18 of 18; `SDL_timer.c` compiles with `-Werror`, with and without threads
+change freerdp_preview  | FreeRDP master @ 29cb8ef1b (2026-10-21) | 4 commits of open pull requests for Emscripten builds: sound #13732, clipboard #13733, microphone #13811, H.264 through WebCodecs #13812, each as of 2026-10-21 | the web login test; each pull request's own CI upstream | FreeRDP/FreeRDP#13732 FreeRDP/FreeRDP#13733 FreeRDP/FreeRDP#13811 FreeRDP/FreeRDP#13812
+change sdl3_wasm        | SDL `release-3.2.30` | 1 commit: the Emscripten timers stay on the main thread. Since 3.2.30 a timer removed from another thread fired through a freed entry ("table index is out of bounds" in `SDL_Emscripten_TimerHelper`), in about 1 of 3 first sessions | a first login, repeated, unpatched against patched: 9 of 28 sessions hit the error, then 0 of 16; freerdp-web's `test-reconnect.mjs` (clients quit and start again) 18 of 18; `SDL_timer.c` compiles with `-Werror`, with and without threads | libsdl-org/SDL#16587
 change freerdp_web      | its release v{version} | our own page, taken by its release tag | its unit tests and page checks (freerdp-web CI), then the web login test
-change xrdp_preview     | xrdp devel @ 5943357a (2026-10-14) | 113 commits on their way upstream: Wayland sessions (wlup: sway, GNOME), AV1 with 4:4:4, encoder paced by the client's frame acknowledgements, Opus sound fixes | the preview login test, Xorg and Wayland
+change xrdp_preview     | xrdp devel @ 5943357a (2026-10-14) | 113 commits on their way upstream: Wayland sessions (wlup: sway, GNOME), AV1 with 4:4:4, encoder paced by the client's frame acknowledgements, Opus sound fixes (#3922: 2 of its 3 commits) | the preview login test, Xorg and Wayland | neutrinolabs/xrdp#3904 neutrinolabs/xrdp#3911 neutrinolabs/xrdp#3912 neutrinolabs/xrdp#3913 neutrinolabs/xrdp#3914 neutrinolabs/xrdp#3915 neutrinolabs/xrdp#3922
 change librfxcodec      | xrdp's submodule | unchanged: the commit `xrdp_preview` uses | built with the xrdp preview
 change libpainter       | xrdp's submodule | unchanged: the commit `xrdp_preview` uses | built with the xrdp preview
 change xorgxrdp_preview | xorgxrdp devel | unchanged: the development commit whose module interface `xrdp_preview` needs | the preview's Xorg login

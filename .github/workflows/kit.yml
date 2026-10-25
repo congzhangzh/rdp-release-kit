@@ -13,7 +13,7 @@ on:
     tags: ['v*']
     # a change no build reads makes no new pre-release (docs/RELEASE.md,
     # "Frozen releases"); tag pushes are never filtered by path
-    paths-ignore: ['**.md', 'docs/**', '.github/workflows/upstream.yml', 'check-upstream.sh', 'LICENSE', 'NOTICE']
+    paths-ignore: ['**.md', 'docs/**', '.github/workflows/upstream.yml', '.github/workflows/pins.yml', 'check-upstream.sh', 'pins.notes', 'build/pins-table.sh', 'build/release-notes.sh', 'LICENSE', 'NOTICE']
   pull_request:
   workflow_dispatch:
 

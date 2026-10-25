@@ -280,8 +280,12 @@ two weeks.
   what changed, why, and how it was tested.
 - **`pins.notes`**: every pin that is not a plain upstream release (a fork
   commit carrying our fix, a development commit) has a `change` line with
-  its base, what it changes or fixes, and how that was tested. A pin that
-  carries our fix moves back to an upstream release once upstream has it.
+  its base, what it changes or fixes, how that was tested, and the pull
+  requests and issues that carry it upstream (`owner/repo#N`). A pin that
+  carries our fix moves back to an upstream release once upstream has it:
+  `check-upstream.sh` reports the state of each of them, and the daily
+  `upstream` job opens an issue `Upstream has our changes: <name>` when all
+  of a pin's are merged or fixed.
 - `build/pins-table.sh` joins `pins.notes` with `sources.lock`. CI fails
   when a pin has no product, a commit pin has no `change` line, or the
   README's tables are stale (`build/pins-table.sh --readme README.md`

@@ -20,7 +20,32 @@ jobs:
       - uses: actions/checkout@v7
 
       - name: Compare with upstream
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: ./check-upstream.sh | tee upstream.txt
+
+      # A fork pin whose pull requests and issues (pins.notes) are all
+      # merged or fixed upstream can go back to an upstream release
+      - name: One issue per pin whose changes are all upstream
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          awk '$1 != "ours" && $2 == "all-upstream" { print $1 }' upstream.txt | while read -r name; do
+            title="Upstream has our changes: $name"
+            if gh issue list --state all --search "in:title \"$title\"" --json title -q '.[].title' | grep -qxF "$title"; then
+              echo "known: $title"
+              continue
+            fi
+            refs=$(awk -v n="$name" '$1 == n && $2 != "all-upstream" { print "- " $2 ": " $3, $4, $5 }' upstream.txt)
+            gh issue create --title "$title" --label enhancement --body "Every pull request and issue that pins.notes names for $name is merged or fixed upstream:
+
+          $refs
+
+          Move $name in sources.lock back to an upstream release that has them, drop or rewrite its change line in pins.notes, and add a CHANGELOG.md entry.
+
+          Found by the daily upstream check (check-upstream.sh)."
+            echo "opened: $title"
+          done
 
       - name: One issue per update
         env:

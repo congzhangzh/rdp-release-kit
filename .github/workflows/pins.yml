@@ -1,0 +1,24 @@
+name: pins
+
+# The README's pins tables against sources.lock and pins.notes, on the
+# changes the kit workflow skips (a note or the README alone builds
+# nothing, so it makes no pre-release). docs/RELEASE.md, "Recording a change".
+on:
+  push:
+    branches: [main]
+    paths: ['README.md', 'pins.notes', 'sources.lock', 'build/pins-table.sh', 'build/release-notes.sh', '.github/workflows/pins.yml']
+  pull_request:
+    paths: ['README.md', 'pins.notes', 'sources.lock', 'build/pins-table.sh', 'build/release-notes.sh', '.github/workflows/pins.yml']
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - name: The README's pins tables are current
+        run: build/pins-table.sh --check README.md
+      - name: The release notes come out
+        run: build/release-notes.sh "check" > /dev/null
