@@ -45,7 +45,7 @@ fi
 "$bin" /buildconfig | tr ' ' '\n' | grep -c '^WITH_' | sed 's/$/ build options/'
 # the connection window's Python, with Tk, and freerdp-tk (build/launcher.sh)
 pkg=$(dirname "$(dirname "$bin")")
-PYTHONPATH=$pkg/freerdp-tk "$pkg/python/bin/python3" -s -c \
+PYTHONPATH=$pkg/lib/freerdp-tk "$pkg/python/bin/python3" -s -c \
     'import _tkinter, tkinter, freerdp_tk.app; print("launcher: Tk", _tkinter.TK_VERSION)'
 EOF
 

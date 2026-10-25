@@ -19,13 +19,17 @@ add_launcher() {
     tk=$(unpack freerdp_tk)
     cp -a "$src" "$pkg/python"
     # what a launcher never runs: the test suite (a third of the size),
-    # IDLE, the turtle demos, pip's bootstrap
-    # (lib/python3.N/ on Linux and macOS, Lib/ on Windows)
-    rm -rf "$pkg"/python/lib/python3.*/{test,idlelib,turtledemo,ensurepip} \
-        "$pkg"/python/Lib/{test,idlelib,turtledemo,ensurepip}
-    mkdir -p "$pkg/freerdp-tk" "$pkg/licenses/$py" "$pkg/licenses/freerdp_tk"
-    cp -a "$tk/src/freerdp_tk" "$pkg/freerdp-tk/"
-    find "$pkg/freerdp-tk" -name __pycache__ -prune -exec rm -rf {} +
+    # IDLE, the turtle demos, pip and its bootstrap, the headers and man
+    # pages for building extensions (lib/python3.N/ and bin/ on Linux and
+    # macOS, Lib/ and Scripts/ on Windows); Tcl and Tk stay, freerdp-tk is Tk
+    rm -rf "$pkg"/python/lib/python3.*/{test,idlelib,turtledemo,ensurepip,config-*} \
+        "$pkg"/python/lib/python3.*/site-packages/pip* "$pkg"/python/bin/{pip,idle,pydoc}* \
+        "$pkg"/python/Lib/{test,idlelib,turtledemo,ensurepip} "$pkg"/python/Lib/site-packages/pip* \
+        "$pkg"/python/Scripts "$pkg"/python/include "$pkg"/python/share
+    # lib/, not next to the start script: on Linux and macOS that is named freerdp-tk too
+    mkdir -p "$pkg/lib/freerdp-tk" "$pkg/licenses/$py" "$pkg/licenses/freerdp_tk"
+    cp -a "$tk/src/freerdp_tk" "$pkg/lib/freerdp-tk/"
+    find "$pkg/lib/freerdp-tk" -name __pycache__ -prune -exec rm -rf {} +
     cp "$tk/LICENSE" "$pkg/licenses/freerdp_tk/"
     find "$src" -maxdepth 3 -name LICENSE.txt -exec cp {} "$pkg/licenses/$py/" \;
 
@@ -35,7 +39,7 @@ add_launcher() {
             'rem Opens freerdp-tk, the connection window, with this folder'"'"'s FreeRDP' \
             'rem client and Python.' \
             'set "PATH=%~dp0;%PATH%"' \
-            'set "PYTHONPATH=%~dp0freerdp-tk"' \
+            'set "PYTHONPATH=%~dp0lib\freerdp-tk"' \
             'start "" "%~dp0python\pythonw.exe" -s -m freerdp_tk %*' > "$pkg/freerdp-tk.cmd"
         printf '%s\r\n' \
             "FreeRDP ${VERSION[freerdp]} for $label $arch, from rdp-release-kit" \
@@ -51,7 +55,7 @@ add_launcher() {
 # Opens freerdp-tk, the connection window, with this folder's FreeRDP client
 # and Python.
 here=$(cd "$(dirname "$0")" && pwd)
-PATH=$here/bin:$PATH PYTHONPATH=$here/freerdp-tk exec "$here/python/bin/python3" -s -m freerdp_tk "$@"
+PATH=$here/bin:$PATH PYTHONPATH=$here/lib/freerdp-tk exec "$here/python/bin/python3" -s -m freerdp_tk "$@"
 EOF
         chmod +x "$pkg/freerdp-tk"
         cat > "$pkg/README.txt" << EOF
@@ -74,6 +78,6 @@ EOF
 # and has what freerdp-tk needs: Tk, and freerdp-tk itself importable
 check_launcher() {
     local pkg=$1
-    PYTHONPATH=$pkg/freerdp-tk "$pkg/python/bin/python3" -s -c \
+    PYTHONPATH=$pkg/lib/freerdp-tk "$pkg/python/bin/python3" -s -c \
         'import _tkinter, tkinter, freerdp_tk.app; print("launcher: Python", __import__("sys").version.split()[0], "with Tk", _tkinter.TK_VERSION)'
 }
