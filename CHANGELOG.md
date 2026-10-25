@@ -15,6 +15,10 @@ toolchain) gets an entry here in the same commit.
 
 **Releases: rolling, by date**
 
+- Web client: the freerdp-web page 20261025.2 (`c1982be`). The page's code is the same
+  as 20261025.1's; the release is the first one published the new way (its tag publishes
+  nothing; the site goes out by hand with this kit's client of that page, after a login
+  from the files going live).
 - **FreeRDP `release-20261025.1`** (`d708a57aa`), the first release picked
   under the fork's new branch rule: integration-latest rebuilt on FreeRDP
   master `b2403bb99` (2026-10-23, 96 commits past the 20261021.1 base),
