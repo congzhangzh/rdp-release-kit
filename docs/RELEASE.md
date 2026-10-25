@@ -12,7 +12,7 @@ verify them; they never compile.
 | `sdl-freerdp`, Linux x86_64 / aarch64, with freerdp-tk and its Python | our FreeRDP preview, the web client's (FreeRDP master + open pull requests, frozen on a fork branch); freerdp-tk by its release; python-build-standalone release | preview | `<YYYYMMDD>.<N>` |
 | `sdl-freerdp.exe`, Windows x86_64 / ARM64, with freerdp-tk and its Python | the same | preview | `<YYYYMMDD>.<N>` |
 | xrdp + xorgxrdp, `.deb` / `.rpm` for every release in `distros.list`, x86_64 and ARM64 | xrdp, xorgxrdp signed release tags | stable | `<YYYYMMDD>.<N>` |
-| Web client (WebAssembly) + the freerdp-web page | FreeRDP master + open pull requests, frozen on a fork branch; the page by a freerdp-web release (`vYYYYMMDD.N`, earlier `vX.Y.Z`) | preview | `web-<YYYYMMDD>.<N>-<kit commit, 12>` on every push to main that changes a build; also inside every release |
+| Web client (WebAssembly) + the freerdp-web page | FreeRDP master + open pull requests, frozen on a fork branch; the page by a freerdp-web release (`YYYYMMDD.N`, earlier `vYYYYMMDD.N`, `vX.Y.Z`) | preview | `web-<YYYYMMDD>.<N>-<kit commit, 12>` on every push to main that changes a build; also inside every release |
 | xrdp preview packages: Wayland sessions, AV1, pacing | a frozen xrdp development commit + xorgxrdp devel | preview | `xrdp-preview-<YYYYMMDD>.<N>-<kit commit, 12>` |
 | Demo videos: Xfce, GNOME, and GNOME and KDE through the xrdp preview | recorded by `test/record-demos.sh` with that build's web client and xrdp preview (the `demo` workflow, called by the kit's run; every release carries the videos and waits for them) | preview | `demo-<YYYYMMDD>.<N>-<kit commit, 12>`; freerdp-web's splash takes the newest |
 
@@ -36,11 +36,12 @@ once and never replaced ([Frozen releases](#frozen-releases)).
   `name short-commit git+url full-commit` for a git source. Every build
   reads its sources from here and nowhere else.
 - freerdp-web is pinned only by its GitHub point releases, as a whole:
-  the version column is the release (`0.4.12`), the commit is the one its
-  tag `v0.4.12` points to (`build/check-release-pins.sh`, in CI), and
+  the version column is the release (`20261025.1`), the commit is the one its
+  tag `20261025.1` points to (`build/check-release-pins.sh`, in CI), and
   `check-upstream.sh` watches its tags like any upstream. Its GitHub
-  Pages are freerdp-web's own: it publishes them over the kit's newest
-  tested client whenever it likes, and never waits for the kit.
+  Pages are freerdp-web's own: a tag publishes nothing; freerdp-web publishes
+  a tag by hand once the kit has built and tested that page (client "exact"),
+  after a login from the very files going live (its `login` job).
 - [`signed.lock`](../signed.lock) and [`keys/`](../keys): the release key
   each signed tarball must verify against.
 - [`distros.list`](../distros.list): the distribution releases to package
@@ -96,12 +97,14 @@ upstream tag / frozen branch
   nothing bumps itself, and nothing waits longer than two weeks (see
   [Keeping pins fresh](#keeping-pins-fresh)).
 - **The web client**: two projects, each at its own speed. freerdp-web
-  makes point releases (`v20261021.1`; before that `v0.4.12`) and publishes its Pages itself: its
-  page over the kit's newest tested client (its `kit-release.sh` finds
-  it), at any time. The kit pins a freerdp-web release when one comes out
-  (the upstream check opens the issue), tests the client with it, and
-  makes `web-<YYYYMMDD>.<N>-<kit commit>`; the kit's release carries the
-  client and that freerdp-web release as one whole.
+  makes releases (tags `20261025.1`, no prefix; earlier `v20261021.1`, `v0.4.12`). The kit pins
+  a release when one comes out (the upstream check opens the issue), tests the client with it,
+  and makes `web-<YYYYMMDD>.<N>-<kit commit>`; the kit's release carries the client and that
+  freerdp-web release as one whole. freerdp-web then publishes its Pages from the tag, by hand,
+  with that very client (`kit-release.sh` finds it), after its own login from the files going
+  live. So the site only gets a page and a client the kit tested together, and a kit change
+  may break the page: the kit's test fails, nothing reaches the site, and the page is fixed
+  and released after (2026-10-25: the live site never breaks; the kit may).
 - **Pages**: only freerdp-web has them; the kit publishes none (its old
   address kept the redirect GitHub last deployed).
 - **Releases are automatic, and frozen**: every push to main that changes
