@@ -107,6 +107,64 @@ upstream tag / frozen branch
   and released after (2026-10-25: the live site never breaks; the kit may).
 - **Pages**: only freerdp-web has them; the kit publishes none (its old
   address kept the redirect GitHub last deployed).
+
+### Our own releases of an upstream: picked from the fork
+
+Since 2026-10-25 every client (Linux, Windows, macOS, web) builds FreeRDP
+from our release, not from an upstream one: the kit ships what we chose, on
+our schedule. The branches on our fork have one role each:
+
+```
+pull-request branches ─┐  one topic each, on upstream master (the PR targets it)
+feature branches ──────┤
+                       ▼
+integration-latest        rebuilt at will: its base + every open part
+                       │  ripe = it passed the kit's tests
+                       ▼  pick
+release-<YYYYMMDD>.<N>    frozen, on the fork; never committed to, moved or deleted
+                       │
+                       ▼  pin
+sources.lock: freerdp <YYYYMMDD>.<N> <commit>
+```
+
+1. **Rebuild the integration** on its base. The base is a choice: upstream
+   master (the newest fixes, our merged pull requests) or an upstream
+   release tag (steadier ground), whichever the release needs. Parts that
+   upstream merged drop out.
+2. **Test it here**, from that very tree, before it is picked:
+   `SRC_freerdp=<the integration checkout> ./build.sh` (and
+   `./build-windows.sh`, `./build-wasm.sh`), then `test/xrdp-session.sh`
+   (the stable xrdp and `--preview`) and `test/wasm-session.sh` (once more
+   with `WASM_ENGINE=jspi`).
+3. **Pick the release**: a branch `release-<YYYYMMDD>.<N>` on that commit,
+   pushed to the fork (the integration first, by force-with-lease). `<N>`
+   counts that day's picks from 1.
+4. **Pin it**: the `freerdp` line names `<YYYYMMDD>.<N>` and the commit;
+   `pins.notes` says what it carries and lists the open pull requests,
+   which `check-upstream.sh` then watches. CI tests it again on every
+   platform.
+
+A fix never goes into a picked release: it goes to its pull-request
+branch, the integration is rebuilt, and a new release is picked. Like a
+Fedora compose, and unlike a Debian or Ubuntu release, a picked release is
+never patched, so every pin stays reproducible. Picks from before this
+rule keep their names (`wasm-preview-<YYYYMMDD>.<N>-<commit>`).
+
+### A freerdp-web release, end to end
+
+The kit and the page need each other, so they release in a fixed order.
+The site only ever gets a page and a client that the kit tested together:
+
+| Step | Where | What |
+|---|---|---|
+| 1 | freerdp-web | the page change on main; the site is untouched |
+| 2 | freerdp-web | the release: the version in the manifest, CHANGELOG, release notes, the tag `<YYYYMMDD>.<N>`, a GitHub Release. A tag publishes nothing |
+| 3 | the kit | pin it (`freerdp_web`), with any kit change it needs; push |
+| 4 | the kit | CI builds the client with that page, logs in, and publishes `web-<YYYYMMDD>.<N>-<kit commit>`, titled with the page commit |
+| 5 | freerdp-web | `gh workflow run pages.yml --ref <tag> -f publish=true`: the kit's client of that very page ("exact"), a login from exactly the files going live (Asyncify and JSPI), then the deploy, then a login from the live site |
+
+A kit change may break the page: then step 4 fails, nothing new reaches
+the site, and the page is fixed and released after it.
 - **Releases are automatic, and frozen**: every push to main that changes
   a build and passes publishes one; a pull request only builds and tests.
   What reaches people is still gated: the release holds only what every
