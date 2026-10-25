@@ -197,6 +197,11 @@ jobs:
         # architecture with that architecture's client
         runner: [ubuntu-24.04, ubuntu-24.04-arm]
     runs-on: ${{ matrix.runner }}
+    # ARM64 may fail until the preview's source builds there: xrdp's
+    # development branch builds with -Werror, and libxrdp/xrdp_caps.c tests
+    # a char for < 0, never true where char is unsigned (ARM64). Its
+    # packages publish once it builds; x86_64 doesn't wait for it.
+    continue-on-error: ${{ matrix.runner == 'ubuntu-24.04-arm' }}
     steps:
       - uses: actions/checkout@v7
         with:
