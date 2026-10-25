@@ -15,6 +15,23 @@ toolchain) gets an entry here in the same commit.
 
 **Releases: rolling, by date**
 
+- **Every client builds our FreeRDP preview** (`freerdp` 20261021.1,
+  `79f10e8ae`, fork branch `wasm-preview-20261021.1-79f10e8`): the Linux,
+  Windows and macOS clients leave FreeRDP 3.32.2 for the commit the web
+  client already built, FreeRDP master 29cb8ef1b plus four open pull
+  requests whose code compiles under Emscripten only. The release follows
+  our own preview, not FreeRDP's release schedule. What the native clients
+  gain: the Opus microphone fix (#13810). 3.32.2 handed `opus_encode()`
+  whatever the capture device delivered, and Opus takes whole packets only
+  (2.5 to 60 ms), so audin dropped the connection with
+  `ERROR_INTERNAL_ERROR` once a server picked Opus for the microphone (the
+  xrdp preview with `MicrophoneOpus=true`). One pin, `freerdp`, for all four
+  clients: `freerdp_preview` goes, `SRC_freerdp` now overrides the web
+  build too, and `check-upstream.sh` no longer compares FreeRDP with its
+  releases. Archives are named `sdl3-freerdp-20261021.1-<os>-<arch>`.
+- Web client: the freerdp-web page 20261025.1 (`1167155`), which loads the
+  JSPI build where `WebAssembly.Suspending` exists and sends pointer events
+  under Capture, so the pointer moves with SDL 3.4.
 - **Web client, two builds**: the same objects linked twice, with Asyncify
   (`web/`, 10.6 MB, every browser with WebAssembly) and with JSPI
   (`web/jspi/`, 6.9 MB, Chrome 137+: the browser suspends the code, so

@@ -119,8 +119,8 @@ lto() {
 }
 check "build.sh: LTO=off with a local FreeRDP is accepted" 'lto LTO=off SRC_freerdp="$src"'
 check "build.sh: LTO=off without a local FreeRDP is refused" '! lto LTO=off'
-check "build.sh: LTO=off with only a local freerdp_preview is refused" \
-    '! lto LTO=off SRC_freerdp_preview="$src"'
+check "build.sh: LTO=off with only another local source (sdl3) is refused" \
+    '! lto LTO=off SRC_sdl3="$src"'
 check "build.sh: LTO=on is refused (off is the only setting)" '! lto LTO=on SRC_freerdp="$src"'
 check "build.sh: CI=true refuses an override" '! lto CI=true SRC_freerdp="$src"'
 

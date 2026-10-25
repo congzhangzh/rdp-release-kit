@@ -9,8 +9,8 @@ verify them; they never compile.
 
 | Product | Source | Channel | Release name |
 |---|---|---|---|
-| `sdl-freerdp`, Linux x86_64 / aarch64, with freerdp-tk and its Python | FreeRDP release tag; freerdp-tk by its release; python-build-standalone release | stable | `<YYYYMMDD>.<N>` |
-| `sdl-freerdp.exe`, Windows x86_64 / ARM64, with freerdp-tk and its Python | the same | stable | `<YYYYMMDD>.<N>` |
+| `sdl-freerdp`, Linux x86_64 / aarch64, with freerdp-tk and its Python | our FreeRDP preview, the web client's (FreeRDP master + open pull requests, frozen on a fork branch); freerdp-tk by its release; python-build-standalone release | preview | `<YYYYMMDD>.<N>` |
+| `sdl-freerdp.exe`, Windows x86_64 / ARM64, with freerdp-tk and its Python | the same | preview | `<YYYYMMDD>.<N>` |
 | xrdp + xorgxrdp, `.deb` / `.rpm` for every release in `distros.list`, x86_64 and ARM64 | xrdp, xorgxrdp signed release tags | stable | `<YYYYMMDD>.<N>` |
 | Web client (WebAssembly) + the freerdp-web page | FreeRDP master + open pull requests, frozen on a fork branch; the page by a freerdp-web release (`vYYYYMMDD.N`, earlier `vX.Y.Z`) | preview | `web-<YYYYMMDD>.<N>-<kit commit, 12>` on every push to main that changes a build; also inside every release |
 | xrdp preview packages: Wayland sessions, AV1, pacing | a frozen xrdp development commit + xorgxrdp devel | preview | `xrdp-preview-<YYYYMMDD>.<N>-<kit commit, 12>` |

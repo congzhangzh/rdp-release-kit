@@ -84,7 +84,7 @@ cmake_dep sdl3_ttf "${CROSS[@]}" -DSDLTTF_VENDORED=OFF -DSDLTTF_HARFBUZZ=OFF \
 # the FindZLIB of Debian 13's CMake (3.31) does not look for. Without the
 # deprecated 3.x API, as upstream's scripts/mingw.sh: on Windows its
 # freerdp_keyboard_init_ex passes DWORD* as UINT32* and does not compile
-# with clang (3.32.2, still on master).
+# with clang (3.32.2, and master as of the preview).
 # A local FreeRDP (SRC_freerdp) keeps its build tree, so Ninja rebuilds
 # only what changed; its link reuses the ThinLTO cache (clang's IPO is
 # ThinLTO), or LTO=off leaves link-time optimisation out.

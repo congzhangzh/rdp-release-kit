@@ -563,10 +563,11 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           freerdp=$(awk '$1 == "freerdp" { print $2 }' sources.lock)
+          freerdp_commit=$(awk '$1 == "freerdp" { print $4 }' sources.lock)
           xrdp=$(awk '$1 == "xrdp" { print $2 }' sources.lock)
-          title="FreeRDP $freerdp clients, xrdp $xrdp packages (kit ${GITHUB_SHA:0:12})"
+          title="FreeRDP preview $freerdp clients, xrdp $xrdp packages (kit ${GITHUB_SHA:0:12})"
           tag=$(build/prerelease-tag.sh release "$title")
-          summary="Rolling release $tag of rdp-release-kit, built and tested from $GITHUB_SHA: FreeRDP's SDL3 client for Linux, Windows and macOS, each with freerdp-tk (a window to save and open connections) and the Python that runs it, and xrdp packages for Debian, Ubuntu and Fedora, on x86_64 and ARM64. Published once, never replaced.
+          summary="Rolling release $tag of rdp-release-kit, built and tested from $GITHUB_SHA: FreeRDP's SDL3 client for Linux, Windows and macOS, built from our preview of FreeRDP master (preview $freerdp, commit ${freerdp_commit:0:12}, with the fixes upstream has merged since its last release, such as the Opus microphone), each with freerdp-tk (a window to save and open connections) and the Python that runs it, and xrdp packages for Debian, Ubuntu and Fedora, on x86_64 and ARM64. Published once, never replaced.
 
           ## Download and run
 

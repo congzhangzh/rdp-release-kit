@@ -5,7 +5,13 @@
 # last column is then the commit id. Bump a line, then rebuild.
 #
 # name      version  url                                                                                      sha256
-freerdp     3.32.2   https://github.com/FreeRDP/FreeRDP/releases/download/3.32.2/freerdp-3.32.2.tar.gz            e95a505c0057e4d06a3b120477c421028769deba4db9c639ef3465d050f0955c
+# FreeRDP, for every client (Linux, Windows, macOS, web): our preview, not an
+# upstream release. FreeRDP master plus open pull requests, frozen on a fork
+# branch named wasm-preview-<preview number>-<commit>: sound (#13732),
+# clipboard (#13733), microphone (#13811), H.264 through WebCodecs (#13812),
+# whose code compiles under Emscripten only; AV1 (#13731) and the Opus
+# microphone fix (#13810, which 3.32.2 lacks) are in master since 2026-10-21
+freerdp     20261021.1 git+https://github.com/congzhangzh/FreeRDP.git                                        79f10e8ae52c60060440513fd35b972628aef0ec
 sdl3        3.4.18   https://github.com/libsdl-org/SDL/releases/download/release-3.4.18/SDL3-3.4.18.tar.gz        9c75cf16330322c217dedd2e0609f1124f1b54b8633e763467b4684d0f4334a3
 sdl3_ttf    3.2.2    https://github.com/libsdl-org/SDL_ttf/releases/download/release-3.2.2/SDL3_ttf-3.2.2.tar.gz   63547d58d0185c833213885b635a2c0548201cc8f301e6587c0be1a67e1e045d
 freetype    2.15.0   https://download.savannah.gnu.org/releases/freetype/freetype-2.15.0.tar.xz                   93cd47eb719c325107f2d3cf087d06299e944c3b48a40b55537302304dea1dd5
@@ -38,17 +44,12 @@ python_windows_x86_64 3.13.17+20261021 https://github.com/astral-sh/python-build
 python_windows_aarch64 3.13.17+20261021 https://github.com/astral-sh/python-build-standalone/releases/download/20261021/cpython-3.13.17+20261021-aarch64-pc-windows-msvc-install_only_stripped.tar.gz 9287d32654828930872c8225f53618dac9b06dd3af5d4c3e9ab1c576e0741c96
 python_macos_arm64    3.13.17+20261021 https://github.com/astral-sh/python-build-standalone/releases/download/20261021/cpython-3.13.17+20261021-aarch64-apple-darwin-install_only_stripped.tar.gz 8dc60610a82f1e73be7faf964383e02520f95f6e39592a5c37c3809f5a7b798e
 python_macos_x86_64   3.13.17+20261021 https://github.com/astral-sh/python-build-standalone/releases/download/20261021/cpython-3.13.17+20261021-x86_64-apple-darwin-install_only_stripped.tar.gz ce9c748c8f7525c0052247edb2435fdb1cac89c77e687e0e199eaf2b827668c2
-# WASM client (preview): FreeRDP master plus open pull requests, frozen on a
-# fork branch named wasm-preview-<preview number>-<commit>: sound (#13732),
-# clipboard (#13733), microphone (#13811), H.264 (#13812); AV1 (#13731) and
-# the Opus microphone fix (#13810) are in master since 2026-10-21;
-# the web page with its passkey vault, and SDL for the Emscripten build:
+# The web page with its passkey vault, and SDL for the Emscripten build:
 # 3.4.18 plus one fix, on a fork branch named emscripten-timer-3.4: its
 # timers are safe to use from any thread (with threads, a timer removed from
 # another thread fired through a freed entry, "table index is out of bounds"
 # in SDL_Emscripten_TimerHelper); 3.4.18 already ignores FS.mkdir errors for
 # /tmp/filedrop, which 3.2.30 needed backported
-freerdp_preview 20261021.1 git+https://github.com/congzhangzh/FreeRDP.git                                    79f10e8ae52c60060440513fd35b972628aef0ec
 sdl3_wasm   3.4.18+timer git+https://github.com/congzhangzh/SDL.git                                      1d615c14f95a3389bf0026e719144ad51378e40c
 freerdp_web 20261025.1 git+https://github.com/congzhangzh/freerdp-web.git                                     11671559a1e276050ce7f723158aaae0ed822023
 xrdp_preview     20261025.1 git+https://github.com/congzhangzh/xrdp.git                                          94f7cf46f6bb5ca615cbfe9332c9ab9589eac7fb

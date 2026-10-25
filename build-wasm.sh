@@ -6,7 +6,7 @@
 #
 # PAGE_SRC=<dir> uses a local freerdp-web checkout for the page (PAGE_REV=<commit>
 # names it in the MANIFEST; freerdp-web's own Pages build does that) (not for
-# releases); SRC_freerdp_preview=<dir> does the same for FreeRDP (see
+# releases); SRC_freerdp=<dir> does the same for FreeRDP (see
 # build/overrides.sh). The work tree is kept in ~/.cache/rdp-release-kit/wasm
 # (WORK=<dir> for another one), compiled objects in its ccache directory.
 set -euo pipefail

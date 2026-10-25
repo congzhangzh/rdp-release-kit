@@ -12,7 +12,7 @@
 #
 # PAGE_SRC=<dir> takes the page from a local checkout instead of the pinned
 # commit, while the page is being changed (not for releases); a local
-# FreeRDP comes the same way, as SRC_freerdp_preview (build/overrides.sh).
+# FreeRDP comes the same way, as SRC_freerdp (build/overrides.sh).
 set -Eeuo pipefail
 
 KIT=$1
@@ -76,13 +76,13 @@ fi
 # defines createFreeRDP(), and each call is a new runtime (memory, threads,
 # C globals), so the page reconnects with a fresh client instead of a reload
 # (freerdp-web 20261024.1 and later; older pages expect the global Module)
-echo "== freerdp ${VERSION[freerdp_preview]} (preview)"
-src=$(unpack freerdp_preview)
-overridden freerdp_preview || rm -rf "$WORK/build/freerdp"
+echo "== freerdp ${VERSION[freerdp]} (preview)"
+src=$(unpack freerdp)
+overridden freerdp || rm -rf "$WORK/build/freerdp"
 # a local FreeRDP keeps ThinLTO's code generation between links: a relink
 # redoes only the changed modules
 DEV=()
-if overridden freerdp_preview; then
+if overridden freerdp; then
     DEV=(-DCMAKE_EXE_LINKER_FLAGS_RELEASE="-Wl,--thinlto-cache-dir=$WORK/thinlto")
 fi
 # freerdp_link <engine's link flags>: the client linked for one way of
@@ -132,7 +132,7 @@ else
     page=$(unpack freerdp_web)
     page_rev=${SHA[freerdp_web]}
 fi
-NAME=freerdp-web-${VERSION[freerdp_preview]}${OVERRIDES:+-local}
+NAME=freerdp-web-${VERSION[freerdp]}${OVERRIDES:+-local}
 rm -rf "$OUT/web" "$OUT/$NAME.zip"
 mkdir -p "$OUT/web/licenses"
 cp -r "$page/web/." "$OUT/web/"
@@ -140,7 +140,7 @@ rm -rf "$OUT/web/tests"
 cp "$WORK/client/sdl-freerdp.js" "$WORK/client/sdl-freerdp.wasm" "$OUT/web/"
 mkdir -p "$OUT/web/jspi"
 cp "$WORK/client/jspi/sdl-freerdp.js" "$WORK/client/jspi/sdl-freerdp.wasm" "$OUT/web/jspi/"
-licenses "$OUT/web/licenses" freerdp_preview sdl3_wasm sdl3_ttf freetype libressl opus dav1d \
+licenses "$OUT/web/licenses" freerdp sdl3_wasm sdl3_ttf freetype libressl opus dav1d \
     zlib jansson
 {
     echo "FreeRDP web client (preview), built $(date -u +%F) with $(emcc --version | head -1)"
@@ -148,7 +148,7 @@ licenses "$OUT/web/licenses" freerdp_preview sdl3_wasm sdl3_ttf freetype libress
     override_manifest
     echo
     echo "sources (sources.lock):"
-    for name in freerdp_preview sdl3_wasm sdl3_ttf freetype libressl opus dav1d zlib jansson; do
+    for name in freerdp sdl3_wasm sdl3_ttf freetype libressl opus dav1d zlib jansson; do
         printf '  %-16s %-9s %s\n' "$name" "${VERSION[$name]}" "${SHA[$name]}"
     done
 } > "$OUT/web/MANIFEST"

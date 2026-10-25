@@ -5,7 +5,8 @@
 #   ./check-upstream.sh          one line per source: name, pinned, newest, status
 #
 # Prints "update" where upstream is ahead; exits 0 either way (a person
-# decides what to bump). Our own preview sources are not checked;
+# decides what to bump). Our own preview sources are not checked (FreeRDP
+# among them: every client builds our frozen preview of its master);
 # freerdp-web and freerdp-tk are, because the kit takes them by their releases.
 set -euo pipefail
 cd "$(dirname "$0")"
@@ -14,7 +15,6 @@ cd "$(dirname "$0")"
 # Lines follow the stable series the kit pins on purpose: OpenSSL's 3.5
 # LTS, SDL's stable (even) minor releases, SDL 3.2 for the web client.
 WATCH=(
-	"freerdp     https://github.com/FreeRDP/FreeRDP.git           ^[0-9]+\.[0-9]+\.[0-9]+$             ''"
 	"sdl3        https://github.com/libsdl-org/SDL.git            ^release-3\.[0-9]*[02468]\.[0-9]+$   release-"
 	"sdl3_wasm   https://github.com/libsdl-org/SDL.git            ^release-3\.2\.[0-9]+$               release-"
 	"sdl3_ttf    https://github.com/libsdl-org/SDL_ttf.git        ^release-3\.[0-9]*[02468]\.[0-9]+$   release-"
