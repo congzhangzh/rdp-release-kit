@@ -6,7 +6,7 @@
 #
 # Prints "update" where upstream is ahead; exits 0 either way (a person
 # decides what to bump). Our own preview sources are not checked;
-# freerdp-web is, because the kit takes it by its releases.
+# freerdp-web and freerdp-tk are, because the kit takes them by their releases.
 set -euo pipefail
 cd "$(dirname "$0")"
 
@@ -28,7 +28,9 @@ WATCH=(
 	"xorgxrdp    https://github.com/neutrinolabs/xorgxrdp.git     ^v[0-9]+\.[0-9]+\.[0-9]+(\.[0-9]+)?$  v"
 	"libressl    https://github.com/libressl/portable.git         ^v[0-9]+\.[0-9]+\.[0-9]+$             v"
 	"llvm_mingw  https://github.com/mstorsjo/llvm-mingw.git       ^[0-9]{8}$                           ''"
-	"freerdp_web https://github.com/congzhangzh/freerdp-web.git   ^v[0-9]+\.[0-9]+(\.[0-9]+)?$         v"
+	# ours: release tags have no prefix since 2026-10-25, v<version> before
+	"freerdp_web https://github.com/congzhangzh/freerdp-web.git   ^v?[0-9]+\.[0-9]+(\.[0-9]+)?$        v"
+	"freerdp_tk  https://github.com/congzhangzh/freerdp-tk.git    ^v?[0-9]+\.[0-9]+(\.[0-9]+)?$        v"
 	"pipewire_xrdp https://github.com/neutrinolabs/pipewire-module-xrdp.git ^v[0-9]+\.[0-9]+(\.[0-9]+)?$ v"
 )
 

@@ -28,6 +28,11 @@ toolchain) gets an entry here in the same commit.
   (Windows: `freerdp-tk.cmd`), which puts the archive's own `sdl-freerdp`
   first. No Python or Tk needed on the machine. The smoke test loads the
   bundled Python, Tk and freerdp-tk on every distribution it runs on.
+- No prefix on any release tag, ours included: freerdp-web and freerdp-tk
+  tag their next releases `<YYYYMMDD>.<N>` / `0.2.0`, not `v…`.
+  `check-release-pins.sh` takes the bare tag or the older `v` one, and
+  checks freerdp-tk's pin too; `check-upstream.sh` watches both repos
+  either way.
 - xrdp packages and the xrdp preview for ARM64 too (`ubuntu-24.04-arm`
   runners, each logged in to with the ARM64 client); the x86_64 artifacts
   keep their names.
