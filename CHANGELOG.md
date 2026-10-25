@@ -15,6 +15,18 @@ toolchain) gets an entry here in the same commit.
 
 **Releases: rolling, by date**
 
+- LibreSSL 4.4.0 (Windows and web clients; issue #12): it removes the weak
+  `emSign ECC Root CA - G3` from its `cert.pem`, fixes the build with
+  llvm-mingw's own `endian.h`, and fixes Windows' `poll()`, `connect()` and
+  `struct timeval` (DTLS timeouts). Hash from OpenBSD's `SHA256`, the same
+  as the GitHub release asset's. FreeRDP's `scripts/mingw.sh` still pins
+  4.3.3, so the kit no longer follows it here.
+- **The GNOME demo records again** (failed since 9e3f5e3): unloading
+  AppArmor took docker's `docker-default` profile with it, and dockerd loads
+  it only when it starts, so runc refused the RUN steps of the GNOME
+  image's build (`apt-get … exit code: 1`, no apt output). The demo job
+  restarts docker after the teardown.
+
 - **Every release carries its demo videos**: the kit's run records them
   (`demo.yml`, now a workflow the kit calls) once its web client and xrdp
   preview are published, and the release waits for them. The `demo-*`

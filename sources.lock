@@ -20,11 +20,12 @@ x264        b35605a  git+https://code.videolan.org/videolan/x264.git            
 # sound of an xrdp session through PipeWire, built for Fedora (Debian and
 # Ubuntu package it): the release v0.2, by its tag's commit
 pipewire_xrdp 0.2    git+https://github.com/neutrinolabs/pipewire-module-xrdp.git                             748f562d616590c678d5b06722f3fe5ae9707465
-# Windows client: LibreSSL as FreeRDP's own scripts/mingw.sh pins it (same
-# hash); the llvm-mingw toolchain publishes no checksums, so its hash is
+# Windows and web clients: LibreSSL by OpenBSD's published SHA256 (FreeRDP's
+# own scripts/mingw.sh still pins 4.3.3; 4.4.0 removes a weak CA root and
+# fixes the build with llvm-mingw's own endian.h); the llvm-mingw toolchain publishes no checksums, so its hash is
 # the one of the copy downloaded on 2026-10-21 (trust on first use; it
 # equals the digest GitHub shows for the release asset)
-libressl    4.3.3    https://ftp.openbsd.org/pub/OpenBSD/LibreSSL/libressl-4.3.3.tar.gz                         ff97c432457f349e6ba3d416ab903bc7468f1436f0f32efe5fff808de292c7b8
+libressl    4.4.0    https://ftp.openbsd.org/pub/OpenBSD/LibreSSL/libressl-4.4.0.tar.gz                         7d02522ad5070b9adb32eb253ecabce181184a3750cf65abac0675ee908687c1
 llvm_mingw  20261020 https://github.com/mstorsjo/llvm-mingw/releases/download/20261020/llvm-mingw-20261020-ucrt-ubuntu-22.04-x86_64.tar.xz 55064b60b991a1e1e8090b8c2f84e82b22cfe5903d12c159d65064cf5e8ae335
 # The connection window shipped with the Linux, Windows and macOS clients:
 # freerdp-tk (Tkinter) by its release tag's commit, and the standalone
