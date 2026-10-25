@@ -26,6 +26,28 @@ verify a file's origin.
 | FreeRDP web client (WebAssembly) with the [freerdp-web](https://github.com/congzhangzh/freerdp-web) page | preview: FreeRDP master + open pull requests (see the pins below) | a current browser (tested: Chrome); served from GitHub Pages |
 | xrdp + xorgxrdp native packages (.deb / .rpm) | stable | x86_64 and ARM64: Debian testing, 13, 12; Ubuntu 26.10, 26.04, 24.04; Fedora 45, 44, 43 |
 
+### What does not run, and why
+
+Each limit below is a library or a feature that a platform lacks, not a
+choice; "tested" means CI runs it there, anything else is what the builds
+are made for.
+
+| Where | Not supported | Why |
+|---|---|---|
+| Linux, older releases | RHEL/CentOS 8, Debian 11, Ubuntu 20.04 and older | Their glibc is older than 2.34. The client is built on AlmaLinux 9 against glibc 2.34's symbols (so it runs on everything newer), and an older loader refuses it: `version GLIBC_2.34 not found`. |
+| Linux, musl | Alpine and other musl-based distributions | No glibc at all; the client is a glibc program. |
+| Linux, minimal systems | a server or container image without sound libraries | The client links PulseAudio's `libpulse.so.0` (PipeWire provides it too): install `libpulse0` / `pulseaudio-libs`. Every desktop has it. |
+| Linux, no display | freerdp-tk's window | Tk draws through X11 (on a Wayland desktop through XWayland), so it needs a desktop session. The client itself still runs from a terminal with `/v:`. |
+| Linux on Arch, ARM64 | not tested | Arch publishes x86_64 images only, so the smoke test runs Arch on x86_64 alone. |
+| Windows 7, 8, 8.1; 32-bit x86 | not supported; not built | The client uses the Universal C Runtime that is part of Windows 10 and later (llvm-mingw's UCRT target), and the bundled CPython 3.13 is built for Windows 10 and later. 32-bit Windows is not built. |
+| macOS | coming (arm64, x86_64) | The build is being added; nothing is published for macOS yet. |
+| xrdp packages | RHEL/Alma/Rocky, openSUSE; releases older than those listed | Not built (the kit's lists, `distros.list` and `deps/`, cover Debian, Ubuntu and Fedora); EPEL has an xrdp for RHEL's family. xorgxrdp is an Xorg driver that must match its Xorg server exactly, so each release gets its own build. |
+| xrdp preview: GNOME | Debian 12 | GNOME's backend uses Mutter's remote desktop API of GNOME 46 and newer; Debian 12 has GNOME 43. |
+| xrdp preview: sway | Debian 13, Ubuntu 24.04 (Xorg sessions only) | Sway sessions need sway 1.11 (wlroots 0.19) for the `ext-image-copy-capture` protocols; Debian 13 has sway 1.10, Ubuntu 24.04 sway 1.9. |
+| xrdp preview: AV1 | a release without libaom 3.0 | Its preview is built without AV1 (`no-av1`); clients get H.264. |
+| xrdp preview on ARM64 | for now | xrdp's development branch builds with `-Werror`, and `libxrdp/xrdp_caps.c` tests a `char` for `< 0`, which is never true where `char` is unsigned, as on ARM64. The stable packages build there. |
+| Web client | browsers other than Chrome: partly | What each browser lacks and what that turns off (video codecs, the passkey vault, the clipboard): [freerdp-web's docs/browsers.md](https://github.com/congzhangzh/freerdp-web/blob/main/docs/browsers.md). |
+
 Every source is pinned in [`sources.lock`](sources.lock) with its SHA-256
 and is built from source. FreeRDP's hash is the one upstream publishes with
 its release.
