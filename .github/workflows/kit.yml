@@ -444,6 +444,8 @@ jobs:
       # gateway from the page's own rdp-gateway.sh, a login to xrdp
       - name: Log in from the browser
         run: test/wasm-session.sh dist/wasm/web dist/wasm/rdp-gateway.sh
+      - name: Log in from the browser, with the JSPI build
+        run: WASM_ENGINE=jspi test/wasm-session.sh dist/wasm/web dist/wasm/rdp-gateway.sh
 
       # freerdp-web publishes the page; it builds nothing. The tested client
       # goes to a pre-release here, web-<YYYYMMDD>.<N>-<kit commit>, with the

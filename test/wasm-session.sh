@@ -34,6 +34,9 @@
 # rootful one on a CI runner; SERVER_RUN_OPTS=<options> adds options to
 # their container (e.g. what an older podman's defaults need).
 #
+# WASM_ENGINE=jspi logs in with the page dir's jspi/ build (JSPI, Chrome
+# 137+) instead of its Asyncify one; output then in dist/test/wasm-jspi/.
+#
 # DEMO_VIDEO=<file.mp4> records a demo instead of the plain login: the server
 # gets a desktop (Xfce for xrdp) and test/wasm-demo.mjs plays a user's visit,
 # with a pointer, captions and the sound. Everything in it is synthetic: the
@@ -57,9 +60,23 @@ xrdp-gnome | xrdp-kde)
         { echo "SERVER=$SERVER needs podman (systemd without privileges)" >&2; exit 1; }
     PKGS=${3:-$KIT/dist/xrdp-preview/fedora-45} ;;
 esac
-OUT=$KIT/dist/test/wasm
+OUT=$KIT/dist/test/wasm${WASM_ENGINE:+-$WASM_ENGINE}
 NAME=kit-wasm-server
 rm -rf "$OUT"; mkdir -p "$OUT/ssh"
+# WASM_ENGINE=jspi: the client linked for JSPI (the page dir's jspi/) in place
+# of the Asyncify one, whichever the page itself loads
+case ${WASM_ENGINE:-asyncify} in
+asyncify) ;;
+jspi)
+    [ -z "${PAGE_URL:-}" ] || { echo "WASM_ENGINE=jspi needs a page dir, not PAGE_URL" >&2; exit 1; }
+    grep -q 'WebAssembly.Suspending' "$PAGE/jspi/sdl-freerdp.js" 2> /dev/null ||
+        { echo "no JSPI build in $PAGE/jspi" >&2; exit 1; }
+    cp -r "$PAGE/." "$OUT/page/"
+    cp "$PAGE/jspi/sdl-freerdp.js" "$PAGE/jspi/sdl-freerdp.wasm" "$OUT/page/"
+    PAGE=$OUT/page
+    echo "== client: the JSPI build" ;;
+*) echo "WASM_ENGINE: asyncify or jspi" >&2; exit 1 ;;
+esac
 ssh-keygen -q -t ed25519 -N '' -f "$OUT/ssh/key" -C wasm-session-test
 # -F none: the test's ssh ignores the user's ~/.ssh/config, so nothing of
 # the user's (agent or X11 forwarding, other keys, proxies, shared

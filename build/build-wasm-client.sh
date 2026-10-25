@@ -85,6 +85,9 @@ DEV=()
 if overridden freerdp_preview; then
     DEV=(-DCMAKE_EXE_LINKER_FLAGS_RELEASE="-Wl,--thinlto-cache-dir=$WORK/thinlto")
 fi
+# freerdp_link <engine's link flags>: the client linked for one way of
+# suspending WebAssembly (both are link options: the objects are the same)
+freerdp_link() {
 configure "$WORK/build/freerdp" \
     emcmake cmake -G Ninja -S "$src" -B "$WORK/build/freerdp" -DCMAKE_BUILD_TYPE=Release \
     -DCMAKE_PREFIX_PATH="$DEPS" -DCMAKE_FIND_ROOT_PATH="$DEPS" -DBUILD_SHARED_LIBS=OFF \
@@ -99,15 +102,26 @@ configure "$WORK/build/freerdp" \
     -DWITH_DSP_FFMPEG=OFF -DWITH_OPENH264=OFF -DCHANNEL_URBDRC=OFF -DCHANNEL_RDPECAM=OFF \
     -DWITH_SIMD=OFF -DWITH_MANPAGES=OFF -DWITH_TIMEZONE_ICU=OFF -DWITH_UNICODE_BUILTIN=ON \
     -DUSE_UNWIND=OFF -DWITH_OPUS=ON -DWITH_GFX_AV1=ON -DWITH_DAV1D=ON \
-    -DCMAKE_EXE_LINKER_FLAGS="-pthread -sASYNCIFY -sASYNCIFY_STACK_SIZE=131072 \
+    -DCMAKE_EXE_LINKER_FLAGS="-pthread $1 \
 -sALLOW_MEMORY_GROWTH=1 -sINITIAL_MEMORY=134217728 -sMAXIMUM_MEMORY=1073741824 \
 -sSTACK_SIZE=1048576 -sPTHREAD_POOL_SIZE=32 -sWEBSOCKET_SUBPROTOCOL=binary \
 -sENVIRONMENT=web,worker -sINVOKE_RUN=0 -sEXIT_RUNTIME=1 -sFORCE_FILESYSTEM=1 \
 -sMODULARIZE=1 -sEXPORT_NAME=createFreeRDP \
 -sEXPORTED_RUNTIME_METHODS=callMain,FS,ENV,ccall,HEAPU8 -sEXPORTED_FUNCTIONS=_main,_malloc,_free" \
-    "${DEV[@]}" > "$WORK/log/freerdp.log" 2>&1
+    "${DEV[@]}" >> "$WORK/log/freerdp.log" 2>&1
 grep -q -e "AV1 decoder: dav1d" -e "configuration kept" "$WORK/log/freerdp.log"
 cmake --build "$WORK/build/freerdp" --target sdl3-freerdp >> "$WORK/log/freerdp.log" 2>&1
+}
+# Asyncify, which every browser with WebAssembly runs, in dist/wasm/web; JSPI
+# (smaller and faster, no Asyncify rewrite, in Chrome 137+ for now) in its
+# jspi/ folder, linked from the same objects. The page picks one.
+: > "$WORK/log/freerdp.log"
+CLIENT_DIR=$WORK/build/freerdp/client/SDL/SDL3
+mkdir -p "$WORK/client/jspi"
+freerdp_link "-sJSPI"
+cp "$CLIENT_DIR/sdl-freerdp.js" "$CLIENT_DIR/sdl-freerdp.wasm" "$WORK/client/jspi/"
+freerdp_link "-sASYNCIFY -sASYNCIFY_STACK_SIZE=131072"
+cp "$CLIENT_DIR/sdl-freerdp.js" "$CLIENT_DIR/sdl-freerdp.wasm" "$WORK/client/"
 ccache_stats
 
 # --- the page: freerdp-web's web/ plus the client
@@ -123,8 +137,9 @@ rm -rf "$OUT/web" "$OUT/$NAME.zip"
 mkdir -p "$OUT/web/licenses"
 cp -r "$page/web/." "$OUT/web/"
 rm -rf "$OUT/web/tests"
-cp "$WORK/build/freerdp/client/SDL/SDL3/sdl-freerdp.js" \
-    "$WORK/build/freerdp/client/SDL/SDL3/sdl-freerdp.wasm" "$OUT/web/"
+cp "$WORK/client/sdl-freerdp.js" "$WORK/client/sdl-freerdp.wasm" "$OUT/web/"
+mkdir -p "$OUT/web/jspi"
+cp "$WORK/client/jspi/sdl-freerdp.js" "$WORK/client/jspi/sdl-freerdp.wasm" "$OUT/web/jspi/"
 licenses "$OUT/web/licenses" freerdp_preview sdl3_wasm sdl3_ttf freetype libressl opus dav1d \
     zlib jansson
 {

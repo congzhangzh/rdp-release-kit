@@ -15,6 +15,13 @@ toolchain) gets an entry here in the same commit.
 
 **Releases: rolling, by date**
 
+- **Web client, two builds**: the same objects linked twice, with Asyncify
+  (`web/`, 10.6 MB, every browser with WebAssembly) and with JSPI
+  (`web/jspi/`, 6.9 MB, Chrome 137+: the browser suspends the code, so
+  nothing is rewritten for it). Both are link options, so the second link
+  compiles nothing. freerdp-web's page picks one (`web/engine.js`, from its
+  release after 20261024.1); CI logs in with each (`WASM_ENGINE=jspi
+  test/wasm-session.sh`, output in `dist/test/wasm-jspi/`).
 - Web client: SDL `3.4.18+timer` (`1d615c14f`, fork branch
   `emscripten-timer-3.4`), upstream's newest release plus the timer fix
   (the same change as on 3.2.30); 3.4.18 has the `/tmp/filedrop` guard
