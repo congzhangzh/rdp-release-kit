@@ -50,7 +50,7 @@ python_macos_x86_64   3.13.17+20261021 https://github.com/astral-sh/python-build
 # /tmp/filedrop, which 3.2.30 needed backported
 freerdp_preview 20261021.1 git+https://github.com/congzhangzh/FreeRDP.git                                    79f10e8ae52c60060440513fd35b972628aef0ec
 sdl3_wasm   3.4.18+timer git+https://github.com/congzhangzh/SDL.git                                      1d615c14f95a3389bf0026e719144ad51378e40c
-freerdp_web 20261024.1 git+https://github.com/congzhangzh/freerdp-web.git                                     3eb0102fbaa0537201d9f332d3adbfa4bb96b35a
+freerdp_web 20261025.1 git+https://github.com/congzhangzh/freerdp-web.git                                     11671559a1e276050ce7f723158aaae0ed822023
 xrdp_preview     20261025.1 git+https://github.com/congzhangzh/xrdp.git                                          94f7cf46f6bb5ca615cbfe9332c9ab9589eac7fb
 librfxcodec      0badc06  git+https://github.com/neutrinolabs/librfxcodec.git                                  0badc062e96d170af57870480a4aa7cf469302b0
 libpainter       379b8fb  git+https://github.com/neutrinolabs/libpainter.git                                   379b8fbf40f309829364bf3414d721f9ba77766d
