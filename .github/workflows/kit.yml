@@ -7,7 +7,9 @@ name: kit
 # client and logs in from a browser. Every push to main that passes
 # publishes the rolling release <YYYYMMDD>.<N> (and the pre-releases of the
 # previews); a pull request only builds and tests. The web client itself is
-# published on freerdp-web's own Pages; this repository has none.
+# published on freerdp-web's own Pages; this repository has none. A push that
+# only moves the freerdp_web pin (a new freerdp-web release; build/changes.sh)
+# builds and tests the web client alone: its pre-release, no rolling release.
 on:
   push:
     branches: [main]
@@ -29,12 +31,15 @@ jobs:
       - uses: actions/checkout@v7
       - run: test/overrides.sh
       - run: test/publish.sh
+      - run: test/changes.sh
       - name: freerdp-web is pinned by a release (vX.Y.Z)
         run: build/check-release-pins.sh
       - name: The README's pins tables are current
         run: build/pins-table.sh --check README.md
 
   build:
+    needs: [releases]
+    if: needs.releases.outputs.scope == 'all'
     strategy:
       fail-fast: false
       matrix:
@@ -78,6 +83,8 @@ jobs:
           retention-days: 3
 
   windows:
+    needs: [releases]
+    if: needs.releases.outputs.scope == 'all'
     strategy:
       fail-fast: false
       matrix:
@@ -115,6 +122,8 @@ jobs:
   # x86_64 on macos-15-intel (GitHub's last Intel image), so the x86_64
   # client and its Python run on Intel, not through Rosetta
   macos:
+    needs: [releases]
+    if: needs.releases.outputs.scope == 'all'
     strategy:
       fail-fast: false
       matrix:
@@ -156,13 +165,26 @@ jobs:
           if-no-files-found: error
           retention-days: 3
 
+  # The distribution lists, and which builds this push needs (build/changes.sh):
+  # "web" when it only moves the freerdp_web pin, else "all" (a pull request
+  # and a run by hand: always all)
   releases:
     runs-on: ubuntu-24.04
     outputs:
       images: ${{ steps.list.outputs.images }}
       preview: ${{ steps.list.outputs.preview }}
+      scope: ${{ steps.scope.outputs.scope }}
     steps:
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0   # the push's base, to compare with
+      - id: scope
+        env:
+          BEFORE: ${{ github.event_name == 'push' && github.event.before || '' }}
+        run: |
+          scope=$(build/changes.sh "$BEFORE" "$GITHUB_SHA")
+          echo "scope=$scope" >> "$GITHUB_OUTPUT"
+          echo "this push builds: $scope"
       - id: list
         run: |
           echo "images=$(grep -v -E '^\s*(#|$)' distros.list | jq -R . | jq -cs .)" >> "$GITHUB_OUTPUT"
@@ -410,8 +432,13 @@ jobs:
           retention-days: 3
           include-hidden-files: true   # the page's .well-known/
 
+  # With scope "web" no xrdp job runs: the login test takes the xrdp packages
+  # of the newest web-* pre-release, which a full run built and tested
   wasm:
-    needs: [scripts, wasm-build, xrdp]
+    needs: [scripts, releases, wasm-build, xrdp]
+    if: >-
+      !cancelled() && needs.scripts.result == 'success' && needs.wasm-build.result == 'success' &&
+      (needs.xrdp.result == 'success' || (needs.xrdp.result == 'skipped' && needs.releases.outputs.scope == 'web'))
     runs-on: ubuntu-24.04
     concurrency: publish-web-${{ github.sha }}
     permissions:
@@ -428,10 +455,21 @@ jobs:
 
       # the artifact keeps its debian-13/ directory
       - name: The xrdp packages, for the login test's server
+        if: needs.releases.outputs.scope == 'all'
         uses: actions/download-artifact@v8
         with:
           name: xrdp-debian-13
           path: dist/xrdp
+      - name: The xrdp packages of the newest web pre-release (only the page changed)
+        if: needs.releases.outputs.scope == 'web'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag=$(gh release list -R "$GITHUB_REPOSITORY" -L 100 --json tagName,isPrerelease,isDraft,publishedAt \
+            -q '[.[] | select(.isPrerelease and (.isDraft | not) and (.tagName | startswith("web-")))] | sort_by(.publishedAt) | last | .tagName')
+          [ -n "$tag" ] || { echo "no web-* pre-release to take the xrdp packages from" >&2; exit 1; }
+          gh release download "$tag" -R "$GITHUB_REPOSITORY" -p '*.deb' -D dist/xrdp/debian-13
+          echo "xrdp packages of $tag:"; ls dist/xrdp/debian-13
 
       # the test driver uses Node's WebSocket (Node 22+); its checks use uvx
       - uses: actions/setup-node@v7

@@ -167,6 +167,13 @@ A kit change may break the page: then step 4 fails, nothing new reaches
 the site, and the page is fixed and released after it.
 - **Releases are automatic, and frozen**: every push to main that changes
   a build and passes publishes one; a pull request only builds and tests.
+- **A page-only push builds the web client alone**: when a push only moves
+  the `freerdp_web` pin (`build/changes.sh`: comments, docs and the pins
+  tables aside), only `wasm-build` and `wasm` run. The login test takes its
+  xrdp packages from the newest `web-*` pre-release, and the push publishes
+  that one pre-release, with no rolling release and no demos (nothing they
+  hold changed). Anything else, a pull request and a run by hand build
+  everything.
   What reaches people is still gated: the release holds only what every
   test passed, and freerdp-web's site changes only when it publishes.
 

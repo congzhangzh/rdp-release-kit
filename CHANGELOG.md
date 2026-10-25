@@ -15,6 +15,14 @@ toolchain) gets an entry here in the same commit.
 
 **Releases: rolling, by date**
 
+- **A new freerdp-web release costs one web build, not the whole kit**: a push that only
+  moves the `freerdp_web` pin ran all 52 jobs (native clients on six platforms, xrdp on
+  every distribution, demos, the rolling release), about 30 minutes, although only the web
+  client reads the page. `build/changes.sh` now compares the push with its base (comments,
+  docs and the pins tables aside): only the pin changed → scope `web`, and only `wasm-build`
+  and `wasm` run, the login test taking its xrdp packages from the newest `web-*`
+  pre-release. Anything else, a pull request and a run by hand → `all`, as before.
+  `test/changes.sh` checks it on a throwaway repository (8 cases).
 - Web client: the freerdp-web page 20261025.2 (`c1982be`). The page's code is the same
   as 20261025.1's; the release is the first one published the new way (its tag publishes
   nothing; the site goes out by hand with this kit's client of that page, after a login
