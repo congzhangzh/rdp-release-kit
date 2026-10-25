@@ -15,6 +15,14 @@ toolchain) gets an entry here in the same commit.
 
 **Releases: rolling, by date**
 
+- Web client: SDL `3.4.18+timer` (`1d615c14f`, fork branch
+  `emscripten-timer-3.4`), upstream's newest release plus the timer fix
+  (the same change as on 3.2.30); 3.4.18 has the `/tmp/filedrop` guard
+  already, so that backport goes. SDL 3.4 reads the mouse from pointer
+  events, and the page under Capture sent only mouse events: Capture needs
+  the freerdp-web release after 20261024.1 (its pointer-event fix), which
+  the kit pins next. Until then this web client's pointer does not move
+  under Capture.
 - LibreSSL 4.4.0 (Windows and web clients; issue #12): it removes the weak
   `emSign ECC Root CA - G3` from its `cert.pem`, fixes the build with
   llvm-mingw's own `endian.h`, and fixes Windows' `poll()`, `connect()` and
