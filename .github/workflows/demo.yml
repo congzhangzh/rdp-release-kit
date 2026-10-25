@@ -67,6 +67,14 @@ jobs:
           # at start ("Failed to load .../image-missing.svg: Loader process
           # exited early"), GNOME showed no wallpaper. This runner is thrown away
           sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+          # AppArmor off altogether: the host's profiles attach by path to
+          # programs inside the containers too. Ubuntu's unix-chkpwd profile
+          # denies the CAP_DAC_OVERRIDE that Fedora's setuid unix_chkpwd needs
+          # for its mode 0000 /etc/shadow (apparmor="DENIED" capname=
+          # "dac_override"), so pam_unix's account check failed and sshd
+          # refused every login to the Fedora servers (2026-10-24). Ubuntu
+          # runners have no SELinux.
+          sudo aa-teardown > /dev/null && echo "AppArmor profiles unloaded"
           podman --version
           ls -l /dev/udmabuf || true
           # what decides how systemd runs in a container

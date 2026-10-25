@@ -15,6 +15,17 @@ toolchain) gets an entry here in the same commit.
 
 **Releases: rolling, by date**
 
+- **Demos record again** (broken since 2026-10-24): every login to the
+  Fedora servers was refused by sshd's PAM account check ("could not obtain
+  user info" from `unix_chkpwd`). The runner's AppArmor profile
+  `unix-chkpwd` attaches by path to that program inside the containers too,
+  and denies the `CAP_DAC_OVERRIDE` Fedora's setuid `unix_chkpwd` needs for
+  its mode-0000 `/etc/shadow`. Found with a throwaway workflow: a minimal
+  Fedora 45 + sshd server failed the same way on the runner (root and
+  rootless podman alike) and logged in on another host; `strace` showed the
+  helper's `/etc/shadow` open failing with `EACCES`, and the kernel logged
+  the denial. The demo jobs now unload AppArmor on their throwaway runner,
+  and the server log shows the account as each side sees it.
 - **macOS client**, arm64 and x86_64 (`build-macos.sh`), with freerdp-tk
   and a standalone CPython 3.13.17 per architecture, like Linux and Windows:
   built natively with Apple clang for macOS 12 and newer, every library
