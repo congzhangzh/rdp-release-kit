@@ -79,6 +79,10 @@ fi
 echo "== freerdp ${VERSION[freerdp]} (preview)"
 src=$(unpack freerdp)
 overridden freerdp || rm -rf "$WORK/build/freerdp"
+# a kept build tree configured from another source directory (the pin was
+# freerdp_preview until 2026-10-25) is one CMake refuses: start it again
+grep -qx "CMAKE_HOME_DIRECTORY:INTERNAL=$src" "$WORK/build/freerdp/CMakeCache.txt" 2> /dev/null ||
+    rm -rf "$WORK/build/freerdp"
 # a local FreeRDP keeps ThinLTO's code generation between links: a relink
 # redoes only the changed modules
 DEV=()
