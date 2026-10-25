@@ -66,6 +66,19 @@ toolchain) gets an entry here in the same commit.
 - xrdp packages and the xrdp preview for ARM64 too (`ubuntu-24.04-arm`
   runners, each logged in to with the ARM64 client); the x86_64 artifacts
   keep their names.
+- Web client: SDL `3.2.30+timer+filedrop` (`3beaaf641`, fork branch
+  `emscripten-timer-threads-filedrop`), the previous pin plus upstream's
+  267e681a0 backported: SDL's Emscripten windows run
+  `FS.mkdir("/tmp/filedrop")`, which threw `EEXIST` when a window was made
+  while another was open. At a network drop FreeRDP's retry dialog made
+  one: the exception unwound the main thread while it held the dialog's
+  mutex, the Asyncify client then exited (the page's retry brought the
+  session back by luck), and a JSPI build hung for good. With the guard,
+  freerdp-web's `test-reconnect.mjs` on a JSPI build passes 3 of 3 (0 of 4
+  before); the session comes back through FreeRDP's own retry, in the same
+  client. SDL 3.4 has the guard but was not taken: with it, the remote
+  pointer stopped following relative motion under pointer capture
+  (`test-capture.mjs`, both engines).
 
 **Docs and releases**
 
