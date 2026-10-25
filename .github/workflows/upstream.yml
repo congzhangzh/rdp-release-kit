@@ -2,7 +2,7 @@ name: upstream
 
 # Once a day, compares every pinned upstream source with upstream's newest
 # release (check-upstream.sh) and opens one issue per update found. It
-# changes nothing: a person bumps sources.lock in a pull request. An
+# changes nothing: a person bumps sources.lock in a commit on main. An
 # update waits two weeks at most (docs/RELEASE.md, "Keeping pins fresh").
 on:
   schedule:
@@ -59,7 +59,7 @@ jobs:
             fi
             gh issue create --title "$title" --label enhancement --body "upstream has $name $latest; sources.lock pins $have.
 
-          To update: change its line in sources.lock (version, URL, SHA-256 from upstream's published checksum where it has one), then open a pull request; CI builds and tests every product with it.
+          To update: change its line in sources.lock (version, URL, SHA-256 from upstream's published checksum where it has one), then push it to main; CI builds and tests every product with it and, if all pass, publishes the release.
 
           Found by the daily upstream check (check-upstream.sh)."
             echo "opened: $title"

@@ -82,7 +82,7 @@ a negative test (a wrong hash, a wrong key, a tampered tarball).
 
 ```
 upstream tag / frozen branch
-  → bump commit in sources.lock (a pull request: build + all gates)
+  → bump commit in sources.lock, pushed to main (the kit takes no pull requests)
   → main: CI again; the previews go to their pre-releases (web-…, xrdp-preview-…)
   → all green: the release <YYYYMMDD>.<N>, made latest: every product,
     SHA256SUMS, build provenance attestations
@@ -253,7 +253,7 @@ two weeks.
   - opens one issue per new upstream release
     (`Update available: <name> <pinned> → <newest>`);
   - closes the issues whose pin has moved since.
-- **After 14 days**, an update must be bumped (a pull request that changes
+- **After 14 days**, an update must be bumped (a commit on main that changes
   `sources.lock`) or deferred. To defer, give the issue the `deferred`
   label and say why in it, for example "opus 1.6 changes the API, after
   the FreeRDP 3.33 bump". The label is made once, with
