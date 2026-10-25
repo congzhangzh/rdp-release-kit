@@ -8,20 +8,22 @@ name: demo
 # branch demo-ci records with the newest pre-releases and publishes nothing,
 # to work on the recordings themselves.
 on:
-  workflow_run:
-    workflows: [kit]
-    types: [completed]
-    branches: [main]
+  # the kit's run calls it once its web client and xrdp preview are
+  # published, and its release waits for the videos
+  workflow_call:
+    inputs:
+      kit_sha:
+        description: the kit commit whose pre-releases are recorded
+        type: string
+        required: true
   workflow_dispatch:
   push:
     branches: [demo-ci]
-
 permissions:
   contents: read
 
 jobs:
   record:
-    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     strategy:
       fail-fast: false
       matrix:
@@ -32,7 +34,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+          ref: ${{ inputs.kit_sha || github.sha }}
 
       # the test driver uses Node's WebSocket (Node 22+); its checks use uvx
       - uses: actions/setup-node@v7
@@ -86,7 +88,7 @@ jobs:
       - name: Record
         env:
           GH_TOKEN: ${{ github.token }}
-          KIT_COMMIT: ${{ github.event_name == 'push' && 'newest' || github.event.workflow_run.head_sha || github.sha }}
+          KIT_COMMIT: ${{ inputs.kit_sha || (github.event_name == 'push' && 'newest') || github.sha }}
           PODMAN: /usr/local/bin/podman-root
           # Ubuntu's AppArmor profile for rootful podman forbids the mounts
           # systemd makes for its own sandboxes ("Failed to remount root
@@ -104,16 +106,18 @@ jobs:
           if-no-files-found: ignore
 
   publish:
-    if: github.event_name != 'push'
+    # not for a push to demo-ci (an experiment): github.event_name is the
+    # kit's own event when the kit calls this workflow
+    if: inputs.kit_sha != '' || github.event_name == 'workflow_dispatch'
     needs: [record]
     runs-on: ubuntu-24.04
-    concurrency: publish-demo-${{ github.event.workflow_run.head_sha || github.sha }}
+    concurrency: publish-demo-${{ inputs.kit_sha || github.sha }}
     permissions:
       contents: write
     steps:
       - uses: actions/checkout@v7
         with:
-          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+          ref: ${{ inputs.kit_sha || github.sha }}
 
       - uses: actions/download-artifact@v8
         with:
@@ -124,7 +128,7 @@ jobs:
       - name: Publish the pre-release
         env:
           GH_TOKEN: ${{ github.token }}
-          KIT_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+          KIT_SHA: ${{ inputs.kit_sha || github.sha }}
         run: |
           mkdir -p dist/demo
           python3 - dist/in dist/demo << 'EOF'
@@ -152,3 +156,10 @@ jobs:
           tag=$(build/prerelease-tag.sh demo "$title")
           notes="The demo videos of freerdp-web's splash, recorded by rdp-release-kit's test/record-demos.sh with the pre-releases demo.json names, on throwaway servers: everything shown is synthetic. Big Buck Bunny © Blender Foundation, CC BY 3.0; WebGL Aquarium © Google, BSD. Published once, never replaced."
           build/publish-prerelease.sh "$tag" "$title" "$notes" dist/demo/*
+
+      # the same files for the kit's release
+      - uses: actions/upload-artifact@v7
+        with:
+          name: demo-release
+          path: dist/demo/
+          if-no-files-found: error

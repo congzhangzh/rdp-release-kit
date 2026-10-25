@@ -475,6 +475,18 @@ jobs:
           path: dist/test/
           if-no-files-found: ignore
 
+  # The demo videos of this commit's web client and xrdp preview
+  # (.github/workflows/demo.yml), published as the pre-release demo-* for
+  # freerdp-web's splash and carried by the release below
+  demo:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [wasm, xrdp-preview-release, pipewire-xrdp-release]
+    permissions:
+      contents: write
+    uses: ./.github/workflows/demo.yml
+    with:
+      kit_sha: ${{ github.sha }}
+
   # The kit's rolling release <YYYYMMDD>.<N>: every push to main whose
   # products all pass publishes FreeRDP's clients (with their connection
   # window), the xrdp packages and the web client, once and never replaced,
@@ -482,7 +494,7 @@ jobs:
   # download (docs/RELEASE.md, "Products and channels")
   release:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    needs: [build, windows, macos, xrdp, wasm]
+    needs: [build, windows, macos, xrdp, wasm, demo]
     runs-on: ubuntu-24.04
     # one at a time across commits: each counts N from the releases before it,
     # so two pushes close together get .1 and .2, not both .1 (the second
@@ -509,14 +521,19 @@ jobs:
         with:
           name: wasm-build
           path: dist
+      - uses: actions/download-artifact@v8
+        with:
+          name: demo-release
+          path: dist/demo
 
       - name: The files
         run: |
           # assets are flat and GitHub turns '~' into '.': name the files
           # so first, so SHA256SUMS matches what is downloaded
           mkdir -p upload
-          find dist -type f \( -name '*.tar.xz' -o -name '*.zip' -o -name '*.deb' -o -name '*.rpm' \) \
-              ! -name '*~preview*' | while read -r f; do
+          find dist -type f \( -name '*.tar.xz' -o -name '*.zip' -o -name '*.deb' -o -name '*.rpm' \
+              -o -path 'dist/demo/*' \) \
+              ! -name '*~preview*' ! -name SHA256SUMS | while read -r f; do
             cp "$f" "upload/$(basename "$f" | tr '~' '.')"
           done
           (cd upload && sha256sum -- * > ../SHA256SUMS) && mv SHA256SUMS upload/
@@ -549,6 +566,8 @@ jobs:
           | macOS Intel | \`sdl3-freerdp-$freerdp-macos-x86_64.tar.xz\` | the same |
           | xrdp server | \`xrdp_*~<release>_<arch>.deb\` + \`xorgxrdp_*\` (Debian, Ubuntu), \`xrdp-*.fc<N>.<arch>.rpm\` + \`xorgxrdp-*\` (Fedora) | \`sudo apt install ./xrdp_*.deb ./xorgxrdp_*.deb\` or \`sudo dnf install ./xrdp-*.rpm ./xorgxrdp-*.rpm\` |
 
-          The Linux client runs on glibc 2.34 and newer (RHEL 9, Debian 12, Ubuntu 22.04, Fedora 35 and newer) with PulseAudio's or PipeWire's libpulse; nothing else to install. The macOS client runs on macOS 12 and newer. Check a download: \`sha256sum -c --ignore-missing SHA256SUMS\`; its origin: \`gh attestation verify <file> -R $GITHUB_REPOSITORY\`. Each archive's MANIFEST lists what it was built from."
+          The Linux client runs on glibc 2.34 and newer (RHEL 9, Debian 12, Ubuntu 22.04, Fedora 35 and newer) with PulseAudio's or PipeWire's libpulse; nothing else to install. The macOS client runs on macOS 12 and newer. Check a download: \`sha256sum -c --ignore-missing SHA256SUMS\`; its origin: \`gh attestation verify <file> -R $GITHUB_REPOSITORY\`. Each archive's MANIFEST lists what it was built from.
+
+          The demo videos (\`demo-*.mp4\`, \`demo.json\`) are this build's web client and xrdp preview, recorded on throwaway servers: everything shown is synthetic. Big Buck Bunny © Blender Foundation, CC BY 3.0; WebGL Aquarium © Google, BSD."
           notes=$(build/release-notes.sh "$summary" linux windows macos web xrdp)
           LATEST=1 build/publish-prerelease.sh "$tag" "$title" "$notes" upload/*

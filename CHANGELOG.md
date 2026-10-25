@@ -15,6 +15,11 @@ toolchain) gets an entry here in the same commit.
 
 **Releases: rolling, by date**
 
+- **Every release carries its demo videos**: the kit's run records them
+  (`demo.yml`, now a workflow the kit calls) once its web client and xrdp
+  preview are published, and the release waits for them. The `demo-*`
+  pre-release stays, for freerdp-web's splash. A recording that fails now
+  stops the release.
 - **Demos record again** (broken since 2026-10-24): every login to the
   Fedora servers was refused by sshd's PAM account check ("could not obtain
   user info" from `unix_chkpwd`). The runner's AppArmor profile
