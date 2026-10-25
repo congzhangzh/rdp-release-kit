@@ -6,7 +6,8 @@
 # Only headers and build tools come from here: every library the client
 # links is built from sources.lock and linked statically. SDL3 opens X11,
 # Wayland, libdecor and its audio backends with dlopen() at runtime, so it
-# needs their headers but no link dependency on them.
+# needs their headers but no link dependency on them. git fetches the
+# sources pinned by commit (freerdp-tk).
 FROM almalinux:9
 
 # Three tries: a mirror in the middle of a sync serves metadata that does
@@ -16,7 +17,7 @@ RUN for try in 1 2 3; do \
         && dnf config-manager --set-enabled crb \
         && dnf -y install \
             gcc gcc-c++ make cmake ninja-build meson nasm pkgconf-pkg-config ccache \
-            perl-core python3 xz bzip2 file diffutils binutils rsync \
+            perl-core python3 xz bzip2 file diffutils binutils rsync git-core \
             libX11-devel libXext-devel libXrandr-devel libXcursor-devel libXi-devel \
             libXfixes-devel libXrender-devel libXScrnSaver-devel libXtst-devel \
             libxkbcommon-devel ibus-devel systemd-devel libusb1-devel vulkan-headers \
