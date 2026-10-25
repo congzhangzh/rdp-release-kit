@@ -33,11 +33,14 @@ toolchain) gets an entry here in the same commit.
   `check-release-pins.sh` takes the bare tag or the older `v` one, and
   checks freerdp-tk's pin too; `check-upstream.sh` watches both repos
   either way.
-- The xrdp preview does not build on ARM64 yet: xrdp's development branch
-  builds with `-Werror`, and `libxrdp/xrdp_caps.c:655` (from 2014) tests
-  `jpeg_prop[0] < 0` on a `char`, which is unsigned on ARM64 (`-Wtype-limits`).
-  Its ARM64 jobs may fail meanwhile, so x86_64's preview still publishes;
-  the stable xrdp 0.10.6.1 builds on ARM64.
+- xrdp preview 20261025.1 (`94f7cf46`): the previous one plus a fix that
+  builds it on ARM64. xrdp's development branch builds with `-Werror`, and
+  `libxrdp/xrdp_caps.c:655` (from 2014) tested `jpeg_prop[0] < 0` on a
+  `char`, which is unsigned on ARM64 (`-Wtype-limits`); it now compares the
+  byte as unsigned (fork branch `caps-jpeg-quality-unsigned`, on devel, for
+  upstream). Checked on x86_64 with `-funsigned-char`: the old commit fails
+  with exactly the ARM64 error, the new one builds. The stable xrdp 0.10.6.1
+  never had the problem (a release builds without `-Werror`).
 - xrdp packages and the xrdp preview for ARM64 too (`ubuntu-24.04-arm`
   runners, each logged in to with the ARM64 client); the x86_64 artifacts
   keep their names.
