@@ -291,6 +291,7 @@ if [ "$SERVER" = xrdp-gnome ] || [ "$SERVER" = xrdp-kde ]; then
         echo "== processes"; ps -eo user,pid,etime,rss,args --sort=-rss | head -25
         # why a login is refused: the account as each side sees it
         echo "== the user tester"; getent passwd tester; getent shadow tester | cut -d: -f1,3-
+        getent shadow tester | cut -d: -f2 | cut -c1-3 | sed "s/^/hash starts: /"; passwd -S tester
         grep -E "^(passwd|shadow|group):" /etc/nsswitch.conf; ls -l /etc/passwd /etc/shadow /usr/sbin/unix_chkpwd
         getcap /usr/sbin/unix_chkpwd 2> /dev/null; rpm -q openssh-server pam systemd shadow-utils authselect
         systemctl show sshd -p CapabilityBoundingSet -p AmbientCapabilities -p NoNewPrivileges \
