@@ -31,6 +31,8 @@ jobs:
       - run: test/publish.sh
       - name: freerdp-web is pinned by a release (vX.Y.Z)
         run: build/check-release-pins.sh
+      - name: The README's pins tables are current
+        run: build/pins-table.sh --check README.md
 
   build:
     strategy:
@@ -281,7 +283,7 @@ jobs:
             cp "$f" "upload/$(basename "$f" | tr '~' '.')"
           done
           (cd upload && sha256sum -- *.deb *.rpm > SHA256SUMS)
-          notes="A PREVIEW of the next xrdp: xrdp $sha (its development branch with Wayland sessions, AV1 and pacing) and xorgxrdp's development branch, built and tested (an Xorg and a Wayland login) by rdp-release-kit $GITHUB_SHA. Not an xrdp release. Published once, never replaced."
+          notes=$(build/release-notes.sh "A PREVIEW of the next xrdp: xrdp $sha (its development branch with Wayland sessions, AV1 and pacing) and xorgxrdp's development branch, built and tested (an Xorg and a Wayland login) by rdp-release-kit $GITHUB_SHA. Not an xrdp release. Published once, never replaced." xrdp-preview)
           build/publish-prerelease.sh "$tag" "$title" "$notes" upload/*
 
   # PipeWire's xrdp module for Fedora (Fedora does not package it), for the
@@ -318,7 +320,7 @@ jobs:
           find dist/xrdp-preview -type f -name 'pipewire-module-xrdp-*.rpm' -exec cp {} upload/ \;
           ls upload/*.rpm > /dev/null
           (cd upload && sha256sum -- *.rpm > SHA256SUMS)
-          notes="PipeWire's xrdp module (the sink and source that carry an xrdp session's sound and microphone), release v$version of neutrinolabs/pipewire-module-xrdp ($sha), unpatched, built by rdp-release-kit $GITHUB_SHA for Fedora $fedora, which does not package it. Debian 12 (backports), 13 and Ubuntu 24.04 and newer package it themselves (apt install pipewire-module-xrdp). Published once, never replaced; a new one only when its inputs change."
+          notes=$(build/release-notes.sh "PipeWire's xrdp module (the sink and source that carry an xrdp session's sound and microphone), release v$version of neutrinolabs/pipewire-module-xrdp ($sha), unpatched, built by rdp-release-kit $GITHUB_SHA for Fedora $fedora, which does not package it. Debian 12 (backports), 13 and Ubuntu 24.04 and newer package it themselves (apt install pipewire-module-xrdp). Published once, never replaced; a new one only when its inputs change." xrdp)
           build/publish-prerelease.sh "$tag" "$title" "$notes" upload/*
 
   # The web client builds at once; only its login test waits for xrdp
@@ -412,7 +414,7 @@ jobs:
           done
           (cd dist/handoff && sha256sum freerdp-web-page.zip > freerdp-web-page.zip.sha256 &&
             sha256sum -- * > ../SHA256SUMS && mv ../SHA256SUMS .)
-          notes="The web client for freerdp-web $page, built and tested (a browser login to xrdp over SSH) by rdp-release-kit $GITHUB_SHA. freerdp-web's workflow publishes it. Not a kit release. Published once, never replaced."
+          notes=$(build/release-notes.sh "The web client for freerdp-web $page, built and tested (a browser login to xrdp over SSH) by rdp-release-kit $GITHUB_SHA. freerdp-web's workflow publishes it. Not a kit release. Published once, never replaced." web)
           build/publish-prerelease.sh "$tag" "$title" "$notes" dist/handoff/*
 
       - uses: actions/upload-artifact@v7
@@ -440,6 +442,7 @@ jobs:
       id-token: write
       attestations: write
     steps:
+      - uses: actions/checkout@v7
       - uses: actions/download-artifact@v8
         with:
           path: dist
@@ -468,5 +471,6 @@ jobs:
           done
           (cd upload && sha256sum -- * > ../SHA256SUMS) && mv SHA256SUMS upload/
           gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" \
-              --title "$GITHUB_REF_NAME" --notes "See MANIFEST in each client archive." \
+              --title "$GITHUB_REF_NAME" \
+              --notes "$(build/release-notes.sh "rdp-release-kit $GITHUB_REF_NAME. Each client archive's MANIFEST lists what it was built from." linux windows web xrdp)" \
               upload/*

@@ -273,6 +273,21 @@ two weeks.
   repository after 60 days without activity. The check then stops
   silently, and has to be turned on again in the Actions tab.
 
+### Recording a change
+
+- **`CHANGELOG.md`**: every commit that changes what is built (a pin, a
+  build option, a patch, a toolchain) adds its entry in the same commit:
+  what changed, why, and how it was tested.
+- **`pins.notes`**: every pin that is not a plain upstream release (a fork
+  commit carrying our fix, a development commit) has a `change` line with
+  its base, what it changes or fixes, and how that was tested. A pin that
+  carries our fix moves back to an upstream release once upstream has it.
+- `build/pins-table.sh` joins `pins.notes` with `sources.lock`. CI fails
+  when a pin has no product, a commit pin has no `change` line, or the
+  README's tables are stale (`build/pins-table.sh --readme README.md`
+  rewrites them). `build/release-notes.sh` puts the same tables, and a
+  link to the changelog at the release's commit, in every release's notes.
+
 ## Consuming a release
 
 ```sh
