@@ -15,6 +15,17 @@ toolchain) gets an entry here in the same commit.
 
 **Releases: rolling, by date**
 
+- **FreeRDP `release-20261025.1`** (`d708a57aa`), the first release picked
+  under the fork's new branch rule: integration-latest rebuilt on FreeRDP
+  master `b2403bb99` (2026-10-23, 96 commits past the 20261021.1 base),
+  tested, then picked as `release-<YYYYMMDD>.<N>`. Four of the pull
+  requests the preview carried are in master now (sound #13732, H.264
+  through WebCodecs #13812, #13838, #13839), so it carries two: the browser
+  clipboard (#13733) and the Web Audio microphone (#13811). Older picks keep
+  their `wasm-preview-…` names. Locally, every client built from it: web
+  (Asyncify and JSPI, each logged in to xrdp: 5 of 5), Linux (stable xrdp
+  debian:13: 8 of 8; the xrdp preview on debian:testing: 12 of 12),
+  Windows x86_64 (check-windows ok).
 - **Every client builds our FreeRDP preview** (`freerdp` 20261021.1,
   `79f10e8ae`, fork branch `wasm-preview-20261021.1-79f10e8`): the Linux,
   Windows and macOS clients leave FreeRDP 3.32.2 for the commit the web
