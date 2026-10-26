@@ -7,14 +7,15 @@
 # name      version  url                                                                                      sha256
 # FreeRDP, for every client (Linux, Windows, macOS, web): our release, not an
 # upstream one. A ripe commit of our integration-latest, picked on the fork as
-# release-<YYYYMMDD>.<N>: FreeRDP master b2403bb99 (2026-10-23) plus four open
+# release-<YYYYMMDD>.<N>: FreeRDP master b2403bb99 (2026-10-23) plus five open
 # pull requests whose code compiles under Emscripten only, the browser
 # clipboard (#13733), the Web Audio microphone (#13811), the MessageChannel
-# yield (#13864) and the page's monitors (#13865). Master has the
+# yield (#13864), the page's monitors (#13865) and no connection dialog window
+# (#13860). Master has the
 # rest of ours: AV1 (#13731), sound (#13732), H.264 through WebCodecs
 # (#13812), #13838, #13839, and the Opus microphone fix (#13810, which 3.32.2
 # lacks)
-freerdp     20261026.2 git+https://github.com/congzhangzh/FreeRDP.git                                        dbba4a4ce8bc7d9a5aee54e2184aaea4a54365df
+freerdp     20261026.3 git+https://github.com/congzhangzh/FreeRDP.git                                        cef3ddb474ef197413356630398480d400b79247
 sdl3        3.4.18   https://github.com/libsdl-org/SDL/releases/download/release-3.4.18/SDL3-3.4.18.tar.gz        9c75cf16330322c217dedd2e0609f1124f1b54b8633e763467b4684d0f4334a3
 sdl3_ttf    3.2.2    https://github.com/libsdl-org/SDL_ttf/releases/download/release-3.2.2/SDL3_ttf-3.2.2.tar.gz   63547d58d0185c833213885b635a2c0548201cc8f301e6587c0be1a67e1e045d
 freetype    2.15.0   https://download.savannah.gnu.org/releases/freetype/freetype-2.15.0.tar.xz                   93cd47eb719c325107f2d3cf087d06299e944c3b48a40b55537302304dea1dd5
@@ -54,7 +55,7 @@ python_macos_x86_64   3.13.17+20261021 https://github.com/astral-sh/python-build
 # in SDL_Emscripten_TimerHelper); 3.4.18 already ignores FS.mkdir errors for
 # /tmp/filedrop, which 3.2.30 needed backported
 sdl3_wasm   3.4.18+timer git+https://github.com/congzhangzh/SDL.git                                      1d615c14f95a3389bf0026e719144ad51378e40c
-freerdp_web 20261026.3 git+https://github.com/congzhangzh/freerdp-web.git                                     bf7d6fd7b1caec9005c3b4a1485210193ef7964e
+freerdp_web 20261026.4 git+https://github.com/congzhangzh/freerdp-web.git                                     0c27b252f7e78e9ee9caedfd122513c5c6390e9d
 xrdp_preview     20261025.1 git+https://github.com/congzhangzh/xrdp.git                                          94f7cf46f6bb5ca615cbfe9332c9ab9589eac7fb
 librfxcodec      0badc06  git+https://github.com/neutrinolabs/librfxcodec.git                                  0badc062e96d170af57870480a4aa7cf469302b0
 libpainter       379b8fb  git+https://github.com/neutrinolabs/libpainter.git                                   379b8fbf40f309829364bf3414d721f9ba77766d

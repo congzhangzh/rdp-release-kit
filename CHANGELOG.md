@@ -15,6 +15,14 @@ toolchain) gets an entry here in the same commit.
 
 **Releases: rolling, by date**
 
+- **FreeRDP `release-20261026.3`** (`cef3ddb47`): `release-20261026.2` plus our pull request
+  #13860: no connection dialog window in a browser. Its SDL window took the session's one
+  canvas, so after FreeRDP's auto-reconnect the canvas was 0 x 0 (no picture) and no window
+  had the keyboard focus (no keys; the mouse still worked). freerdp-web's suite passed 22 of
+  22 with it, and its new checks (the canvas and the keys after a reconnect) fail with
+  `release-20261026.2`.
+- Web client: the freerdp-web page 20261026.4 (`0c27b25`): that client, and All screens ▾
+  asking for the mode.
 - **FreeRDP `release-20261026.2`** (`dbba4a4ce`): `release-20261026.1` plus our pull request
   #13865: in a browser the page may split the client's one canvas into monitors
   (`Module.freerdpMonitors`), and the display layout then carries a monitor per screen, also
