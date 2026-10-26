@@ -15,6 +15,14 @@ toolchain) gets an entry here in the same commit.
 
 **Releases: rolling, by date**
 
+- **xrdp preview `release-20261026.3`** (`5f77b058`): `release-20261026.2` plus two fixes found
+  on a real pair of screens (2560x1440 and 1706x1067, AV1): GNOME took no layout with a
+  pixel's gap between monitors ("Logical monitors not adjacent"), so the client's primary
+  was lost; gaps and overlaps of up to 4 pixels are now closed. And `max_fps` (xrdp.ini,
+  the GNOME or KDE session): without a GPU GNOME composites in software, and two monitors
+  under a scrolling load took gnome-shell to 134 % of a CPU at the default 60 frames a
+  second, 91 % at 30. Every wlup suite passed on that commit, one at a time: sway 42 of
+  42 and 57 of 57, GNOME 44 of 44, KDE 39 of 39.
 - **xrdp preview `release-20261026.2`** (`a1c78563`): `release-20261026.1` plus the same for
   KDE Plasma (wlup's KWin backend): the output that is cast for the first monitor, a KWin
   virtual output for each other one, at the client's positions with its primary monitor
