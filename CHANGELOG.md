@@ -15,6 +15,15 @@ toolchain) gets an entry here in the same commit.
 
 **Releases: rolling, by date**
 
+- **xrdp preview `release-20261026.1`** (`816daad4`), picked from integration-wlup-all on
+  the fork: GNOME sessions (wlup's Mutter backend) get a virtual monitor per RDP monitor
+  instead of one as wide as all of them, with the client's primary monitor as GNOME's (the
+  top bar), also when the client changes its layout mid-session (freerdp-web's All screens
+  -> Separate screens). The chansrv Opus parts now sit on a newer xrdp devel, which brings 3
+  of its commits (#3927). Every wlup suite passed on that commit: sway 42 of 42 and 57 of 57,
+  KDE 35 of 35, GNOME 44 of 44 (with its new two-monitor checks; run alone after a run of
+  all four together lost GNOME's first login to load), and freerdp-web's
+  test-screens-gnome, which fails without the change.
 - Web client: the freerdp-web page 20261026.5 (`5788b71`): under capture (Pointer Lock) the
   remote pointer now shows on every screen of All screens, not only in the page's window.
   The client is unchanged (FreeRDP `release-20261026.3`).
