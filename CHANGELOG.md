@@ -15,6 +15,13 @@ toolchain) gets an entry here in the same commit.
 
 **Releases: rolling, by date**
 
+- **xrdp preview `release-20261026.4`** (`6b3df599`): `release-20261026.3` plus: a session's
+  windows stay on the client's primary screen when the client goes from one monitor to
+  several (freerdp-web's All screens). The output that held them used to go to the leftmost
+  screen, so every window moved to the other screen, also at each reconnect; GNOME and KDE.
+  freerdp-web's test-screens-wlup checks it (fails with `.3` on both desktops, passes 5 of 5
+  with `.4`). Every wlup suite passed on that commit, all four together: sway 42 of 42 and
+  57 of 57, GNOME 44 of 44, KDE 39 of 39.
 - **xrdp preview `release-20261026.3`** (`5f77b058`): `release-20261026.2` plus two fixes found
   on a real pair of screens (2560x1440 and 1706x1067, AV1): GNOME took no layout with a
   pixel's gap between monitors ("Logical monitors not adjacent"), so the client's primary
