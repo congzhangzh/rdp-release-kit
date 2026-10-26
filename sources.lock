@@ -7,13 +7,14 @@
 # name      version  url                                                                                      sha256
 # FreeRDP, for every client (Linux, Windows, macOS, web): our release, not an
 # upstream one. A ripe commit of our integration-latest, picked on the fork as
-# release-<YYYYMMDD>.<N>: FreeRDP master b2403bb99 (2026-10-23) plus two open
+# release-<YYYYMMDD>.<N>: FreeRDP master b2403bb99 (2026-10-23) plus three open
 # pull requests whose code compiles under Emscripten only, the browser
-# clipboard (#13733) and the Web Audio microphone (#13811). Master has the
+# clipboard (#13733), the Web Audio microphone (#13811) and the MessageChannel
+# yield (#13864). Master has the
 # rest of ours: AV1 (#13731), sound (#13732), H.264 through WebCodecs
 # (#13812), #13838, #13839, and the Opus microphone fix (#13810, which 3.32.2
 # lacks)
-freerdp     20261025.1 git+https://github.com/congzhangzh/FreeRDP.git                                        d708a57aa7b3b1a7b050805958564d867987641b
+freerdp     20261026.1 git+https://github.com/congzhangzh/FreeRDP.git                                        0cae530aea88f3f5b427fd931f6cce99bf3b2cbf
 sdl3        3.4.18   https://github.com/libsdl-org/SDL/releases/download/release-3.4.18/SDL3-3.4.18.tar.gz        9c75cf16330322c217dedd2e0609f1124f1b54b8633e763467b4684d0f4334a3
 sdl3_ttf    3.2.2    https://github.com/libsdl-org/SDL_ttf/releases/download/release-3.2.2/SDL3_ttf-3.2.2.tar.gz   63547d58d0185c833213885b635a2c0548201cc8f301e6587c0be1a67e1e045d
 freetype    2.15.0   https://download.savannah.gnu.org/releases/freetype/freetype-2.15.0.tar.xz                   93cd47eb719c325107f2d3cf087d06299e944c3b48a40b55537302304dea1dd5
@@ -53,7 +54,7 @@ python_macos_x86_64   3.13.17+20261021 https://github.com/astral-sh/python-build
 # in SDL_Emscripten_TimerHelper); 3.4.18 already ignores FS.mkdir errors for
 # /tmp/filedrop, which 3.2.30 needed backported
 sdl3_wasm   3.4.18+timer git+https://github.com/congzhangzh/SDL.git                                      1d615c14f95a3389bf0026e719144ad51378e40c
-freerdp_web 20261026.1 git+https://github.com/congzhangzh/freerdp-web.git                                     b6fce6189fd3be9d6c85fb47825ed7e585bbd270
+freerdp_web 20261026.2 git+https://github.com/congzhangzh/freerdp-web.git                                     0b12d92c0f12da03f4d1ccb2b7caf83c4a69d318
 xrdp_preview     20261025.1 git+https://github.com/congzhangzh/xrdp.git                                          94f7cf46f6bb5ca615cbfe9332c9ab9589eac7fb
 librfxcodec      0badc06  git+https://github.com/neutrinolabs/librfxcodec.git                                  0badc062e96d170af57870480a4aa7cf469302b0
 libpainter       379b8fb  git+https://github.com/neutrinolabs/libpainter.git                                   379b8fbf40f309829364bf3414d721f9ba77766d

@@ -15,6 +15,15 @@ toolchain) gets an entry here in the same commit.
 
 **Releases: rolling, by date**
 
+- **FreeRDP `release-20261026.1`** (`0cae530ae`): `release-20261025.1` plus our pull request
+  #13864, the MessageChannel yield: `pollset_poll`'s yield waits on a MessageChannel task
+  instead of `emscripten_sleep(0)`, whose `setTimeout(0)` the browser clamps to 4 ms. Emscripten
+  only (native clients compile the same code as before). Forced on every empty poll, an
+  xterm scrolling random text received 53–57 kB/s with `setTimeout` and 1913–2291 kB/s with
+  the MessageChannel, JSPI and Asyncify alike; as shipped the yield does not fire in our
+  pthread client, so sessions measure the same. freerdp-web's suite passed 22 of 22 (11
+  tests, both engines) with this client. pins.notes watches #13864 too.
+- Web client: the freerdp-web page 20261026.2 (`0b12d92`), the release that names this client.
 - Web client: the freerdp-web page 20261026.1 (`b6fce61`): **All screens**, the remote
   desktop spread over every screen through the Window Management API (one large monitor for
   the server), and the JSPI measurements in its README and notes. Same client pins.
