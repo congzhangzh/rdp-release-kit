@@ -11,6 +11,14 @@ from right now, and what our own changes to a source fix:
 Every change that alters what is built (a pin, a build option, a patch, a
 toolchain) gets an entry here in the same commit.
 
+## 2026-10-26
+
+**Releases: rolling, by date**
+
+- Web client: the freerdp-web page 20261026.1 (`b6fce61`): **All screens**, the remote
+  desktop spread over every screen through the Window Management API (one large monitor for
+  the server), and the JSPI measurements in its README and notes. Same client pins.
+
 ## 2026-10-25
 
 **Releases: rolling, by date**
