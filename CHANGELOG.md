@@ -15,6 +15,9 @@ toolchain) gets an entry here in the same commit.
 
 **Releases: rolling, by date**
 
+- Web client: the freerdp-web page 20261026.5 (`5788b71`): under capture (Pointer Lock) the
+  remote pointer now shows on every screen of All screens, not only in the page's window.
+  The client is unchanged (FreeRDP `release-20261026.3`).
 - **FreeRDP `release-20261026.3`** (`cef3ddb47`): `release-20261026.2` plus our pull request
   #13860: no connection dialog window in a browser. Its SDL window took the session's one
   canvas, so after FreeRDP's auto-reconnect the canvas was 0 x 0 (no picture) and no window
