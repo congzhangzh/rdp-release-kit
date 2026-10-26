@@ -15,6 +15,14 @@ toolchain) gets an entry here in the same commit.
 
 **Releases: rolling, by date**
 
+- **FreeRDP `release-20261026.2`** (`dbba4a4ce`): `release-20261026.1` plus our pull request
+  #13865: in a browser the page may split the client's one canvas into monitors
+  (`Module.freerdpMonitors`), and the display layout then carries a monitor per screen, also
+  at the first activation after a connect or reconnect. Emscripten only. freerdp-web's suite
+  passed 22 of 22 with it, test-screens 5 of 5 in both of its modes (the session's RandR
+  monitors: two 640x480 or one 1280x480).
+- Web client: the freerdp-web page 20261026.3 (`bf7d6fd`): All screens as separate monitors
+  (the default) or one wide desktop.
 - **FreeRDP `release-20261026.1`** (`0cae530ae`): `release-20261025.1` plus our pull request
   #13864, the MessageChannel yield: `pollset_poll`'s yield waits on a MessageChannel task
   instead of `emscripten_sleep(0)`, whose `setTimeout(0)` the browser clamps to 4 ms. Emscripten
