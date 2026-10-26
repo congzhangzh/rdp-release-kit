@@ -15,6 +15,13 @@ toolchain) gets an entry here in the same commit.
 
 **Releases: rolling, by date**
 
+- **xrdp preview `release-20261026.2`** (`a1c78563`): `release-20261026.1` plus the same for
+  KDE Plasma (wlup's KWin backend): the output that is cast for the first monitor, a KWin
+  virtual output for each other one, at the client's positions with its primary monitor
+  first (Plasma's panel). Every wlup suite passed on that commit, all four together: sway
+  42 of 42 and 57 of 57, GNOME 44 of 44, KDE 39 of 39 (with its new two-monitor checks); and
+  freerdp-web's test-screens-wlup 4 of 4 on GNOME and on KDE, the mid-session layout of All
+  screens -> Separate screens. (Pinned by 77f18a7; this entry came one commit late.)
 - **xrdp preview `release-20261026.1`** (`816daad4`), picked from integration-wlup-all on
   the fork: GNOME sessions (wlup's Mutter backend) get a virtual monitor per RDP monitor
   instead of one as wide as all of them, with the client's primary monitor as GNOME's (the
