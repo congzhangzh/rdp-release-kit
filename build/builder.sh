@@ -7,7 +7,7 @@
 #
 # The image is rdp-release-kit-<kind>:<stock image as a tag>, labelled
 # with a hash of what goes into it: the stock image's name, tools.sh, the
-# dependency lists, FLAVOUR and NO_AV1. It is made again when that hash
+# dependency lists and NO_AV1. It is made again when that hash
 # changes, or when it is older than BUILDER_DAYS (default 7, for the
 # distributions' security updates). BUILDER=off runs the stock image, and
 # the build installs its tools itself. Expects KIT and ENGINE.
@@ -17,7 +17,7 @@ builder() {
         echo "$base"
         return 0
     fi
-    [ "$kind" = xrdp ] && kind+=-${FLAVOUR:-stable}${NO_AV1:+-noav1}
+    [ "$kind" = xrdp ] && kind+=${NO_AV1:+-noav1}
     # a tag: letters, digits, _ . -, at most 128
     name=rdp-release-kit-$kind:$(printf '%s' "$base" | tr -c 'A-Za-z0-9_.-' - | cut -c1-128)
     hash=$({ echo "$base $kind"; cat "$KIT/build/tools.sh" "$KIT"/deps/*.txt; } |
@@ -41,7 +41,7 @@ builder() {
     cat > "$ctx/Dockerfile" << EOF
 FROM $base
 COPY . /tools
-RUN FLAVOUR=${FLAVOUR:-stable} NO_AV1=${NO_AV1:-} bash /tools/build/tools.sh /tools ${kind%%-*} \\
+RUN NO_AV1=${NO_AV1:-} bash /tools/build/tools.sh /tools ${kind%%-*} \\
     && rm -rf /tools
 ENV KIT_TOOLS=$hash
 LABEL rdp-release-kit.tools=$hash rdp-release-kit.made=$(date +%s)

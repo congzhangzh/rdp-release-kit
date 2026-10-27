@@ -1,15 +1,25 @@
-# Distributions to build xrdp packages for, as container images: the
-# testing, stable and oldstable release of each.
-# Ubuntu: the latest release and the two newest LTS (25.10 is out of
-# support). Fedora: the next release (prerelease until late October 2026)
-# and the two supported ones. RHEL 10 and its rebuilds no longer ship the
-# Xorg server, which xorgxrdp needs.
+# Distributions to build the xrdp packages for (./build-xrdp.sh), as
+# container images: Debian testing and stable, the latest Ubuntu and its
+# two newest LTS, Fedora's next release and the two supported ones.
+# Debian 12 is not here: its GNOME (43) lacks libei and Mutter's
+# ConnectToEIS (GNOME 46 and newer), which the GNOME backend needs. RHEL 10
+# and its rebuilds no longer ship the Xorg server, which xorgxrdp needs.
+# Marks after the image (any number, then a note) leave out a feature the
+# release cannot give the packages; its Xorg sessions work all the same:
+# "no-sway": the release's sway is older than 1.11 (wlroots 0.19), whose
+# screen capture protocols (ext-image-copy-capture) the wlroots backend
+# needs; xrdp.ini lists no sway session, and the test skips sway.
+# "no-kde": the release's plasma-wayland-protocols has no output device
+# registry (kde_output_device_registry_v2, 1.21 and newer), which the KWin
+# backend needs; it is built without it, and xrdp.ini lists no KDE session.
+# "no-av1": the release has no libaom 3.0 or newer (deps/*.txt), which
+# xrdp's AV1 encoder needs; it is built without AV1, and clients get H.264
+# instead. ./check-deps.sh shows which release needs it.
 debian:testing
-debian:13
-debian:12
+debian:13       no-sway no-kde   sway 1.10, plasma-wayland-protocols 1.17
 ubuntu:26.10
-ubuntu:26.04
-ubuntu:24.04
+ubuntu:26.04    no-kde           plasma-wayland-protocols 1.20
+ubuntu:24.04    no-sway no-kde   sway 1.9, plasma-wayland-protocols 1.10
 fedora:45
 fedora:44
 fedora:43

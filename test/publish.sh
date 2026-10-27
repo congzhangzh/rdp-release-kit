@@ -190,8 +190,8 @@ TITLE="Web client for freerdp-web p1 (kit k1)" publish "$out" client.zip
 check "and publishes nothing new" '[ $rc = 0 ] && grep -q "published already" <<< "$out"'
 name web "Web client for freerdp-web p1 (kit k2)" fedcba9876543210
 check "the next build that day is .2, with its kit commit" '[ "$out" = web-20261021.2-fedcba987654 ]'
-name xrdp-preview "xrdp preview x1 (kit k2)" fedcba9876543210
-check "each kind counts on its own" '[ "$out" = xrdp-preview-20261021.1-fedcba987654 ]'
+name xrdp "xrdp x1 (kit k2)" fedcba9876543210
+check "each kind counts on its own" '[ "$out" = xrdp-20261021.1-fedcba987654 ]'
 name pipewire-module-xrdp "pipewire-module-xrdp 0.2 (748f562d6165) for Fedora 43,44,45 (inputs i1)" fedcba9876543210
 check "PipeWire's xrdp module is a kind of its own" '[ "$out" = pipewire-module-xrdp-20261021.1-fedcba987654 ]'
 echo '[{"id": 9, "tag_name": "web-20261021.4-aaaaaaaaaaaa", "name": "Web client for freerdp-web p0 (kit k0)", "draft": true}]' \

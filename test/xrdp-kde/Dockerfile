@@ -1,4 +1,4 @@
-# KDE Plasma on Wayland through the kit's xrdp preview: sesman starts Plasma
+# KDE Plasma on Wayland through the kit's xrdp: sesman starts Plasma
 # for the user (xrdp.ini code=32, the wlup module's KWin backend), and xrdp
 # encodes it with AV1. KWin 6.8 composites in software (Mesa llvmpipe) with
 # the host's /dev/udmabuf: no GPU, no DRM node, no vgem. Plasma, like GNOME,
@@ -8,9 +8,9 @@
 #
 # Arch Linux, the distribution with KWin 6.8 (Debian has 6.7, Fedora 45
 # 6.7.5). xrdp is no kit package here: the build stage compiles the kit's
-# pinned sources (sources.lock: xrdp_preview, librfxcodec, libpainter,
-# pipewire_xrdp) with the kit packages' configure options, plus the KWin
-# backend. Used by wasm-session.sh with SERVER=xrdp-kde. Everything in it
+# pinned sources (sources.lock: xrdp, librfxcodec, libpainter,
+# pipewire_xrdp) with the kit packages' configure options, the KWin
+# backend among them. Used by wasm-session.sh with SERVER=xrdp-kde. Everything in it
 # is synthetic: user tester, password kit-test-pw, a TLS key made here.
 #
 # Build context: this directory and, in src/, the four source archives
@@ -22,8 +22,8 @@ RUN pacman -Syu --noconfirm --needed nasm autoconf automake libtool pkgconf open
         > /dev/null
 COPY src/ /src/
 RUN set -e; cd /src; for t in *.tar; do tar -xf "$t"; done; \
-    for sub in librfxcodec libpainter; do rm -rf "xrdp_preview/$sub"; cp -a "$sub" "xrdp_preview/$sub"; done; \
-    cd /src/xrdp_preview; ./bootstrap > /tmp/bootstrap.log 2>&1; \
+    for sub in librfxcodec libpainter; do rm -rf "xrdp/$sub"; cp -a "$sub" "xrdp/$sub"; done; \
+    cd /src/xrdp; ./bootstrap > /tmp/bootstrap.log 2>&1; \
     # Arch's layout: /usr/sbin is a link to /usr/bin, and a real sbin in the
     # copy below would replace it (and lose what is reached through it)
     ./configure --prefix=/usr --sbindir=/usr/bin --sysconfdir=/etc --localstatedir=/var --libdir=/usr/lib \

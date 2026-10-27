@@ -21,20 +21,19 @@
 # reached through gnome-remote-desktop, in a container
 # (test/gnome/, unprivileged); the RDP and websockify ports stay 3389 and 3390.
 #
-# SERVER=xrdp-gnome: GNOME on Wayland through the kit's xrdp preview, with
-# AV1 (test/xrdp-gnome/: Fedora 45, systemd under rootless podman). The
-# packages dir then holds the preview's Fedora 45 packages (default
-# dist/xrdp-preview/fedora-45). MUTTER_DEBUG=<topics> (Mutter's, e.g.
+# SERVER=xrdp-gnome: GNOME on Wayland through the kit's xrdp, with AV1
+# (test/xrdp-gnome/: Fedora 45, systemd under rootless podman). The
+# packages dir then holds the kit's Fedora 45 packages (default
+# dist/xrdp/fedora-45). MUTTER_DEBUG=<topics> (Mutter's, e.g.
 # geometry,window-state) turns them on in the session; the session's whole
 # journal is then kept as session.journal.
 #
-# SERVER=xrdp-kde: KDE Plasma on Wayland through the xrdp preview, with AV1
+# SERVER=xrdp-kde: KDE Plasma on Wayland through the kit's xrdp, with AV1
 # (test/xrdp-kde/: Arch with KWin 6.8, xrdp compiled there from the pinned
 # sources). KWin renders in software with the host's /dev/udmabuf: no GPU,
 # no DRM node, no vgem; the user running podman must be able to open it
-# (group kvm). XRDP_PREVIEW_TAR=<tar> compiles an xrdp tree under test
-# there instead of the pinned one (git archive --prefix=xrdp_preview/
-# <commit>). PODMAN=<command> runs another podman for both, e.g. a
+# (group kvm). XRDP_TAR=<tar> compiles an xrdp tree under test there
+# instead of the pinned one (git archive --prefix=xrdp/ <commit>). PODMAN=<command> runs another podman for both, e.g. a
 # rootful one on a CI runner; SERVER_RUN_OPTS=<options> adds options to
 # their container (e.g. what an older podman's defaults need).
 #
@@ -70,13 +69,13 @@ PAGE=$1
 GATEWAY=$(cd "$(dirname "$2")" && pwd)/$(basename "$2")
 PKGS=${3:-$KIT/dist/xrdp/debian-13}
 ENGINE=${ENGINE:-$(command -v docker || command -v podman)}
-# GNOME and KDE through the xrdp preview need systemd in their container:
+# GNOME and KDE through xrdp need systemd in their container:
 # podman, which runs it without privileges
 case ${SERVER:-} in
 xrdp-gnome | xrdp-kde)
     ENGINE=${PODMAN:-$(command -v podman)} ||
         { echo "SERVER=$SERVER needs podman (systemd without privileges)" >&2; exit 1; }
-    PKGS=${3:-$KIT/dist/xrdp-preview/fedora-45} ;;
+    PKGS=${3:-$KIT/dist/xrdp/fedora-45} ;;
 esac
 OUT=$KIT/dist/test/wasm${WASM_ENGINE:+-$WASM_ENGINE}${SCREENS:+-screens}
 NAME=kit-wasm-server
@@ -168,10 +167,10 @@ cp "$KIT/test/$SERVER/Dockerfile" "$ctx/"
 DEVICES=()
 read -r -a RUN_OPTS <<< "${SERVER_RUN_OPTS:-}"
 if [ "$SERVER" = xrdp-gnome ]; then
-    echo "== server: GNOME on Wayland through the xrdp preview (AV1), Fedora 45, systemd under podman"
+    echo "== server: GNOME on Wayland through the kit's xrdp (AV1), Fedora 45, systemd under podman"
     IMAGE=kit-xrdp-gnome:f45 HOST=rdp-gnome
-    ls "$PKGS"/xrdp-*.fc45.x86_64.rpm > /dev/null 2>&1 || { echo "no Fedora 45 xrdp preview packages in $PKGS" \
-        "(./build-xrdp.sh --preview fedora:45, or the *fc45* files of an xrdp-preview-* pre-release)" >&2; exit 1; }
+    ls "$PKGS"/xrdp-*.fc45.x86_64.rpm > /dev/null 2>&1 || { echo "no Fedora 45 xrdp packages in $PKGS" \
+        "(./build-xrdp.sh fedora:45, or the *fc45* files of an xrdp-* pre-release)" >&2; exit 1; }
     mkdir -p "$ctx/pkgs"
     cp "$PKGS"/xrdp-*.fc45.x86_64.rpm "$ctx/pkgs/"
     # PipeWire's xrdp module, the session's sound (the kit's package; Fedora has none)
@@ -181,7 +180,7 @@ if [ "$SERVER" = xrdp-gnome ]; then
     [ -z "${MUTTER_DEBUG:-}" ] || printf 'RUN mkdir -p /etc/environment.d && echo MUTTER_DEBUG=%s > /etc/environment.d/90-mutter-debug.conf\n' \
         "$MUTTER_DEBUG" >> "$ctx/Dockerfile"
 else
-    echo "== server: KDE Plasma on Wayland through the xrdp preview (AV1), Arch (KWin 6.8), systemd under podman"
+    echo "== server: KDE Plasma on Wayland through the kit's xrdp (AV1), Arch (KWin 6.8), systemd under podman"
     IMAGE=kit-xrdp-kde:arch HOST=rdp-kde
     # KWin 6.8 renders in software with /dev/udmabuf (no GPU, no DRM, no vgem);
     # a rootless podman opens it as this user
@@ -193,9 +192,9 @@ else
     DEVICES=(--device /dev/udmabuf)
     # xrdp is compiled in the image from the pinned sources, checked as every build's are
     mkdir -p "$ctx/src"
-    for src in xrdp_preview librfxcodec libpainter pipewire_xrdp; do
-        if [ "$src" = xrdp_preview ] && [ -n "${XRDP_PREVIEW_TAR:-}" ]; then
-            cp "$XRDP_PREVIEW_TAR" "$ctx/src/$src.tar" || exit 1
+    for src in xrdp librfxcodec libpainter pipewire_xrdp; do
+        if [ "$src" = xrdp ] && [ -n "${XRDP_TAR:-}" ]; then
+            cp "$XRDP_TAR" "$ctx/src/$src.tar" || exit 1
             continue
         fi
         # shellcheck disable=SC2016 # for the inner shell
@@ -235,18 +234,28 @@ fi
                  "$ENGINE" logs --tail 40 "$NAME" >&2
                  "$ENGINE" exec "$NAME" journalctl -b --no-pager -n 30 >&2; exit 1; }
 else
-echo "== server: sshd + xrdp on 127.0.0.1 only"
+# the packages dir "debian": Debian 13's own xrdp and xorgxrdp, xrdp's
+# upstream release as Debian ships it (the ladder's and the demo's
+# "original"), instead of the kit's packages
+if [ "$PKGS" = debian ]; then
+    XRDP_INSTALL="xrdp xorgxrdp" PKG_MOUNT=()
+    echo "== server: sshd + Debian 13's own xrdp on 127.0.0.1 only"
+else
+    XRDP_INSTALL="/pkgs/*.deb" PKG_MOUNT=(-v "$PKGS":/pkgs:ro)
+    ls "$PKGS"/xrdp_*.deb "$PKGS"/xorgxrdp_*.deb > /dev/null || { echo "no xrdp packages in $PKGS" >&2; exit 1; }
+    echo "== server: sshd + xrdp on 127.0.0.1 only"
+fi
 "$ENGINE" rm -f "$NAME" > /dev/null 2>&1
 # a fixed host name: the remote desktop shows nothing of the machine running the test
 "$ENGINE" run -d --name "$NAME" --hostname rdp-test -p 127.0.0.1:2223:22 -v "$OUT/ssh/key.pub":/key.pub:ro \
-    -v "$PKGS":/pkgs:ro "${DEMO_MOUNTS[@]}" -e DESKTOP="$DESKTOP" -e SCREENS="${SCREENS:+1}" debian:13 sleep 3600 > /dev/null
-ls "$PKGS"/xrdp_*.deb "$PKGS"/xorgxrdp_*.deb > /dev/null || { echo "no xrdp packages in $PKGS" >&2; exit 1; }
+    "${PKG_MOUNT[@]}" "${DEMO_MOUNTS[@]}" -e DESKTOP="$DESKTOP" -e SCREENS="${SCREENS:+1}" \
+    -e XRDP_INSTALL="$XRDP_INSTALL" debian:13 sleep 3600 > /dev/null
 "$ENGINE" exec "$NAME" bash -c '
     set -e
     export DEBIAN_FRONTEND=noninteractive
     apt-get update -qq > /dev/null
-    # shellcheck disable=SC2086 # DESKTOP is a list of packages
-    apt-get install -y -qq openssh-server websockify xterm $DESKTOP /pkgs/*.deb > /tmp/apt.log 2>&1 ||
+    # shellcheck disable=SC2086 # DESKTOP and XRDP_INSTALL are lists of packages
+    apt-get install -y -qq openssh-server websockify xterm $DESKTOP $XRDP_INSTALL > /tmp/apt.log 2>&1 ||
         { tail -20 /tmp/apt.log; exit 1; }
     useradd -m -s /bin/bash tester && echo tester:kit-test-pw | chpasswd
     install -d -m 700 -o tester -g tester /home/tester/.ssh

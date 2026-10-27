@@ -13,6 +13,42 @@ toolchain) gets an entry here in the same commit.
 
 ## 2026-10-27
 
+- **One xrdp: ours, with Xorg and Wayland sessions, in the rolling release** (聪哥's
+  decision). The kit built two xrdp lines: xrdp's release 0.10.6.1 (Xorg only, no
+  `libwlup.so`), which the rolling release carried, and our release as a preview, in
+  pre-releases only, without PipeWire's xrdp module. So "Latest" installed on Fedora
+  offered no Wayland session ("Unrecognised session code 31" for `[GNOME]`), and GNOME
+  with sound took two releases. Now:
+  - one `xrdp` pin, our fork's `release-20261027.1` (`8ef7574a`), and `xorgxrdp` its
+    development commit (`20261018.1`); `xrdp_preview`, `xorgxrdp_preview`, xrdp 0.10.6.1,
+    xorgxrdp 0.10.5 and their signatures (`signed.lock`, `keys/`) go;
+  - the rolling release carries these packages, with `pipewire-module-xrdp` for Fedora,
+    and a table to install them, release by release, with direct links
+    (`build/xrdp-install-notes.sh`);
+  - no "preview" in new names: the pre-release is `xrdp-<YYYYMMDD>.<N>-<kit commit>`,
+    the version `0.10.80+<pin's version>.<commit>` (`0.10.80+20261027.1.8ef7574a`), which
+    sorts after the earlier preview packages (`~preview`) and upgrades them; old
+    `xrdp-preview-*` pre-releases keep their names; `build-xrdp.sh`, `check-deps.sh`
+    and `test/xrdp-session.sh` have no `--preview` any more;
+  - KDE Plasma too: the KWin backend is built and `[KDE]` (code 32) is on the login
+    screen where the release's plasma-wayland-protocols has the output device registry
+    (1.21 and newer): Debian testing, Ubuntu 26.10, Fedora 43 to 45. Debian 13 (1.17),
+    Ubuntu 26.04 (1.20) and 24.04 (1.10) are marked `no-kde`;
+  - the releases are the preview's (`distros.list`, with its marks): Debian 12 is no
+    longer built, since GNOME's backend needs GNOME 46 or newer;
+  - the ladder's and the demo's "original" is xrdp's upstream release as Debian 13
+    ships it (`wasm-session.sh` with the packages dir `debian`); the ladder's servers
+    are `xrdp-original-xorg`, `xrdp-xorg`, `xrdp-gnome`, `xrdp-kde`; the demo videos keep
+    their names (`xrdp-preview-*`), which freerdp-web's `media.json` links.
+  Locally: `build-xrdp.sh` and `test/xrdp-session.sh` on
+  fedora:45 (18 of 18: Xorg, sway, the login screen lists GNOME and KDE after Xorg,
+  PipeWire's module) and debian:testing (17 of 17); browser logins
+  (`wasm-session.sh`) to GNOME from those Fedora 45 packages, to KDE compiled from the
+  pin (root podman), and to Debian 13's own xrdp (0.10.1), 5 of 5 each; the All screens
+  rung against Debian's xrdp, 19 and 18 checks; `test/publish.sh` 31 of 31,
+  `test/overrides.sh` 31 of 31; the install table from placeholder files for every
+  release.
+
 - **xrdp preview: the Wayland sessions are on the login screen.** The preview packages
   (rpm and deb) list `[GNOME]` (code 31, backend `mutter`) when the GNOME backend was
   built, and `[Wayland]` (sway, code 30) unless the release is marked `no-sway`; xrdp's

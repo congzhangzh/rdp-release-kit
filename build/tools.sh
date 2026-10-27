@@ -5,8 +5,7 @@
 #
 # It runs once, when the builder image is made (build/builder.sh), and the
 # builds then start from that image. In a stock image (BUILDER=off) each
-# build runs it itself. xrdp reads FLAVOUR and NO_AV1, as
-# build/build-xrdp-pkg.sh does.
+# build runs it itself. xrdp reads NO_AV1, as build/build-xrdp-pkg.sh does.
 set -euo pipefail
 
 KIT=$1
@@ -27,9 +26,7 @@ case $KIND in
         PACKAGES=(ninja-build meson pkg-config zip ccache rsync) ;;
     xrdp)
         # the first word of each line in deps/<family>.txt
-        DEPLISTS=("$KIT/deps/$FAMILY.txt")
-        [ "${FLAVOUR:-stable}" = preview ] && DEPLISTS+=("$KIT/deps/$FAMILY-preview.txt")
-        mapfile -t PACKAGES < <(grep -h -v -E '^\s*(#|$)' "${DEPLISTS[@]}" | awk '{print $1}' |
+        mapfile -t PACKAGES < <(grep -h -v -E '^\s*(#|$)' "$KIT/deps/$FAMILY.txt" | awk '{print $1}' |
             if [ -n "${NO_AV1:-}" ]; then grep -v '^libaom-'; else cat; fi)
         PACKAGES+=(ccache rsync) ;;
     *)

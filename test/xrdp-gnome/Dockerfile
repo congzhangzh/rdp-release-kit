@@ -1,4 +1,4 @@
-# GNOME on Wayland through the kit's xrdp preview: sesman starts GNOME for
+# GNOME on Wayland through the kit's xrdp: sesman starts GNOME for
 # the user (xrdp.ini code=31, the wlup module's Mutter backend), and xrdp
 # encodes it with AV1. GNOME is led by gnome-session through the user's
 # systemd, so systemd is PID 1 here, which Docker allows only with
@@ -14,7 +14,7 @@
 # TLS key xrdp's package made when the image was built.
 #
 # Build context: this directory and, in pkgs/, the kit's Fedora 45
-# packages: the xrdp preview and PipeWire's xrdp module, the session's
+# packages: xrdp and PipeWire's xrdp module, the session's
 # sound to the client (wasm-session.sh puts them there).
 FROM fedora:45
 RUN dnf -y -q install --setopt=install_weak_deps=False \

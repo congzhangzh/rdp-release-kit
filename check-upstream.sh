@@ -6,7 +6,9 @@
 #
 # Prints "update" where upstream is ahead; exits 0 either way (a person
 # decides what to bump). Our own preview sources are not checked (FreeRDP
-# among them: every client builds our frozen preview of its master);
+# among them: every client builds our frozen preview of its master; xrdp
+# and xorgxrdp too: the packages build our xrdp release and xorgxrdp's
+# development commit);
 # freerdp-web and freerdp-tk are, because the kit takes them by their releases.
 set -euo pipefail
 cd "$(dirname "$0")"
@@ -24,8 +26,6 @@ WATCH=(
 	"dav1d       https://code.videolan.org/videolan/dav1d.git     ^[0-9]+\.[0-9]+\.[0-9]+$             ''"
 	"zlib        https://github.com/madler/zlib.git               ^v[0-9]+\.[0-9]+(\.[0-9]+)*$          v"
 	"jansson     https://github.com/akheron/jansson.git           ^v[0-9]+\.[0-9]+(\.[0-9]+)?$          v"
-	"xrdp        https://github.com/neutrinolabs/xrdp.git         ^v[0-9]+\.[0-9]+\.[0-9]+(\.[0-9]+)?$  v"
-	"xorgxrdp    https://github.com/neutrinolabs/xorgxrdp.git     ^v[0-9]+\.[0-9]+\.[0-9]+(\.[0-9]+)?$  v"
 	"libressl    https://github.com/libressl/portable.git         ^v[0-9]+\.[0-9]+\.[0-9]+$             v"
 	"llvm_mingw  https://github.com/mstorsjo/llvm-mingw.git       ^[0-9]{8}$                           ''"
 	# ours: release tags have no prefix since 2026-10-25, v<version> before

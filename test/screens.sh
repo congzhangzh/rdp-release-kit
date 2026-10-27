@@ -3,7 +3,7 @@
 # one-monitor login (wasm-session.sh), then the rung above it on the same
 # kind of server, freerdp-web's All screens test (wasm-session.sh with
 # SCREENS=): rung 2 against xrdp with Xorg, rung 3 against GNOME or KDE on
-# Wayland through the xrdp preview's wlup module. Each rung gets a fresh
+# Wayland through the kit's xrdp and its wlup module. Each rung gets a fresh
 # server, and a failing rung does not stop the ones above it, so the
 # summary says at once whether a problem is basic (rung 1 fails already) or
 # one of several monitors (rung 1 passes, the rung above fails).
@@ -14,14 +14,13 @@
 # test-connect.mjs, test-keymap.py; the CI's wasm-build puts the pinned
 # page's into dist/wasm/tests/). The servers, default all four:
 #
-#   xrdp-original-xorg   xrdp's release (the kit's packages, Debian 13), Xorg
-#   xrdp-preview-xorg    the xrdp preview, Debian 13, Xorg
-#   xrdp-preview-gnome   the xrdp preview, Fedora 45, GNOME on Wayland
-#   xrdp-preview-kde     the xrdp preview compiled on Arch, KDE Plasma on Wayland
+#   xrdp-original-xorg   xrdp's upstream release as Debian 13 ships it, Xorg
+#   xrdp-xorg            the kit's xrdp, Debian 13, Xorg
+#   xrdp-gnome           the kit's xrdp, Fedora 45, GNOME on Wayland
+#   xrdp-kde             the kit's xrdp compiled on Arch, KDE Plasma on Wayland
 #
-# Their packages: XRDP_PKGS (default dist/xrdp/debian-13), PREVIEW_DEBS
-# (dist/xrdp-preview/debian-13), PREVIEW_RPMS (dist/xrdp-preview/fedora-45,
-# with pipewire-module-xrdp). Anything else wasm-session.sh takes passes
+# The kit's packages: XRDP_DEBS (default dist/xrdp/debian-13), XRDP_RPMS
+# (dist/xrdp/fedora-45, with pipewire-module-xrdp). Anything else wasm-session.sh takes passes
 # through (LOCAL_WS_PORT, PODMAN, SERVER_RUN_OPTS ...). Output: every
 # rung's log and test output in dist/test/screens/, the summary there as
 # summary.md too (and in the CI run's summary).
@@ -33,11 +32,10 @@ GATEWAY=$(cd "$(dirname "$2")" && pwd)/$(basename "$2")
 TESTS=$(cd "$3" && pwd)
 shift 3
 LADDER=("$@")
-[ ${#LADDER[@]} -gt 0 ] || LADDER=(xrdp-original-xorg xrdp-preview-xorg xrdp-preview-gnome xrdp-preview-kde)
+[ ${#LADDER[@]} -gt 0 ] || LADDER=(xrdp-original-xorg xrdp-xorg xrdp-gnome xrdp-kde)
 abs() { (cd "$1" 2> /dev/null && pwd) || echo "$1"; }
-XRDP_PKGS=$(abs "${XRDP_PKGS:-$KIT/dist/xrdp/debian-13}")
-PREVIEW_DEBS=$(abs "${PREVIEW_DEBS:-$KIT/dist/xrdp-preview/debian-13}")
-PREVIEW_RPMS=$(abs "${PREVIEW_RPMS:-$KIT/dist/xrdp-preview/fedora-45}")
+XRDP_DEBS=$(abs "${XRDP_DEBS:-$KIT/dist/xrdp/debian-13}")
+XRDP_RPMS=$(abs "${XRDP_RPMS:-$KIT/dist/xrdp/fedora-45}")
 OUT=$KIT/dist/test/screens
 rm -rf "$OUT"; mkdir -p "$OUT"
 
@@ -74,10 +72,10 @@ summary=$OUT/summary.md
 status=0
 for name in "${LADDER[@]}"; do
     case $name in
-    xrdp-original-xorg) server=xrdp PKGS=$XRDP_PKGS up=2 ;;
-    xrdp-preview-xorg) server=xrdp PKGS=$PREVIEW_DEBS up=2 ;;
-    xrdp-preview-gnome) server=xrdp-gnome PKGS=$PREVIEW_RPMS up=3 ;;
-    xrdp-preview-kde) server=xrdp-kde PKGS=$PREVIEW_RPMS up=3 ;;
+    xrdp-original-xorg) server=xrdp PKGS=debian up=2 ;;
+    xrdp-xorg) server=xrdp PKGS=$XRDP_DEBS up=2 ;;
+    xrdp-gnome) server=xrdp-gnome PKGS=$XRDP_RPMS up=3 ;;
+    xrdp-kde) server=xrdp-kde PKGS=$XRDP_RPMS up=3 ;;
     *) echo "screens.sh: no server $name" >&2; exit 2 ;;
     esac
     one=$(rung "$name" 1 "$KIT/dist/test/wasm" SERVER="$server")

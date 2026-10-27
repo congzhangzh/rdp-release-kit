@@ -45,9 +45,10 @@ are made for.
 | macOS, a browser download | starts only after `xattr -dr com.apple.quarantine <folder>` | The client and its Python are signed ad hoc, not notarized by Apple (that needs a paid developer account), so Gatekeeper refuses a quarantined download. |
 | macOS 11 and older | not supported | The client is built for macOS 12 (`MACOSX_DEPLOYMENT_TARGET`), the oldest release with security updates until 2024 that every Apple Silicon Mac and Intel Macs from 2015 run. |
 | xrdp packages | RHEL/Alma/Rocky, openSUSE; releases older than those listed | Not built (the kit's lists, `distros.list` and `deps/`, cover Debian, Ubuntu and Fedora); EPEL has an xrdp for RHEL's family. xorgxrdp is an Xorg driver that must match its Xorg server exactly, so each release gets its own build. |
-| xrdp preview: GNOME | Debian 12 | GNOME's backend uses Mutter's remote desktop API of GNOME 46 and newer; Debian 12 has GNOME 43. |
-| xrdp preview: sway | Debian 13, Ubuntu 24.04 (Xorg sessions only) | Sway sessions need sway 1.11 (wlroots 0.19) for the `ext-image-copy-capture` protocols; Debian 13 has sway 1.10, Ubuntu 24.04 sway 1.9. |
-| xrdp preview: AV1 | a release without libaom 3.0 | Its preview is built without AV1 (`no-av1`); clients get H.264. |
+| xrdp packages | Debian 12 | Not built since the kit builds one xrdp, ours: its GNOME backend uses Mutter's remote desktop API of GNOME 46 and newer, and Debian 12 has GNOME 43. |
+| xrdp: KDE | Debian 13, Ubuntu 26.04 and 24.04 (no KDE session) | The KWin backend needs KWin's output device registry (plasma-wayland-protocols 1.21 and newer); Debian 13 has 1.17, Ubuntu 26.04 1.20, Ubuntu 24.04 1.10. They are marked `no-kde`. |
+| xrdp: sway | Debian 13, Ubuntu 24.04 (no sway session) | Sway sessions need sway 1.11 (wlroots 0.19) for the `ext-image-copy-capture` protocols; Debian 13 has sway 1.10, Ubuntu 24.04 sway 1.9. They are marked `no-sway`. |
+| xrdp: AV1 | a release without libaom 3.0 | It is built without AV1 (`no-av1`); clients get H.264. |
 | Web client | browsers other than Chrome: partly | What each browser lacks and what that turns off (video codecs, the passkey vault, the clipboard): [freerdp-web's docs/browsers.md](https://github.com/congzhangzh/freerdp-web/blob/main/docs/browsers.md). |
 
 Every source is pinned in [`sources.lock`](sources.lock) with its SHA-256
@@ -74,23 +75,22 @@ same tables are in the notes of every release.
 | Windows client `sdl-freerdp.exe` + `freerdp-tk` | freerdp 20261026.4, sdl3 3.4.18, sdl3_ttf 3.2.2, freetype 2.15.0, libressl 4.4.0, opus 1.6.1, dav1d 1.5.4, zlib 1.3.2, jansson 2.15.1, llvm_mingw 20261020, freerdp_tk 0.1.1, python_windows_x86_64 3.13.17+20261021, python_windows_aarch64 3.13.17+20261021 | `build/check-windows.sh` (needs only Windows' own DLLs) |
 | macOS client `sdl-freerdp` + `freerdp-tk` | freerdp 20261026.4, sdl3 3.4.18, sdl3_ttf 3.2.2, freetype 2.15.0, openssl 3.5.9, opus 1.6.1, dav1d 1.5.4, zlib 1.3.2, jansson 2.15.1, freerdp_tk 0.1.1, python_macos_arm64 3.13.17+20261021, python_macos_x86_64 3.13.17+20261021 | `build/check-macos.sh` (only macOS's own libraries and frameworks, minimum macOS 12.0, an ad-hoc signature); the bundled Python loads Tk and freerdp-tk; arm64 on macos-15, x86_64 on macos-15-intel |
 | Web client + freerdp-web page | freerdp 20261026.4, sdl3_wasm 3.4.18+timer, sdl3_ttf 3.2.2, freetype 2.15.0, libressl 4.4.0, opus 1.6.1, dav1d 1.5.4, zlib 1.3.2, jansson 2.15.1, freerdp_web 20261027.2 | `test/wasm-session.sh`: a browser logs in to xrdp through SSH + websockify, the page served without COOP/COEP headers (as GitHub Pages) |
-| xrdp packages (.deb, .rpm) | xrdp 0.10.6.1, xorgxrdp 0.10.5, x264 b35605a, opus 1.6.1, pipewire_xrdp 0.2 | `check-deps.sh`, then `test/xrdp-session.sh`: install in a fresh container of each release, log in over RDP, an Xorg session with an xterm comes up |
-| xrdp preview packages | xrdp_preview 20261027.1, librfxcodec 0badc06, libpainter 379b8fb, xorgxrdp_preview 20261018.1, x264 b35605a, opus 1.6.1 | `test/xrdp-session.sh --preview`: the Xorg login, then a Wayland one (sway) captured at the client's size |
+| xrdp packages (.deb, .rpm) | xrdp 20261027.1, librfxcodec 0badc06, libpainter 379b8fb, xorgxrdp 20261018.1, x264 b35605a, opus 1.6.1, pipewire_xrdp 0.2 | `check-deps.sh`, then `test/xrdp-session.sh`: install in a fresh container of each release, log in over RDP: an Xorg session (xorgxrdp) with an xterm, then a Wayland one (sway, unless the release is marked no-sway) captured at the client's size; the login screen lists GNOME, and KDE unless no-kde |
 
 Pins that are not a plain upstream release:
 
 | Source | Pin | Base | What it changes or fixes | How the change is tested | Upstream |
 |---|---|---|---|---|---|
 | `freerdp` | 20261026.4 [`c12c6df85`](https://github.com/congzhangzh/FreeRDP/commit/c12c6df85789c3757b24a76a74ed3f4978ffa667) | FreeRDP master @ b2403bb99 (2026-10-23) | our release, picked from integration-latest on the fork; every client, native and web, builds it, not an upstream release; master has the Opus microphone fix #13810 that 3.32.2 lacks, and our merged AV1 #13731, sound #13732, H.264 through WebCodecs #13812, #13838, #13839. 5 commits of open pull requests for Emscripten builds (not compiled natively): clipboard #13733, microphone #13811, each as of 2026-10-25, the MessageChannel yield #13864 (pollset_poll's yield waits on a MessageChannel task, not setTimeout's clamped 4 ms; as of 2026-10-26), the page's monitors #13865 (the page splits the one canvas into a monitor per screen for the display layout; as of 2026-10-26), and no connection dialog window #13860 (its SDL window took the session's canvas: after a reconnect the canvas was 0 x 0 and the keys went nowhere; as of 2026-10-25). 1 commit of an open pull request for every client: SDL3 clipboard events with every field set #13872 (a pushed clipboard event left num_mime_types to the stack, and a negative value aborted the client on the server's next copy; as of 2026-10-26) | the native clients' smoke and xrdp login tests, the web login test; freerdp-web's suite on Asyncify and JSPI (22 of 22) and a forced-yield throughput check (53–57 → 1913–2291 kB/s); each pull request's own CI upstream | [FreeRDP#13733](https://github.com/FreeRDP/FreeRDP/issues/13733) [FreeRDP#13811](https://github.com/FreeRDP/FreeRDP/issues/13811) [FreeRDP#13864](https://github.com/FreeRDP/FreeRDP/issues/13864) [FreeRDP#13865](https://github.com/FreeRDP/FreeRDP/issues/13865) [FreeRDP#13860](https://github.com/FreeRDP/FreeRDP/issues/13860) [FreeRDP#13872](https://github.com/FreeRDP/FreeRDP/issues/13872) |
+| `xrdp` | 20261027.1 [`8ef7574a7`](https://github.com/congzhangzh/xrdp/commit/8ef7574a72af69afe9135b0d67b7b4d2ee2745d4) | xrdp devel @ 5943357a (2026-10-14) | 127 commits on their way upstream: Wayland sessions (wlup: sway, GNOME, KDE), GNOME and KDE with a monitor per RDP monitor and the client's primary as their own (branches feature-wlup-mutter-multimon, feature-wlup-kwin-multimon), and a max_fps setting for them, KWin 6.8's custom modes (kde_output_management_v2 22), AV1 with 4:4:4, encoder paced by the client's frame acknowledgements, Opus sound fixes (#3922: 2 of its 3 commits); plus the JPEG quality byte compared as unsigned, so it builds on ARM64 (branch caps-jpeg-quality-unsigned) | the login test, Xorg and Wayland, on x86_64 and ARM64; the ARM64 fix also by a build with -funsigned-char, which fails without it | [xrdp#3904](https://github.com/neutrinolabs/xrdp/issues/3904) [xrdp#3911](https://github.com/neutrinolabs/xrdp/issues/3911) [xrdp#3912](https://github.com/neutrinolabs/xrdp/issues/3912) [xrdp#3913](https://github.com/neutrinolabs/xrdp/issues/3913) [xrdp#3914](https://github.com/neutrinolabs/xrdp/issues/3914) [xrdp#3915](https://github.com/neutrinolabs/xrdp/issues/3915) [xrdp#3922](https://github.com/neutrinolabs/xrdp/issues/3922) |
 | `freerdp_tk` | 0.1.1 [`167afad97`](https://github.com/congzhangzh/freerdp-tk/commit/167afad977b38f6ae51a86921b601f07472dca15) | its release 0.1.1 | our own connection window (Tkinter), shipped with the clients and their Python; `freerdp-tk` / `freerdp-tk.cmd` starts it | the smoke test loads it with the bundled Python on every distribution | — |
 | `sdl3_wasm` | 3.4.18+timer [`1d615c14f`](https://github.com/congzhangzh/SDL/commit/1d615c14f95a3389bf0026e719144ad51378e40c) | SDL `release-3.4.18` | 1 commit: the Emscripten timers are safe to use from any thread. Since 4d8f84f161 (in 3.2.30 and 3.4) they run with pthreads too, but a timeout belongs to the thread that set it: a timer removed from another thread fired through a freed entry ("table index is out of bounds" in `SDL_Emscripten_TimerHelper`), in about 1 of 3 first sessions. 3.4.18 already has upstream's `FS.mkdir("/tmp/filedrop")` guard, which 3.2.30 needed backported (a second window, FreeRDP's retry dialog, threw `EEXIST` and hung a JSPI client after a network drop) | freerdp-web's whole suite on Asyncify and JSPI builds, 28 of 28 runs, `test-capture` and `test-reconnect` included, with the page's pointer-event fix (SDL 3.4 reads the mouse from pointer events); `SDL_timer.c` compiles with `-Werror` | [SDL#16587](https://github.com/libsdl-org/SDL/issues/16587) |
 | `freerdp_web` | 20261027.2 [`77fc7eb3e`](https://github.com/congzhangzh/freerdp-web/commit/77fc7eb3e8ca23ea73a064876dee61ab21b0a448) | its release 20261027.2 | our own page, taken by its release tag | its unit tests and page checks (freerdp-web CI), then the web login test | — |
-| `xrdp_preview` | 20261027.1 [`8ef7574a7`](https://github.com/congzhangzh/xrdp/commit/8ef7574a72af69afe9135b0d67b7b4d2ee2745d4) | xrdp devel @ 5943357a (2026-10-14) | 127 commits on their way upstream: Wayland sessions (wlup: sway, GNOME, KDE), GNOME and KDE with a monitor per RDP monitor and the client's primary as their own (branches feature-wlup-mutter-multimon, feature-wlup-kwin-multimon), and a max_fps setting for them, KWin 6.8's custom modes (kde_output_management_v2 22), AV1 with 4:4:4, encoder paced by the client's frame acknowledgements, Opus sound fixes (#3922: 2 of its 3 commits); plus the JPEG quality byte compared as unsigned, so it builds on ARM64 (branch caps-jpeg-quality-unsigned) | the preview login test, Xorg and Wayland, on x86_64 and ARM64; the ARM64 fix also by a build with -funsigned-char, which fails without it | [xrdp#3904](https://github.com/neutrinolabs/xrdp/issues/3904) [xrdp#3911](https://github.com/neutrinolabs/xrdp/issues/3911) [xrdp#3912](https://github.com/neutrinolabs/xrdp/issues/3912) [xrdp#3913](https://github.com/neutrinolabs/xrdp/issues/3913) [xrdp#3914](https://github.com/neutrinolabs/xrdp/issues/3914) [xrdp#3915](https://github.com/neutrinolabs/xrdp/issues/3915) [xrdp#3922](https://github.com/neutrinolabs/xrdp/issues/3922) |
+| `librfxcodec` | [`0badc062e`](https://github.com/neutrinolabs/librfxcodec/commit/0badc062e96d170af57870480a4aa7cf469302b0) | xrdp's submodule | unchanged: the commit `xrdp` uses | built with xrdp | — |
+| `libpainter` | [`379b8fbf4`](https://github.com/neutrinolabs/libpainter/commit/379b8fbf40f309829364bf3414d721f9ba77766d) | xrdp's submodule | unchanged: the commit `xrdp` uses | built with xrdp | — |
+| `xorgxrdp` | 20261018.1 [`59d0735c4`](https://github.com/neutrinolabs/xorgxrdp/commit/59d0735c4321b5baff3feaa980a01f78a1c1e96f) | xorgxrdp devel | unchanged: the development commit whose module interface `xrdp` needs | the Xorg login | — |
 | `x264` | `b35605ace` | x264 `stable` branch | unchanged: x264 has no releases | the xrdp login tests (H.264) | — |
 | `pipewire_xrdp` | 0.2 [`748f562d6`](https://github.com/neutrinolabs/pipewire-module-xrdp/commit/748f562d616590c678d5b06722f3fe5ae9707465) | release v0.2 | unchanged, pinned by its tag's commit; built for Fedora only, which does not package it | built in the Fedora xrdp jobs | — |
-| `librfxcodec` | [`0badc062e`](https://github.com/neutrinolabs/librfxcodec/commit/0badc062e96d170af57870480a4aa7cf469302b0) | xrdp's submodule | unchanged: the commit `xrdp_preview` uses | built with the xrdp preview | — |
-| `libpainter` | [`379b8fbf4`](https://github.com/neutrinolabs/libpainter/commit/379b8fbf40f309829364bf3414d721f9ba77766d) | xrdp's submodule | unchanged: the commit `xrdp_preview` uses | built with the xrdp preview | — |
-| `xorgxrdp_preview` | 20261018.1 [`59d0735c4`](https://github.com/neutrinolabs/xorgxrdp/commit/59d0735c4321b5baff3feaa980a01f78a1c1e96f) | xorgxrdp devel | unchanged: the development commit whose module interface `xrdp_preview` needs | the preview's Xorg login | — |
 <!-- pins: end -->
 
 ## Build
@@ -132,8 +132,8 @@ included, set `SRC_<name>` for one run or list it in `sources.local`
 SRC_freerdp=$HOME/src/FreeRDP ./build.sh                       # the Linux client
 SRC_freerdp=$HOME/src/FreeRDP ./build-windows.sh x86_64        # the Windows client
 SRC_freerdp=$HOME/src/FreeRDP ./build-wasm.sh                  # the web client
-SRC_xrdp_preview=$HOME/src/xrdp SRC_xorgxrdp_preview=$HOME/src/xorgxrdp \
-    ./build-xrdp.sh --preview debian:13                        # the xrdp preview
+SRC_xrdp=$HOME/src/xrdp SRC_xorgxrdp=$HOME/src/xorgxrdp \
+    ./build-xrdp.sh debian:13                                  # the xrdp packages
 echo "freerdp dir $HOME/src/FreeRDP" > sources.local           # every run
 ```
 
@@ -155,8 +155,7 @@ new function in one file, so it compiles and links for real):
 | Linux client | 36 s → 26 s | 21 s → 5.5 s (`LTO=off`) |
 | Windows client (x86_64) | 56 s → 15 s | 5.1 s (ThinLTO, cached), 3.3 s (`LTO=off`) |
 | web client | 145 s → 124 s | 55 s → 46 s, of which Binaryen's post-link passes 22 s |
-| xrdp packages (debian:13) | 83 s → 26 s | |
-| xrdp preview (debian:13) | 101 s → 43 s | 7 s (xrdp and xorgxrdp local) |
+| xrdp packages (debian:13; measured on the preview, now the only xrdp) | 101 s → 43 s | 7 s (xrdp and xorgxrdp local) |
 
 A local xrdp build installs xrdp with its files' time stamps (xorgxrdp
 includes its headers from there) and compresses its packages with
@@ -223,7 +222,7 @@ client connects without the clipboard channel, because gnome-remote-desktop
 aborts when it cannot mount its FUSE clipboard, and a container has no
 `/dev/fuse`.
 
-`SERVER=xrdp-gnome` and `SERVER=xrdp-kde` log in through the xrdp preview, in
+`SERVER=xrdp-gnome` and `SERVER=xrdp-kde` log in through the kit's xrdp, in
 AV1, to GNOME (Fedora 45, `test/xrdp-gnome/`) and to KDE Plasma (Arch with
 KWin 6.8, `test/xrdp-kde/`, xrdp compiled there from the pinned sources). Both
 run systemd as PID 1, so they need podman (rootless here; `PODMAN=` another).
@@ -235,11 +234,13 @@ the user running podman must be able to open it (group `kvm`).
 above, and then, on a fresh server of the same kind, the rung above it:
 freerdp-web's own All screens tests (`test-screens*.mjs` of the page; CI
 takes the pinned page's), through `SCREENS=<tests dir> test/wasm-session.sh`.
-Rung 2 is xrdp with Xorg, against xrdp's release (`xrdp-original-xorg`) and
-the preview (`xrdp-preview-xorg`): two screens as a monitor each and as one
+Rung 2 is xrdp with Xorg, against xrdp's upstream release as Debian 13
+ships it (`xrdp-original-xorg`; the packages dir `debian` makes
+`wasm-session.sh` install Debian's own xrdp) and the kit's xrdp
+(`xrdp-xorg`): two screens as a monitor each and as one
 wide desktop, the second window's picture, mouse, keys, the captured cursor,
 Reconnect, closing it. Rung 3 is GNOME and KDE on Wayland through the
-preview's wlup (`xrdp-preview-gnome`, `xrdp-preview-kde`): a desktop monitor
+kit's xrdp and its wlup module (`xrdp-gnome`, `xrdp-kde`): a desktop monitor
 per screen, this window's the primary, the session's windows kept on it,
 also after Reconnect. Its summary (`dist/test/screens/summary.md`) says at
 once whether a failure is basic (rung 1 fails already) or one of several
@@ -266,14 +267,16 @@ Separate screens opens a window on the right one, and both windows' screencasts
 are put side by side in one 1920 × 1080 video (no sound).
 
 The demo videos are a kit product. `test/record-demos.sh [server …]` records
-them with what a kit commit published (its web client and xrdp preview,
+them with what a kit commit published (its web client and xrdp packages,
 checked against their `SHA256SUMS`; `KIT_COMMIT=newest` for the newest),
 encodes them at 720p, and writes `demo.json`. A recording passes only if
 the session sent its picture, the remote desktop shows detail, and the web
 video can be heard. Each is named for what it shows, the xrdp ones by which
-xrdp: `xrdp-original-xfce` (xrdp's release), `xrdp-preview-gnome`,
-`xrdp-preview-gnome-screens` (two screens), `xrdp-preview-kde` (the preview),
-and `grd-gnome` (gnome-remote-desktop). After every green build on main, the
+xrdp: `xrdp-original-xfce` (xrdp's upstream release, Debian 13's own
+packages), `xrdp-preview-gnome`, `xrdp-preview-gnome-screens` (two screens),
+`xrdp-preview-kde` (the kit's xrdp; the names stay, as freerdp-web's
+`media.json` gives them their lasting address), and `grd-gnome`
+(gnome-remote-desktop). After every green build on main, the
 `demo` workflow records them, each on its own runner, and publishes them once as
 `demo-<YYYYMMDD>.<N>-<kit commit>`; freerdp-web's splash takes the newest
 set every time it publishes. A push to the branch `demo-ci` records
@@ -298,16 +301,30 @@ web client's site is freerdp-web's. A pull request builds and tests only.
 ./check-deps.sh               # does each release have what the build needs?
 ./build-xrdp.sh               # dist/xrdp/<release>/*.deb or *.rpm, for every release in distros.list
 ./build-xrdp.sh debian:13     # or just one
-test/xrdp-session.sh debian:13   # install in a fresh container, log in over RDP, check the session
+test/xrdp-session.sh debian:13   # install in a fresh container, log in over RDP: Xorg, then Wayland
 ```
+
+The kit builds one xrdp, ours: xrdp's development branch with the work
+that is on its way upstream, picked on the fork as a release
+(`release-<YYYYMMDD>.<N>`, `xrdp` in `sources.lock`, with its two
+submodules): Wayland sessions (the wlup module: sway, GNOME through
+Mutter's remote desktop API, KDE Plasma through KWin's protocols), GNOME
+and KDE with a monitor per RDP monitor, AV1 (FreeRDP's GFX extension, with
+4:4:4), smoother video on slow links (the encoder is paced by the client's
+frame acknowledgements), Opus sound fixes. xorgxrdp is built from its
+development branch, whose module interface it needs. Until 2026-10-27 the
+kit also built xrdp's release, 0.10.6.1, as a second line, and this one as
+a preview; the preview is now the release, and the pre-releases and
+packages lost "preview" from their names (`xrdp-<YYYYMMDD>.<N>-<kit
+commit>`).
 
 The packages are built in a stock container of each release, against that
 release's PAM, OpenSSL, X11 libraries and Xorg server (xorgxrdp is an Xorg
 driver and must match its server exactly). x264 (H.264) and Opus are built
 from `sources.lock` and linked statically, because not every release ships
-them (Fedora has no x264). The xrdp and xorgxrdp tarballs must carry a
-valid signature from xrdp's release key ([`signed.lock`](signed.lock),
-[`keys/`](keys)).
+them (Fedora has no x264); Fedora's packages come with PipeWire's xrdp
+module (`pipewire-module-xrdp`, a session's sound), which Debian and Ubuntu
+package themselves.
 
 What each release needs is in two plain lists, one package per line with
 the reason: [`deps/deb.txt`](deps/deb.txt) for Debian and Ubuntu,
@@ -317,53 +334,38 @@ run-time dependency of the built packages with the version that would be
 installed, each line starting with `ok` or `MISSING`. Run it first when
 adding a release to [`distros.list`](distros.list).
 
-The packages are named `xrdp` and `xorgxrdp`, with a `0kit<N>` release
-suffix (N: the number of kit commits, so every kit change sorts higher),
-and take the place of the distribution's packages of the same
-name. Services are not started on install, and the host keys are made on
-install, never shipped.
+The packages are named `xrdp` and `xorgxrdp` and take the place of the
+distribution's packages of the same name. Their version says what they
+are built from, `0.10.80+<pin's version>.<commit>`, with a `0kit<N>`
+release suffix (N: the number of kit commits, so every kit change sorts
+higher): the `+` sorts it after 0.10.80 and after the kit's earlier
+preview packages (`0.10.80~preview.<N>.<commit>`), which it upgrades, and
+before xrdp's next release. Services are not started on install, and the
+host keys are made on install, never shipped.
 
-### Preview: the next xrdp
+The login screen (`xrdp.ini`) lists `[Xorg]` first, the default, then the
+Wayland sessions the release has: `[GNOME]` (code 31), `[KDE]` (code 32)
+and `[Wayland]` (sway, code 30); `sesman.ini` starts them. The releases in
+`distros.list` are marked for what they cannot have: `no-sway` (sway older
+than 1.11, wlroots 0.19: the module captures the screen through the
+`ext-image-copy-capture` protocols), `no-kde` (plasma-wayland-protocols
+older than 1.21: no output device registry, which the KWin backend needs;
+built without it) and `no-av1` (no libaom 3.0: built without AV1, clients
+fall back to H.264). Marks go after the image, as many as needed:
+`debian:13  no-sway no-kde  <note>`. Debian 12 is not built: GNOME's
+backend needs GNOME 46 or newer.
 
-```sh
-./build-xrdp.sh --preview debian:testing          # dist/xrdp-preview/<release>/
-test/xrdp-session.sh --preview debian:testing     # the Xorg login above, then a Wayland one
-```
+`test/xrdp-session.sh` logs in twice: to an Xorg session (xorgxrdp, an
+xterm), then to a Wayland one (sway, headless, with a terminal), checking
+that sesman starts sway for the user and that the module captures its
+output at the client's size; a release marked `no-sway` skips the second.
+It also checks that the package has the Wayland module and that the login
+screen lists GNOME, and KDE unless the release is marked `no-kde`. The
+GNOME and KDE logins themselves run in `test/wasm-session.sh`
+(`SERVER=xrdp-gnome`, `SERVER=xrdp-kde`) and the demos.
 
-The preview packages xrdp's development branch with the work that is on
-its way upstream: Wayland sessions (the wlup module: sway, and GNOME
-through Mutter's remote desktop API), AV1 (FreeRDP's GFX extension, with
-4:4:4), smoother video on slow links (the encoder is paced by the client's
-frame acknowledgements), Opus sound fixes. It is built from one fixed
-commit (`xrdp_preview` in `sources.lock`, with its two submodules) and
-xorgxrdp's development branch, whose module interface it needs. The
-version says what it is, `0.10.80~preview.<preview number>.<commit>`
-(the number is the pin's version column in `sources.lock`, raised with
-every new pin, so newer previews upgrade older ones), and sorts before the
-release, which replaces it. It is a preview: test it, don't run it
-where a broken session costs you. The releases are in
-[`distros-preview.list`](distros-preview.list) (GNOME's backend needs
-GNOME 46 or newer, so not Debian 12); the extra build dependencies are in
-`deps/deb-preview.txt` and `deps/rpm-preview.txt`.
-
-`test/xrdp-session.sh --preview` logs in twice: to an Xorg session as for
-the release, then to a Wayland one (sway, headless, with a terminal),
-checking that sesman starts sway for the user and that the module
-captures its output at the client's size.
-
-Sway sessions need sway 1.11 or newer (wlroots 0.19): the module captures
-the screen through the `ext-image-copy-capture` protocols, which older
-wlroots lack. Debian 13 (sway 1.10) and Ubuntu 24.04 (sway 1.9) get the
-preview for Xorg sessions; they are marked `no-sway` in the list, and the
-test skips their sway login.
-
-AV1 needs libaom 3.0 or newer from the release. Every release in the list
-has it today (Debian 13: 3.12, Ubuntu 24.04: 3.8, Fedora 43: 3.13). Before
-adding a release, run `./check-deps.sh --preview <image>`: if libaom is
-MISSING, mark the release `no-av1` in the list. Its preview is then built
-without AV1 (no libaom build or run-time dependency, and the package
-description leaves AV1 out), and clients fall back to H.264. Marks go
-after the image, as many as needed: `debian:13  no-sway no-av1  <note>`.
+How to install them, release by release, is in the notes of every rolling
+release (`build/xrdp-install-notes.sh` writes that table).
 
 ## Container engine
 

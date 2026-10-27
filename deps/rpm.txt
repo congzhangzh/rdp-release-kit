@@ -38,3 +38,15 @@ imlib2-devel            images on the login screen
 # xorgxrdp
 xorg-x11-server-devel   the Xorg server xorgxrdp is a driver for
 pipewire-devel          pipewire-module-xrdp (Fedora has no package of it)
+
+# the Wayland sessions (the wlup module: sway, GNOME through Mutter's remote
+# desktop API, KDE through KWin's protocols) and AV1
+wayland-devel           wlup: Wayland client
+wayland-protocols-devel wlup: protocol definitions
+libxkbcommon-devel      wlup: keyboard layouts
+libxkbfile-devel        keyboard rules (configure checks it on devel)
+systemd-devel           wlup GNOME backend: the session's bus
+pipewire-devel          wlup GNOME backend: screen capture
+libei-devel             wlup GNOME backend: input (Mutter's ConnectToEIS)
+libaom-devel            AV1 encoder (FreeRDP's GFX AV1 extension)
+plasma-wayland-protocols-devel wlup KDE backend: KWin's protocol files (1.21 and newer; older: no-kde)

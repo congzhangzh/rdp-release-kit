@@ -1,8 +1,7 @@
 # Tarballs that must carry a valid upstream signature (<url>.asc), and the
-# fingerprint of the signing key (keys/ holds the public keys).
-# xrdp and xorgxrdp: Koichiro IWAO (xrdp release maintainer), primary key
-# 61EC EABB F2BB 40E3 A35D  F30A 9F72 CDBC 01BF 10EB, signing subkey below.
-# The key expired on 2026-09-21: the pinned releases were signed before
-# that and still verify, a newer release needs the maintainer's new key.
-xrdp      18AB838A907167745914871903993B4065E7193B
-xorgxrdp  18AB838A907167745914871903993B4065E7193B
+# fingerprint of the signing key (keys/ holds the public keys), one per
+# line: <name in sources.lock>  <fingerprint>.
+# None now: xrdp's and xorgxrdp's release tarballs (signed by Koichiro
+# IWAO, xrdp's release maintainer) were the only ones, and the kit builds
+# xrdp from our release on the fork and xorgxrdp from a development
+# commit, both pinned by commit id. Their key stays in git's history.

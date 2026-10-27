@@ -162,20 +162,20 @@ image() {
 out=$(image BUILDER=off)
 check "builder: BUILDER=off runs the stock image" '[ "$out" = debian:13 ]'
 out=$(image 2> /dev/null)
-check "builder: the image is named after its kind, flavour and stock image" \
-    '[ "$out" = rdp-release-kit-xrdp-stable:debian-13 ] && [ "$(grep -c build "$TMP/images.log")" = 1 ]'
+check "builder: the image is named after its kind and stock image" \
+    '[ "$out" = rdp-release-kit-xrdp:debian-13 ] && [ "$(grep -c build "$TMP/images.log")" = 1 ]'
 image > /dev/null 2>&1
 check "builder: a second build reuses the image" '[ "$(grep -c build "$TMP/images.log")" = 1 ]'
-image FLAVOUR=preview > /dev/null 2>&1
+image NO_AV1=1 > /dev/null 2>&1
 image > /dev/null 2>&1
-check "builder: another flavour makes another image, and keeps the first" \
+check "builder: NO_AV1 makes another image, and keeps the first" \
     '[ "$(grep -c build "$TMP/images.log")" = 2 ] &&
-     grep -qx "build rdp-release-kit-xrdp-preview:debian-13" "$TMP/images.log"'
+     grep -qx "build rdp-release-kit-xrdp-noav1:debian-13" "$TMP/images.log"'
 echo "extra-package  for the test" >> "$TMP/kit/deps/deb.txt"
 image > /dev/null 2>&1
 check "builder: a changed dependency list makes it again, and removes the old one" \
-    '[ "$(grep -c build "$TMP/images.log")" = 3 ] && grep -qx "rmi sha256:rdp-release-kit-xrdp-stable:debian-13" "$TMP/images.log"'
-sed -i "s/ [0-9]*\$/ $(($(date +%s) - 8 * 86400))/" "$TMP/image-rdp-release-kit-xrdp-stable-debian-13"
+    '[ "$(grep -c build "$TMP/images.log")" = 3 ] && grep -qx "rmi sha256:rdp-release-kit-xrdp:debian-13" "$TMP/images.log"'
+sed -i "s/ [0-9]*\$/ $(($(date +%s) - 8 * 86400))/" "$TMP/image-rdp-release-kit-xrdp-debian-13"
 image > /dev/null 2>&1
 check "builder: an image older than BUILDER_DAYS is made again" \
     '[ "$(grep -c build "$TMP/images.log")" = 4 ]'

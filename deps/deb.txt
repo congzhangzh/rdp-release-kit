@@ -37,3 +37,15 @@ libimlib2-dev       images on the login screen
 
 # xorgxrdp
 xserver-xorg-dev    the Xorg server xorgxrdp is a driver for
+
+# the Wayland sessions (the wlup module: sway, GNOME through Mutter's remote
+# desktop API, KDE through KWin's protocols) and AV1
+libwayland-dev          wlup: Wayland client
+wayland-protocols       wlup: protocol definitions
+libxkbcommon-dev        wlup: keyboard layouts
+libxkbfile-dev          keyboard rules (configure checks it on devel)
+libsystemd-dev          wlup GNOME backend: the session's bus
+libpipewire-0.3-dev     wlup GNOME backend: screen capture
+libei-dev               wlup GNOME backend: input (Mutter's ConnectToEIS)
+libaom-dev              AV1 encoder (FreeRDP's GFX AV1 extension)
+plasma-wayland-protocols wlup KDE backend: KWin's protocol files (1.21 and newer; older: no-kde)

@@ -4,30 +4,28 @@
 # or an install fails:
 #
 #   ./check-deps.sh [image ...]      default: every image in distros.list
-#   ./check-deps.sh --preview [image ...]   the xrdp preview: deps/*-preview.txt
-#                                    too, default: every image in distros-preview.list
 #
 # For each release, two plain lists:
 #   build   each package of deps/<deb|rpm>.txt, and the version the release has
 #   run     each dependency of the built packages (dist/xrdp/<release>/),
 #           and the version a fresh install of the release would use
 # A line starts with "ok" or "MISSING" ("masked" for what a release's
-# marks in distros-preview.list leave out); the last line of each release
-# says whether all is well. A release that is MISSING libaom: mark it
-# no-av1 in distros-preview.list.
+# marks in distros.list leave out); the last line of each release says
+# whether all is well. A release that is MISSING libaom: mark it no-av1 in
+# distros.list. KDE needs plasma-wayland-protocols 1.21 or newer (the
+# version shown): mark an older release no-kde.
 set -uo pipefail
 
 KIT=$(cd "$(dirname "$0")" && pwd)
 # docker first: the builds are tested with it (podman: see README)
 ENGINE=${ENGINE:-$(command -v docker || command -v podman)}
-LIST=distros.list SUFFIX=
 if [ "${1:-}" = --preview ]; then
-    shift
-    LIST=distros-preview.list SUFFIX=-preview
+    echo "check-deps.sh: --preview is gone: the kit builds one xrdp (see distros.list)" >&2
+    exit 2
 fi
 IMAGES=("$@")
 if [ ${#IMAGES[@]} = 0 ]; then
-    mapfile -t IMAGES < <(grep -v -E '^\s*(#|$)' "$KIT/$LIST" | awk '{print $1}')
+    mapfile -t IMAGES < <(grep -v -E '^\s*(#|$)' "$KIT/distros.list" | awk '{print $1}')
 fi
 
 # Runs inside the release's container: /kit is the kit, /pkgs the packages
@@ -67,7 +65,6 @@ else
 fi
 
 lists=$family.txt
-[ -n "$PREVIEW" ] && lists="$lists $family-preview.txt"
 echo "build ($lists)"
 for pkg in $(cd /kit/deps && grep -h -v -E '^\s*(#|$)' $lists | awk '{print $1}'); do
     case "$NO_AV1:$pkg" in
@@ -106,14 +103,14 @@ status=0
 for image in "${IMAGES[@]}"; do
     # shellcheck disable=SC2016 # expanded by the container shell
     distro=$("$ENGINE" run --rm "$image" sh -c '. /etc/os-release; echo "$ID-${VERSION_ID:-$VERSION_CODENAME}"')
-    mkdir -p "$KIT/dist/xrdp$SUFFIX/$distro"
+    mkdir -p "$KIT/dist/xrdp/$distro"
     NO_AV1=
-    [ -n "$SUFFIX" ] && awk -v i="$image" \
+    awk -v i="$image" \
         '$1 == i { for (k = 2; k <= NF; k++) if ($k == "no-av1") f = 1 } END { exit !f }' \
-        "$KIT/$LIST" && NO_AV1=1
+        "$KIT/distros.list" && NO_AV1=1
     echo "### $image ($distro)${NO_AV1:+ no-av1}"
-    "$ENGINE" run --rm -e PREVIEW="$SUFFIX" -e NO_AV1="$NO_AV1" \
-        -v "$KIT":/kit:ro -v "$KIT/dist/xrdp$SUFFIX/$distro":/pkgs:ro \
+    "$ENGINE" run --rm -e NO_AV1="$NO_AV1" \
+        -v "$KIT":/kit:ro -v "$KIT/dist/xrdp/$distro":/pkgs:ro \
         -v "$INSIDE":/check.sh:ro "$image" bash /check.sh || status=1
     echo
 done

@@ -11,15 +11,20 @@ verify them; they never compile.
 |---|---|---|---|
 | `sdl-freerdp`, Linux x86_64 / aarch64, with freerdp-tk and its Python | our FreeRDP preview, the web client's (FreeRDP master + open pull requests, frozen on a fork branch); freerdp-tk by its release; python-build-standalone release | preview | `<YYYYMMDD>.<N>` |
 | `sdl-freerdp.exe`, Windows x86_64 / ARM64, with freerdp-tk and its Python | the same | preview | `<YYYYMMDD>.<N>` |
-| xrdp + xorgxrdp, `.deb` / `.rpm` for every release in `distros.list`, x86_64 and ARM64 | xrdp, xorgxrdp signed release tags | stable | `<YYYYMMDD>.<N>` |
+| xrdp + xorgxrdp, `.deb` / `.rpm` for every release in `distros.list`, x86_64 and ARM64: Xorg and Wayland sessions (GNOME, KDE, sway), AV1, pacing; PipeWire's xrdp module for Fedora | our xrdp release (xrdp devel + our branches, picked on the fork as `release-<YYYYMMDD>.<N>`) + xorgxrdp devel | our release | `<YYYYMMDD>.<N>`; also `xrdp-<YYYYMMDD>.<N>-<kit commit, 12>` on every push to main that changes a build |
 | Web client (WebAssembly) + the freerdp-web page | FreeRDP master + open pull requests, frozen on a fork branch; the page by a freerdp-web release (`YYYYMMDD.N`, earlier `vYYYYMMDD.N`, `vX.Y.Z`) | preview | `web-<YYYYMMDD>.<N>-<kit commit, 12>` on every push to main that changes a build; also inside every release |
-| xrdp preview packages: Wayland sessions, AV1, pacing | a frozen xrdp development commit + xorgxrdp devel | preview | `xrdp-preview-<YYYYMMDD>.<N>-<kit commit, 12>` |
-| Demo videos: Xfce through xrdp's release (`xrdp-original-*`), GNOME (also on two screens) and KDE through the xrdp preview (`xrdp-preview-*`), GNOME through gnome-remote-desktop (`grd-gnome`) | recorded by `test/record-demos.sh` with that build's web client and xrdp preview (the `demo` workflow, called by the kit's run; every release carries the videos and waits for them) | preview | `demo-<YYYYMMDD>.<N>-<kit commit, 12>`; freerdp-web's splash takes the newest |
+| Demo videos: Xfce through xrdp's upstream release as Debian 13 ships it (`xrdp-original-*`), GNOME (also on two screens) and KDE through the kit's xrdp (`xrdp-preview-*`, names kept for freerdp-web's links), GNOME through gnome-remote-desktop (`grd-gnome`) | recorded by `test/record-demos.sh` with that build's web client and xrdp packages (the `demo` workflow, called by the kit's run; every release carries the videos and waits for them) | preview | `demo-<YYYYMMDD>.<N>-<kit commit, 12>`; freerdp-web's splash takes the newest |
 
 **Stable** means: upstream release tags only, hashes (and signatures where
 upstream signs) checked, no patches. **Preview** means: a fixed commit of
 a public branch that is never rewritten, labelled preview everywhere it
-appears, never mixed into a stable package's name or version.
+appears, never mixed into a stable package's name or version. **Our
+release** (xrdp, since 2026-10-27, 聪哥's decision) is a preview that has
+become the only line of its product: a frozen release branch of the fork,
+its packages named and versioned without "preview"
+(`0.10.80+<pin's version>.<commit>`), because no stable line is left to
+tell it apart from. No product is stable today; the term stays for a
+source that goes back to an upstream release.
 
 The kit is rolling: every push to main that changes a build and passes
 every gate publishes a release, named by its UTC date and that day's
@@ -43,9 +48,12 @@ once and never replaced ([Frozen releases](#frozen-releases)).
   a tag by hand once the kit has built and tested that page (client "exact"),
   after a login from the very files going live (its `login` job).
 - [`signed.lock`](../signed.lock) and [`keys/`](../keys): the release key
-  each signed tarball must verify against.
+  each signed tarball must verify against. None today: xrdp and xorgxrdp's
+  release tarballs were the only signed ones, and both are git pins now.
 - [`distros.list`](../distros.list): the distribution releases to package
-  for (testing, stable and old stable of Debian, Ubuntu and Fedora).
+  xrdp for (Debian testing and stable, Ubuntu's latest and two newest LTS,
+  Fedora's next and two supported), each with its marks (`no-sway`,
+  `no-kde`, `no-av1`).
 - Container images are pinned by digest where the toolchain matters
   (Emscripten).
 
@@ -70,10 +78,9 @@ Nothing is uploaded unless every gate of its product passes in CI.
 | | starts on every supported distribution | `test/smoke.sh` |
 | Windows client | only Windows' own DLLs and the UCRT | `build/check-windows.sh` |
 | xrdp packages | every build and run-time dependency available on the release | `check-deps.sh` |
-| | install in a fresh container, log in over RDP with the kit's client, an Xorg session and its xterm run | `test/xrdp-session.sh` |
-| xrdp preview | the same, then a Wayland login: sway starts for the user, wlup captures it at the client's size | `test/xrdp-session.sh --preview` |
+| | install in a fresh container, log in over RDP with the kit's client: an Xorg session and its xterm run, then a Wayland login (sway starts for the user, wlup captures it at the client's size; not on a `no-sway` release); the login screen lists GNOME, and KDE unless `no-kde` | `test/xrdp-session.sh` |
 | Web client | page served without COOP/COEP, gateway over SSH, browser login starts a session | `test/wasm-session.sh` |
-| | several monitors, a ladder per server: rung 1 the login above; rung 2 freerdp-web's All screens test against xrdp's release and the preview with Xorg; rung 3 against GNOME and KDE through the preview (monitor per screen, primary, windows kept). Reported, never holds a release back | `test/screens.sh` (CI job `screens`) |
+| | several monitors, a ladder per server: rung 1 the login above; rung 2 freerdp-web's All screens test with Xorg, against xrdp's upstream release (Debian 13's own packages) and the kit's xrdp; rung 3 against GNOME and KDE through the kit's xrdp (monitor per screen, primary, windows kept). Reported, never holds a release back | `test/screens.sh` (CI job `screens`) |
 | Published page | the same login from the live site | freerdp-web's `check` job |
 | Every push | no private details in the history | `privacy-scan` (pre-push hook) |
 
@@ -85,7 +92,7 @@ a negative test (a wrong hash, a wrong key, a tampered tarball).
 ```
 upstream tag / frozen branch
   → bump commit in sources.lock, pushed to main (the kit takes no pull requests)
-  → main: CI again; the previews go to their pre-releases (web-…, xrdp-preview-…)
+  → main: CI again; the products go to their pre-releases (web-…, xrdp-…)
   → all green: the release <YYYYMMDD>.<N>, made latest: every product,
     SHA256SUMS, build provenance attestations
   → consumers download and verify (freerdp-web publishes on purpose)
@@ -135,7 +142,7 @@ sources.lock: freerdp <YYYYMMDD>.<N> <commit>
 2. **Test it here**, from that very tree, before it is picked:
    `SRC_freerdp=<the integration checkout> ./build.sh` (and
    `./build-windows.sh`, `./build-wasm.sh`), then `test/xrdp-session.sh`
-   (the stable xrdp and `--preview`) and `test/wasm-session.sh` (once more
+   (Xorg and Wayland) and `test/wasm-session.sh` (once more
    with `WASM_ENGINE=jspi`).
 3. **Pick the release**: a branch `release-<YYYYMMDD>.<N>` on that commit,
    pushed to the fork (the integration first, by force-with-lease). `<N>`
@@ -241,8 +248,8 @@ move while builds don't, and versions that only go up.
    | Product | Name |
    |---|---|
    | Web client | `web-<YYYYMMDD>.<N>-<kit commit, 12>`, titled "Web client for freerdp-web <page commit, 12> (kit <kit commit, 12>)" |
-   | xrdp preview | `xrdp-preview-<YYYYMMDD>.<N>-<kit commit, 12>`, titled "xrdp preview <xrdp commit, 12> (kit <kit commit, 12>)" |
-   | Stable | `<YYYYMMDD>.<N>`, titled "FreeRDP <version> clients, xrdp <version> packages (kit <kit commit, 12>)"; made latest |
+   | xrdp | `xrdp-<YYYYMMDD>.<N>-<kit commit, 12>`, titled "xrdp <version> <xrdp commit, 12> (kit <kit commit, 12>)"; until 2026-10-27 `xrdp-preview-…`, which keep their names |
+   | Release | `<YYYYMMDD>.<N>`, titled "FreeRDP preview <version> clients, xrdp <version> packages (kit <kit commit, 12>)"; made latest |
 
    Pre-releases are made continuously, so they are named by date (since
    21 October 2026): the UTC date of the build and N, that day's build
@@ -297,7 +304,7 @@ move while builds don't, and versions that only go up.
 |---|---|
 | [`build/publish-prerelease.sh`](../build/publish-prerelease.sh) | rules 1 and 2 for both pre-releases: a published tag is left as it is; a tag without a release is refused; a draft an earlier run left is deleted; a new draft gets every file, is published, and must then list exactly those files. Only an HTTP 404 counts as "not there": any other error stops it. Tested with a fake `gh` ([`test/publish.sh`](../test/publish.sh)) |
 | kit `wasm` job, "Hand the tested page to freerdp-web" | `web-<YYYYMMDD>.<N>-<kit, 12>` (`build/prerelease-tag.sh`): the client, `KIT_COMMIT`, the debian-13 xrdp packages, `SHA256SUMS` of them all |
-| kit `xrdp-preview-release` job | `xrdp-preview-<YYYYMMDD>.<N>-<kit, 12>` |
+| kit `xrdp-release` job | `xrdp-<YYYYMMDD>.<N>-<kit, 12>` (`xrdp-preview-…` until 2026-10-27) |
 | both jobs | a `concurrency` group per kit commit: two runs of one commit publish one after the other, and the second finds the release there |
 | kit `release` job | `<YYYYMMDD>.<N>` (`build/prerelease-tag.sh release`), published by `publish-prerelease.sh` with `LATEST=1`: the same rules, but a release, made latest |
 | kit pushes | a push that changes only documentation (or only the upstream check) runs no build, so it makes no new pre-release |
@@ -404,5 +411,5 @@ Local work on a source goes through `SRC_<name>` or `sources.local`
 (see the README), which CI refuses: the build tree is kept,
 so an edit to one file rebuilds the Linux client in about 6 s with
 `LTO=off` (21 s before), the Windows client in 5 s (ThinLTO, cached), the
-xrdp preview in 7 s and the web client in about 46 s (55 s), where
+xrdp packages in 7 s and the web client in about 46 s (55 s), where
 Binaryen's post-link passes (22 s) remain.

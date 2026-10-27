@@ -8,15 +8,14 @@
 # requires the Xorg video driver ABI it was built for. Host keys are made
 # in %post.
 set -euo pipefail
-# what the packages are built from (FLAVOUR is set by build-xrdp-pkg.sh)
-if [ "${FLAVOUR:-stable}" = preview ]; then
-    FROM="as a PREVIEW of its development branch, not a release"
-    EXTRAS=" Wayland sessions (sway, GNOME) and AV1."
-    [ -n "${NO_AV1:-}" ] && EXTRAS=" Wayland sessions (sway, GNOME)."
-else
-    FROM="from the upstream release"
-    EXTRAS=
-fi
+# what the packages are built from, and the sessions they have (the
+# release's marks, set by build-xrdp-pkg.sh)
+FROM="from rdp-release-kit's release of its development branch"
+WAYLAND=GNOME
+[ -n "${NO_KDE:-}" ] || WAYLAND+=", KDE"
+[ -n "${NO_SWAY:-}" ] || WAYLAND+=", sway"
+EXTRAS=" Wayland sessions ($WAYLAND)${NO_AV1:+.}"
+[ -n "${NO_AV1:-}" ] || EXTRAS+=" and AV1."
 
 STAGE=$1
 OUT=$2

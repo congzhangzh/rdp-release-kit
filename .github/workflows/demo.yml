@@ -1,14 +1,14 @@
 name: demo
 
 # Records the demo videos (test/record-demos.sh) with what a green kit run
-# on main published (its web client, its xrdp preview), and publishes them
+# on main published (its web client, its xrdp packages), and publishes them
 # as the pre-release demo-<YYYYMMDD>.<N>-<kit commit, 12>, once and never
 # replaced: freerdp-web's splash takes its videos from the newest one when
 # it publishes. Each server records on a runner of its own. A push to the
 # branch demo-ci records with the newest pre-releases and publishes nothing,
 # to work on the recordings themselves.
 on:
-  # the kit's run calls it once its web client and xrdp preview are
+  # the kit's run calls it once its web client and xrdp packages are
   # published, and its release waits for the videos
   workflow_call:
     inputs:

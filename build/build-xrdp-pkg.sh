@@ -11,17 +11,20 @@
 # sources.lock and linked statically, so every package has the same
 # features. The result is <output dir>/<distro>/ with .deb or .rpm files.
 #
-# FLAVOUR=preview builds the xrdp preview instead: xrdp and xorgxrdp from
-# the development commits pinned as xrdp_preview / xorgxrdp_preview, with
-# the Wayland sessions (wlup) and AV1. Its version says so:
-# 0.10.80~preview.<preview number>.<commit>, which sorts before the release
-# 0.10.80. The preview number is the version column of the pin in
-# sources.lock (20261018.1, ...): raise it with every new pin, so newer
-# previews sort higher (a commit's date cannot: rebuilt stacks keep them).
-# NO_AV1=1 (a release marked no-av1 in distros-preview.list) leaves AV1
-# and libaom out.
+# xrdp is our release on the fork, a git commit (sources.lock): xrdp devel
+# with the Wayland sessions (the wlup module: sway, GNOME, KDE) and AV1;
+# xorgxrdp its development commit. Their version says which:
+# <version in configure.ac>+<pin's version>.<commit>, e.g.
+# 0.10.80+20261027.1.8ef7574a. The '+' sorts it after 0.10.80 and after the
+# kit's earlier preview packages (0.10.80~preview.<N>.<commit>), which it
+# upgrades, but before xrdp's next release (0.10.81, 0.11.0). The pin's
+# version is the date of its pick (release-<YYYYMMDD>.<N>), so newer picks
+# sort higher (a commit's date cannot: rebuilt stacks keep them).
+# A release's marks in distros.list leave out what it cannot have:
+# NO_AV1=1 (no-av1) AV1 and libaom, NO_SWAY=1 (no-sway) the sway session
+# on the login screen, NO_KDE=1 (no-kde) the KWin backend and its session.
 #
-# A local source (SRC_xrdp_preview=<dir>, see build/overrides.sh) is built
+# A local source (SRC_xrdp=<dir>, see build/overrides.sh) is built
 # in place and kept: the next run regenerates and configures only when
 # that is needed, and make recompiles what changed. Its packages are
 # marked: release 0local1 instead of 0kit<N>.
@@ -44,7 +47,7 @@ case " $ID ${ID_LIKE:-} " in
     *" fedora "*) FAMILY=rpm ;;
     *) echo "unsupported distribution: $PRETTY_NAME" >&2; exit 1 ;;
 esac
-export FLAVOUR=${FLAVOUR:-stable} NO_AV1=${NO_AV1:-}
+export NO_AV1=${NO_AV1:-} NO_SWAY=${NO_SWAY:-} NO_KDE=${NO_KDE:-}
 # the build dependencies (deps/<family>.txt), unless the image has them
 # (build/builder.sh)
 [ -n "${KIT_TOOLS:-}" ] || "$KIT/build/tools.sh" "$KIT" xrdp
@@ -102,40 +105,37 @@ else
     XORG=/usr/libexec/Xorg
 fi
 
-if [ "$FLAVOUR" = preview ]; then
-    XRDP=xrdp_preview
-    XORGXRDP=xorgxrdp_preview
-    # a git commit, not a release tarball: the submodules come separately
-    # and the configure scripts are generated
-    src=$(unpack $XRDP)
-    # a local checkout brings its own, if it has them checked out
-    for sub in librfxcodec libpainter; do
-        overridden $XRDP && [ -f "$src/$sub/configure.ac" ] && continue
-        rm -rf "${src:?}/$sub"
-        cp -a "$(unpack $sub)" "$src/$sub"
-    done
-    bootstrap "$src"
-    base=$(sed -n 's/^AC_INIT(\[xrdp\], \[\([^]]*\)\].*/\1/p' "$src/configure.ac")
-    XRDP_VERSION=$base~preview.${VERSION[$XRDP]}.${SHA[$XRDP]:0:8}
-    EXTRA=(--enable-wlup)
-    [ -z "$NO_AV1" ] && EXTRA+=(--enable-av1)
-    # the GNOME backend needs libei and PipeWire (GNOME 46 and newer)
-    WLUP_GNOME=
-    if pkg-config --exists libei-1.0 libpipewire-0.3 libsystemd; then
-        EXTRA+=(--enable-wlup-mutter)
-        WLUP_GNOME=1
-    fi
-    # an old warning in xrdp_mm.c, an error with -O2 on devel
-    CFLAGS="$CFLAGS -Wno-error=nonnull"
-else
-    XRDP=xrdp
-    XORGXRDP=xorgxrdp
-    src=$(unpack $XRDP)
-    # a local checkout of a release branch: a git tree
-    overridden $XRDP && bootstrap "$src"
-    XRDP_VERSION=${VERSION[xrdp]}
-    EXTRA=()
+XRDP=xrdp
+XORGXRDP=xorgxrdp
+# a git commit, not a release tarball: the submodules come separately
+# and the configure scripts are generated
+src=$(unpack $XRDP)
+# a local checkout brings its own, if it has them checked out
+for sub in librfxcodec libpainter; do
+    overridden $XRDP && [ -f "$src/$sub/configure.ac" ] && continue
+    rm -rf "${src:?}/$sub"
+    cp -a "$(unpack $sub)" "$src/$sub"
+done
+bootstrap "$src"
+base=$(sed -n 's/^AC_INIT(\[xrdp\], \[\([^]]*\)\].*/\1/p' "$src/configure.ac")
+XRDP_VERSION=$base+${VERSION[$XRDP]}.${SHA[$XRDP]:0:8}
+EXTRA=(--enable-wlup)
+[ -z "$NO_AV1" ] && EXTRA+=(--enable-av1)
+# the GNOME backend needs libei and PipeWire (GNOME 46 and newer)
+WLUP_GNOME=
+if pkg-config --exists libei-1.0 libpipewire-0.3 libsystemd; then
+    EXTRA+=(--enable-wlup-mutter)
+    WLUP_GNOME=1
 fi
+# the KDE backend needs KWin's protocol files with the output device
+# registry (plasma-wayland-protocols 1.21 and newer), unless marked no-kde
+WLUP_KDE=
+if [ -z "$NO_KDE" ]; then
+    EXTRA+=(--enable-wlup-kwin)
+    WLUP_KDE=1
+fi
+# an old warning in xrdp_mm.c, an error with -O2 on devel
+CFLAGS="$CFLAGS -Wno-error=nonnull"
 
 overridden $XRDP && echo "== $XRDP (local)"
 # a local build installs xrdp with the time stamps of its files: xorgxrdp
@@ -154,23 +154,17 @@ rm -rf "$STAGE"
  make -j"$JOBS" && make install DESTDIR="$STAGE/xrdp" "${KEEP_TIME[@]}") > "$WORK/log/xrdp.log" 2>&1
 # configure's summary; a kept configuration passed these checks before
 grep -q -E -e "x264 +yes" -e "configuration kept" "$WORK/log/xrdp.log"
-# AV1 is in a preview unless the release is marked no-av1
-if [ "$FLAVOUR" = preview ] && [ -z "$NO_AV1" ]; then
+# AV1 is in unless the release is marked no-av1
+if [ -z "$NO_AV1" ]; then
     grep -q -E -e "av1 \(libaom\) +yes" -e "configuration kept" "$WORK/log/xrdp.log"
 fi
 
 # xorgxrdp builds against the xrdp just staged: a copy of its .pc file
 # that points into the staging tree
 src=$(unpack $XORGXRDP)
-if [ "$FLAVOUR" = preview ] || overridden $XORGXRDP; then
-    bootstrap "$src"
-fi
-if [ "$FLAVOUR" = preview ]; then
-    XORGXRDP_VERSION=$(sed -n 's/^AC_INIT(\[xorgxrdp\], \[\([^]]*\)\].*/\1/p' "$src/configure.ac")
-    XORGXRDP_VERSION=$XORGXRDP_VERSION~preview.${VERSION[$XORGXRDP]}.${SHA[$XORGXRDP]:0:8}
-else
-    XORGXRDP_VERSION=${VERSION[xorgxrdp]}
-fi
+bootstrap "$src"
+XORGXRDP_VERSION=$(sed -n 's/^AC_INIT(\[xorgxrdp\], \[\([^]]*\)\].*/\1/p' "$src/configure.ac")
+XORGXRDP_VERSION=$XORGXRDP_VERSION+${VERSION[$XORGXRDP]}.${SHA[$XORGXRDP]:0:8}
 echo "== $XORGXRDP $XORGXRDP_VERSION"
 mkdir -p "$WORK/pc"
 sed "s|^prefix=.*|prefix=$STAGE/xrdp/usr|" "$STAGE/xrdp$LIBDIR/pkgconfig/xrdp.pc" > "$WORK/pc/xrdp.pc"
@@ -198,39 +192,43 @@ find "$STAGE" \( -name '*.la' -o -name '*.a' \) -delete
 rm -f "$STAGE"/xrdp/etc/xrdp/{rsakeys.ini,cert.pem,key.pem}
 sed -i "/^\[Xorg\]/,/^\[/ s|^param=Xorg\$|param=$XORG|" "$STAGE/xrdp/etc/xrdp/sesman.ini"
 grep -q "^param=$XORG\$" "$STAGE/xrdp/etc/xrdp/sesman.ini"
-# A preview with AV1 offers it first: FreeRDP clients built with AV1 take
+# With AV1, xrdp offers it first: FreeRDP clients built with AV1 take
 # it, the others fall back to H.264, then RFX (xrdp ships H.264 first)
-if [ "$FLAVOUR" = preview ] && [ -z "$NO_AV1" ]; then
+if [ -z "$NO_AV1" ]; then
     sed -i 's/^order = \[ "H\.264", "RFX" \]$/order = [ "AV1", "H.264", "RFX" ]/' \
         "$STAGE/xrdp/etc/xrdp/gfx.toml"
     grep -q '^order = \[ "AV1", "H\.264", "RFX" \]$' "$STAGE/xrdp/etc/xrdp/gfx.toml"
 fi
-# The preview's Wayland sessions are on the login screen's list (xrdp.ini
-# only has them commented out): GNOME when its backend was built, sway
+# The Wayland sessions are on the login screen's list (xrdp.ini only has
+# them commented out): GNOME and KDE when their backends were built, sway
 # unless the release's sway is too old (NO_SWAY=1, a release marked
 # no-sway). They go after [Xorg], which stays the default: with no
 # autorun=, xrdp starts the first session for a client that sends a
-# password
-if [ "$FLAVOUR" = preview ]; then
-    INI=$STAGE/xrdp/etc/xrdp/xrdp.ini
-    SESSIONS=$(mktemp)
-    if [ -n "${WLUP_GNOME:-}" ]; then
-        printf '%s\n' '[GNOME]' 'name=GNOME (Wayland)' 'lib=libwlup.so' 'username=ask' \
-            'password=ask' 'port=-1' 'code=31' 'backend=mutter' '' >> "$SESSIONS"
-    fi
-    if [ -z "${NO_SWAY:-}" ]; then
-        printf '%s\n' '[Wayland]' 'name=Sway (Wayland)' 'lib=libwlup.so' 'username=ask' \
-            'password=ask' 'port=-1' 'code=30' 'xkb_layout=us' '' >> "$SESSIONS"
-    fi
-    awk -v f="$SESSIONS" '
-        /^\[Xvnc\]/ && !done { while ((getline l < f) > 0) print l; done = 1 }
-        { print }
-        END { if (!done) exit 1 }' "$INI" > "$INI.new"
-    mv "$INI.new" "$INI"
-    rm -f "$SESSIONS"
-    [ -z "${WLUP_GNOME:-}" ] || grep -q '^\[GNOME\]$' "$INI"
-    [ -n "${NO_SWAY:-}" ] || grep -q '^\[Wayland\]$' "$INI"
+# password. sesman.ini has the [GNOME], [KDE] and [Wayland] sections that
+# start them
+INI=$STAGE/xrdp/etc/xrdp/xrdp.ini
+SESSIONS=$(mktemp)
+if [ -n "$WLUP_GNOME" ]; then
+    printf '%s\n' '[GNOME]' 'name=GNOME (Wayland)' 'lib=libwlup.so' 'username=ask' \
+        'password=ask' 'port=-1' 'code=31' 'backend=mutter' '' >> "$SESSIONS"
 fi
+if [ -n "$WLUP_KDE" ]; then
+    printf '%s\n' '[KDE]' 'name=KDE Plasma (Wayland)' 'lib=libwlup.so' 'username=ask' \
+        'password=ask' 'port=-1' 'code=32' 'backend=kwin' '' >> "$SESSIONS"
+fi
+if [ -z "$NO_SWAY" ]; then
+    printf '%s\n' '[Wayland]' 'name=Sway (Wayland)' 'lib=libwlup.so' 'username=ask' \
+        'password=ask' 'port=-1' 'code=30' 'xkb_layout=us' '' >> "$SESSIONS"
+fi
+awk -v f="$SESSIONS" '
+    /^\[Xvnc\]/ && !done { while ((getline l < f) > 0) print l; done = 1 }
+    { print }
+    END { if (!done) exit 1 }' "$INI" > "$INI.new"
+mv "$INI.new" "$INI"
+rm -f "$SESSIONS"
+[ -z "$WLUP_GNOME" ] || grep -q '^\[GNOME\]$' "$INI"
+[ -z "$WLUP_KDE" ] || grep -q '^\[KDE\]$' "$INI"
+[ -n "$NO_SWAY" ] || grep -q '^\[Wayland\]$' "$INI"
 XORG_ABI=$(pkg-config --variable=abi_videodrv xorg-server | cut -d. -f1)
 ARCH_DEB=$(dpkg --print-architecture 2> /dev/null || true)
 # N counts the kit's commits (build-xrdp.sh); a build with a local source

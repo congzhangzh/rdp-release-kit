@@ -1,28 +1,27 @@
 #!/bin/bash
 # Builds native xrdp + xorgxrdp packages for each distribution, each in a
-# stock container of that distribution (podman or docker):
+# stock container of that distribution (podman or docker): xrdp from our
+# release on the fork, with Xorg and Wayland sessions (sway, GNOME, KDE)
+# and AV1, xorgxrdp from its development commit (sources.lock):
 #
 #   ./build-xrdp.sh [image ...]      default: every image in distros.list
-#   ./build-xrdp.sh --preview [image ...]   the xrdp preview, default: every
-#                                    image in distros-preview.list
 #
-# Packages go to dist/xrdp/<distro>/ (the preview: dist/xrdp-preview/).
+# Packages go to dist/xrdp/<distro>/.
 # Sources are downloaded once into ~/.cache/rdp-release-kit/sources; each
 # distribution keeps its own work tree in ~/.cache/rdp-release-kit/xrdp-<image>
 # (under KIT_CACHE=<dir> instead) and its compiled objects in its ccache
 # directory, and builds in an image with its build dependencies already
-# installed (build/builder.sh). SRC_xrdp_preview=<dir> (or SRC_xrdp,
-# SRC_xorgxrdp_preview ...) builds from a local checkout, and keeps that
+# installed (build/builder.sh). SRC_xrdp=<dir> (or SRC_xorgxrdp ...)
+# builds from a local checkout, and keeps that
 # build for the next run (see build/overrides.sh; not for releases).
 set -euo pipefail
 
 KIT=$(cd "$(dirname "$0")" && pwd)
-FLAVOUR=stable LIST=distros.list SUFFIX=
 if [ "${1:-}" = --preview ]; then
-    shift
-    FLAVOUR=preview LIST=distros-preview.list SUFFIX=-preview
+    echo "build-xrdp.sh: --preview is gone: the kit builds one xrdp, ours (see distros.list)" >&2
+    exit 2
 fi
-OUT=$KIT/dist/xrdp$SUFFIX
+OUT=$KIT/dist/xrdp
 SOURCES=${SOURCES:-$HOME/.cache/rdp-release-kit/sources}
 KIT_CACHE=${KIT_CACHE:-$HOME/.cache/rdp-release-kit}
 # docker first: the builds are tested with it (podman: see README)
@@ -39,7 +38,7 @@ owner() { case "$ENGINE" in *docker) echo "$(id -u):$(id -g)" ;; esac; }
 
 IMAGES=("$@")
 if [ ${#IMAGES[@]} = 0 ]; then
-    mapfile -t IMAGES < <(grep -v -E '^\s*(#|$)' "$KIT/$LIST" | awk '{print $1}')
+    mapfile -t IMAGES < <(grep -v -E '^\s*(#|$)' "$KIT/distros.list" | awk '{print $1}')
 fi
 
 # The packages' release is 0kit<N>, N the number of kit commits: every kit
@@ -55,7 +54,7 @@ echo "== packages: release 0kit$KIT_REV"
 
 status=0
 for image in "${IMAGES[@]}"; do
-    work=$KIT_CACHE/xrdp$SUFFIX-${image//[\/:]/-}
+    work=$KIT_CACHE/xrdp-${image//[\/:]/-}
     mkdir -p "$work"
     # the compiler cache of this distribution (its own compiler); CCACHE=off
     # builds without it
@@ -66,17 +65,15 @@ for image in "${IMAGES[@]}"; do
     fi
     # SRC_<name> or sources.local: a local source (development only)
     overrides "$work"
-    # the release's marks in distros-preview.list (see there)
-    NO_AV1=
-    NO_SWAY=
-    [ $FLAVOUR = preview ] && awk -v i="$image" \
-        '$1 == i { for (k = 2; k <= NF; k++) if ($k == "no-av1") f = 1 } END { exit !f }' \
-        "$KIT/$LIST" && NO_AV1=1
-    [ $FLAVOUR = preview ] && awk -v i="$image" \
-        '$1 == i { for (k = 2; k <= NF; k++) if ($k == "no-sway") f = 1 } END { exit !f }' \
-        "$KIT/$LIST" && NO_SWAY=1
-    echo "### $image${NO_AV1:+ (no AV1)}"
-    if ! builder=$(FLAVOUR=$FLAVOUR NO_AV1=$NO_AV1 builder "$image" xrdp); then
+    # the release's marks in distros.list (see there)
+    mark() { awk -v i="$image" -v m="$1" \
+        '$1 == i { for (k = 2; k <= NF; k++) if ($k == m) f = 1 } END { exit !f }' "$KIT/distros.list"; }
+    NO_AV1='' NO_SWAY='' NO_KDE=''
+    mark no-av1 && NO_AV1=1
+    mark no-sway && NO_SWAY=1
+    mark no-kde && NO_KDE=1
+    echo "### $image${NO_AV1:+ (no AV1)}${NO_SWAY:+ (no sway)}${NO_KDE:+ (no KDE)}"
+    if ! builder=$(NO_AV1=$NO_AV1 builder "$image" xrdp); then
         echo "### $image: FAILED"
         status=1
         continue
@@ -85,7 +82,7 @@ for image in "${IMAGES[@]}"; do
     # shellcheck disable=SC2016
     if ! "$ENGINE" run --rm -v "$KIT":/kit:ro -v "$SOURCES":/sources -v "$OUT":/out \
             -v "$work":/work "${CACHE[@]}" "${OVERRIDE[@]}" -e OWNER="$(owner)" \
-            -e FLAVOUR="$FLAVOUR" -e NO_AV1="$NO_AV1" -e NO_SWAY="$NO_SWAY" -e KIT_REV="$KIT_REV" "$builder" \
+            -e NO_AV1="$NO_AV1" -e NO_SWAY="$NO_SWAY" -e NO_KDE="$NO_KDE" -e KIT_REV="$KIT_REV" "$builder" \
             bash -c '/kit/build/build-xrdp-pkg.sh /kit /sources /out; rc=$?;
                      [ -z "$OWNER" ] || chown -R "$OWNER" /out /work /sources ${CCACHE_DIR:-}
                      exit $rc'; then

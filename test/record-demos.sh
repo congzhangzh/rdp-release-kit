@@ -1,6 +1,6 @@
 #!/bin/bash
 # Records the demo videos of a kit commit with what it published: its web
-# client (web-* pre-release), its xrdp preview (xrdp-preview-*) and the newest
+# client (web-* pre-release), its xrdp packages (xrdp-*) and the newest
 # pipewire-module-xrdp-*, each checked against its SHA256SUMS; then encodes
 # each video at 720p with a poster, and writes demo.json (titles, captions
 # naming those pre-releases) and SHA256SUMS:
@@ -9,8 +9,10 @@
 #
 # xrdp-gnome-screens is xrdp-gnome on two screens (test/wasm-demo-screens.mjs:
 # All screens, Separate screens). Each video is named for the server it
-# shows, the xrdp ones by which xrdp: xrdp-original-* (xrdp's release),
-# xrdp-preview-* (the kit's preview); grd-gnome is gnome-remote-desktop.
+# shows, the xrdp ones by which xrdp: xrdp-original-* (xrdp's upstream
+# release, Debian 13's own packages), xrdp-preview-* (the kit's xrdp; the
+# names stay, freerdp-web's media.json gives them their lasting address);
+# grd-gnome is gnome-remote-desktop.
 #
 # Out: dist/demo/ (OUT=<dir> for another). KIT_COMMIT=<sha> records another
 # commit than HEAD; KIT_COMMIT=newest takes the newest pre-release of each
@@ -50,16 +52,17 @@ download() {
         { echo "record-demos.sh: $tag: a file does not match its SHA256SUMS" >&2; exit 1; }
 }
 
-WEB=$(of_commit web) PREVIEW=$(of_commit xrdp-preview) PIPEWIRE=$(newest pipewire-module-xrdp)
-[ -n "$WEB" ] && [ -n "$PREVIEW" ] ||
-    { echo "record-demos.sh: kit ${COMMIT:0:12} published no web-* or xrdp-preview-* pre-release" >&2; exit 1; }
-echo "== inputs: $WEB, $PREVIEW, ${PIPEWIRE:-no pipewire-module-xrdp}"
-download "$WEB" "$IN/web" freerdp-web-page.zip '*.deb'
+# (the kit's xrdp-* pre-releases; before them xrdp-preview-*, which "xrdp-"
+# also finds for KIT_COMMIT=newest)
+WEB=$(of_commit web) XRDP=$(of_commit xrdp) PIPEWIRE=$(newest pipewire-module-xrdp)
+[ -n "$WEB" ] && [ -n "$XRDP" ] ||
+    { echo "record-demos.sh: kit ${COMMIT:0:12} published no web-* or xrdp-* pre-release" >&2; exit 1; }
+echo "== inputs: $WEB, $XRDP, ${PIPEWIRE:-no pipewire-module-xrdp}"
+download "$WEB" "$IN/web" freerdp-web-page.zip
 mkdir -p "$IN/client"
 (cd "$IN/client" && python3 -m zipfile -e "$IN/web/freerdp-web-page.zip" .)
-mkdir -p "$IN/xrdp" && mv "$IN"/web/*.deb "$IN/xrdp/"
-download "$PREVIEW" "$IN/preview" '*fc45*'
-[ -z "$PIPEWIRE" ] || { download "$PIPEWIRE" "$IN/pw" '*fc45*'; cp "$IN"/pw/*.rpm "$IN/preview/"; }
+download "$XRDP" "$IN/xrdp" '*fc45*'
+[ -z "$PIPEWIRE" ] || { download "$PIPEWIRE" "$IN/pw" '*fc45*'; cp "$IN"/pw/*.rpm "$IN/xrdp/"; }
 # the gateway script of the page this client was built with
 page=$(sed -n 's/^page: freerdp-web //p' "$IN/client/MANIFEST")
 curl -fsSL -o "$IN/rdp-gateway.sh" "https://raw.githubusercontent.com/congzhangzh/freerdp-web/$page/rdp-gateway.sh"
@@ -78,21 +81,21 @@ name() {
 }
 title() {
     case $1 in
-        xrdp) echo "xrdp + Xfce" ;;
+        xrdp) echo "upstream xrdp + Xfce" ;;
         gnome) echo "gnome-remote-desktop + GNOME Wayland" ;;
-        xrdp-gnome) echo "xrdp preview + GNOME Wayland, AV1" ;;
-        xrdp-kde) echo "xrdp preview + KDE Plasma Wayland, AV1" ;;
-        xrdp-gnome-screens) echo "xrdp preview + GNOME Wayland, two screens" ;;
+        xrdp-gnome) echo "xrdp + GNOME Wayland, AV1" ;;
+        xrdp-kde) echo "xrdp + KDE Plasma Wayland, AV1" ;;
+        xrdp-gnome-screens) echo "xrdp + GNOME Wayland, two screens" ;;
     esac
 }
 caption() {
     local credits="Big Buck Bunny © Blender Foundation, CC BY 3.0; WebGL Aquarium © Google, BSD."
     case $1 in
-        xrdp) echo "xrdp with Xfce on Debian 13, reached over SSH and websockify: the page, a session, typing, then Firefox on the server with web video and WebGL, with sound. $credits" ;;
+        xrdp) echo "Debian 13's own xrdp (xrdp's upstream release) with Xfce, reached over SSH and websockify: the page, a session, typing, then Firefox on the server with web video and WebGL, with sound. $credits" ;;
         gnome) echo "gnome-remote-desktop with GNOME Shell on Wayland, headless, on Debian 13: the same visit, with GNOME Console started from the search. $credits" ;;
-        xrdp-gnome) echo "The xrdp preview with GNOME on Wayland, Fedora 45: sesman starts a GNOME session and xrdp sends it in AV1, decoded by the browser. The same visit, the terminal started from the search, then Firefox on the server with web video and WebGL, with sound. $credits" ;;
-        xrdp-kde) echo "The xrdp preview with KDE Plasma on Wayland (KWin 6.8, Arch): sesman starts Plasma, KWin renders in software (no GPU) and xrdp sends it in AV1, decoded by the browser. The same visit, Konsole started from the launcher, then Firefox on the server with web video and WebGL, with sound. $credits" ;;
-        xrdp-gnome-screens) echo "The page's All screens on a computer with two screens, side by side: the xrdp preview with GNOME on Wayland, Fedora 45. Separate screens gives GNOME a monitor for each screen, the page's screen the primary, where the terminal stays; Super+Shift+Right moves it to the other screen, and closing the second screen's window brings one screen back." ;;
+        xrdp-gnome) echo "rdp-release-kit's xrdp with GNOME on Wayland, Fedora 45: sesman starts a GNOME session and xrdp sends it in AV1, decoded by the browser. The same visit, the terminal started from the search, then Firefox on the server with web video and WebGL, with sound. $credits" ;;
+        xrdp-kde) echo "rdp-release-kit's xrdp with KDE Plasma on Wayland (KWin 6.8, Arch): sesman starts Plasma, KWin renders in software (no GPU) and xrdp sends it in AV1, decoded by the browser. The same visit, Konsole started from the launcher, then Firefox on the server with web video and WebGL, with sound. $credits" ;;
+        xrdp-gnome-screens) echo "The page's All screens on a computer with two screens, side by side: rdp-release-kit's xrdp with GNOME on Wayland, Fedora 45. Separate screens gives GNOME a monitor for each screen, the page's screen the primary, where the terminal stays; Super+Shift+Right moves it to the other screen, and closing the second screen's window brings one screen back." ;;
     esac
 }
 
@@ -130,8 +133,9 @@ status=0
 for server in "${SERVERS[@]}"; do
     echo "== demo: $server"
     raw=$OUT/raw-$server.mp4
-    pkgs=$IN/preview
-    [ "$server" = xrdp ] && pkgs=$IN/xrdp
+    # xrdp-original-xfce: Debian 13's own xrdp (wasm-session.sh's "debian")
+    pkgs=$IN/xrdp
+    [ "$server" = xrdp ] && pkgs=debian
     # a demo is a recording, not a test of xrdp: one more try when the
     # machine's timing gets in the way (a CI runner now and then)
     if ! record "$server" "$raw" "$pkgs" && ! { mv "$OUT/$server.log" "$OUT/$server-try1.log"
@@ -161,15 +165,15 @@ for server in xrdp-gnome xrdp-gnome-screens xrdp-kde xrdp gnome; do
         printf '%s\t%s\t%s\n' "$(name "$server")" "$(title "$server")" "$(caption "$server")"
     fi
 done > "$OUT/videos.tsv"
-python3 - "$OUT" "$COMMIT" "$WEB" "$PREVIEW" "${PIPEWIRE:-}" << 'EOF'
+python3 - "$OUT" "$COMMIT" "$WEB" "$XRDP" "${PIPEWIRE:-}" << 'EOF'
 import json, sys
-out, commit, web, preview, pw = sys.argv[1:6]
+out, commit, web, xrdp, pw = sys.argv[1:6]
 videos = []
 for line in open(f"{out}/videos.tsv", encoding="utf-8"):
     name, title, caption = line.rstrip("\n").split("\t")
     videos.append({"title": title, "src": f"demo/{name}.mp4",
                    "poster": f"demo/{name}.jpg", "caption": caption})
-recorded = {"kit": commit, "web": web, "xrdp-preview": preview}
+recorded = {"kit": commit, "web": web, "xrdp": xrdp}
 if pw:
     recorded["pipewire-module-xrdp"] = pw
 with open(f"{out}/demo.json", "w", encoding="utf-8") as f:

@@ -2,11 +2,12 @@ name: kit
 
 # Builds the portable SDL3 FreeRDP client for Linux (x86_64, aarch64; run
 # on the supported distributions) and Windows (x86_64, aarch64); builds the
-# xrdp packages for every release in distros.list, checks their
-# dependencies and logs in to each over RDP with that client; builds the web
-# client and logs in from a browser. Every push to main that passes
-# publishes the rolling release <YYYYMMDD>.<N> (and the pre-releases of the
-# previews); a pull request only builds and tests. The web client itself is
+# xrdp packages (our release of xrdp, with Xorg and Wayland sessions) for
+# every release in distros.list, checks their dependencies and logs in to
+# each over RDP with that client, Xorg and Wayland; builds the web client
+# and logs in from a browser. Every push to main that passes publishes the
+# rolling release <YYYYMMDD>.<N> (and the pre-releases of its products); a
+# pull request only builds and tests. The web client itself is
 # published on freerdp-web's own Pages; this repository has none. A push that
 # only moves the freerdp_web pin (a new freerdp-web release; build/changes.sh)
 # builds and tests the web client alone: its pre-release, no rolling release.
@@ -15,7 +16,7 @@ on:
     branches: [main]
     # a change no build reads makes no new release (docs/RELEASE.md,
     # "Frozen releases")
-    paths-ignore: ['**.md', 'docs/**', '.github/workflows/upstream.yml', '.github/workflows/pins.yml', 'check-upstream.sh', 'pins.notes', 'build/pins-table.sh', 'build/release-notes.sh', 'LICENSE', 'NOTICE']
+    paths-ignore: ['**.md', 'docs/**', '.github/workflows/upstream.yml', '.github/workflows/pins.yml', 'check-upstream.sh', 'pins.notes', 'build/pins-table.sh', 'build/release-notes.sh', 'build/xrdp-install-notes.sh', 'LICENSE', 'NOTICE']
   pull_request:
   workflow_dispatch:
 
@@ -172,7 +173,6 @@ jobs:
     runs-on: ubuntu-24.04
     outputs:
       images: ${{ steps.list.outputs.images }}
-      preview: ${{ steps.list.outputs.preview }}
       scope: ${{ steps.scope.outputs.scope }}
     steps:
       - uses: actions/checkout@v7
@@ -187,8 +187,8 @@ jobs:
           echo "this push builds: $scope"
       - id: list
         run: |
-          echo "images=$(grep -v -E '^\s*(#|$)' distros.list | jq -R . | jq -cs .)" >> "$GITHUB_OUTPUT"
-          echo "preview=$(grep -v -E '^\s*(#|$)' distros-preview.list | awk '{print $1}' | jq -R . | jq -cs .)" >> "$GITHUB_OUTPUT"
+          # the image, without its marks (no-sway, no-kde ...)
+          echo "images=$(grep -v -E '^\s*(#|$)' distros.list | awk '{print $1}' | jq -R . | jq -cs .)" >> "$GITHUB_OUTPUT"
 
   xrdp:
     needs: [build, releases]
@@ -237,7 +237,7 @@ jobs:
       - name: Check the dependencies
         run: ./check-deps.sh "${{ matrix.image }}"
 
-      - name: Log in over RDP
+      - name: Log in over RDP, Xorg and Wayland
         run: test/xrdp-session.sh "${{ matrix.image }}"
 
       - uses: actions/upload-artifact@v7
@@ -246,72 +246,6 @@ jobs:
           path: |
             dist/xrdp/*/*.deb
             dist/xrdp/*/*.rpm
-          if-no-files-found: error
-          retention-days: 3
-
-      - name: Keep the login test's logs and screenshot
-        if: always()
-        uses: actions/upload-artifact@v7
-        with:
-          name: test-${{ steps.name.outputs.name }}
-          path: dist/test/
-          if-no-files-found: ignore
-          retention-days: 3
-
-  # The xrdp preview (xrdp_preview in sources.lock): the same build and
-  # Xorg login as the release, then a Wayland (sway) login
-  xrdp-preview:
-    needs: [build, releases]
-    strategy:
-      fail-fast: false
-      matrix:
-        image: ${{ fromJSON(needs.releases.outputs.preview) }}
-        # x86_64 and ARM64 packages, each built and logged in to on its own
-        # architecture with that architecture's client
-        runner: [ubuntu-24.04, ubuntu-24.04-arm]
-    runs-on: ${{ matrix.runner }}
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          fetch-depth: 0   # the packages' release, 0kit<N>, counts the kit's commits
-
-      - name: Cache sources
-        uses: actions/cache@v6
-        with:
-          path: ~/.cache/rdp-release-kit/sources
-          key: sources-${{ hashFiles('sources.lock') }}
-
-      - name: The client, for the login test
-        uses: actions/download-artifact@v8
-        with:
-          name: sdl3-freerdp-${{ matrix.runner }}
-          path: dist
-
-      - name: Name the artifact
-        id: name
-        run: echo "name=xrdp-preview-$(echo '${{ matrix.image }}' | tr ':/' '--')${{ runner.arch == 'ARM64' && '-arm64' || '' }}" >> "$GITHUB_OUTPUT"
-
-      - name: Cache compiled objects
-        uses: actions/cache@v6
-        with:
-          path: ~/.cache/rdp-release-kit/ccache
-          key: ccache-${{ steps.name.outputs.name }}-${{ github.sha }}
-          restore-keys: ccache-${{ steps.name.outputs.name }}-
-
-      - name: Build
-        env:
-          CCACHE_MAXSIZE: 1G
-        run: ./build-xrdp.sh --preview "${{ matrix.image }}"
-
-      - name: Log in over RDP, Xorg and Wayland
-        run: test/xrdp-session.sh --preview "${{ matrix.image }}"
-
-      - uses: actions/upload-artifact@v7
-        with:
-          name: ${{ steps.name.outputs.name }}
-          path: |
-            dist/xrdp-preview/*/*.deb
-            dist/xrdp-preview/*/*.rpm
           if-no-files-found: error
           retention-days: 3
 
@@ -324,51 +258,51 @@ jobs:
           if-no-files-found: ignore
           retention-days: 3
 
-  # Every release's preview packages, once all of them pass, go to the
-  # pre-release xrdp-preview-<YYYYMMDD>.<N>-<kit commit> (pushes only; never
-  # a kit release), published once and never replaced
-  xrdp-preview-release:
+  # Every release's packages, once all of them pass, go to the
+  # pre-release xrdp-<YYYYMMDD>.<N>-<kit commit> (pushes only; the rolling
+  # release carries them too), published once and never replaced
+  xrdp-release:
     if: github.event_name != 'pull_request'
-    needs: [scripts, xrdp-preview]
+    needs: [scripts, xrdp]
     runs-on: ubuntu-24.04
-    concurrency: publish-xrdp-preview-${{ github.sha }}
+    concurrency: publish-xrdp-${{ github.sha }}
     permissions:
       contents: write
     steps:
       - uses: actions/checkout@v7
       - uses: actions/download-artifact@v8
         with:
-          pattern: xrdp-preview-*
-          path: dist/xrdp-preview
+          pattern: xrdp-*
+          path: dist/xrdp
       - name: Publish the pre-release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          sha=$(awk '$1 == "xrdp_preview" { print $4 }' sources.lock)
-          title="xrdp preview ${sha:0:12} (kit ${GITHUB_SHA:0:12})"
-          tag=$(build/prerelease-tag.sh xrdp-preview "$title")
-          # release assets are flat, and GitHub turns '~' in their names
-          # into '.': give the files those names first, so SHA256SUMS
+          read -r version sha < <(awk '$1 == "xrdp" { print $2, $4 }' sources.lock)
+          title="xrdp $version ${sha:0:12} (kit ${GITHUB_SHA:0:12})"
+          tag=$(build/prerelease-tag.sh xrdp "$title")
+          # release assets are flat, and GitHub turns '~' and '+' in their
+          # names into '.': give the files those names first, so SHA256SUMS
           # matches what is downloaded
           mkdir -p upload
           # PipeWire's xrdp module has its own pre-release (below)
-          find dist/xrdp-preview -type f \( -name '*.deb' -o -name '*.rpm' \) \
+          find dist/xrdp -type f \( -name '*.deb' -o -name '*.rpm' \) \
               ! -name 'pipewire-module-xrdp-*' | while read -r f; do
-            cp "$f" "upload/$(basename "$f" | tr '~' '.')"
+            cp "$f" "upload/$(basename "$f" | tr '~+' '..')"
           done
           (cd upload && sha256sum -- *.deb *.rpm > SHA256SUMS)
-          notes=$(build/release-notes.sh "A PREVIEW of the next xrdp: xrdp $sha (its development branch with Wayland sessions, AV1 and pacing) and xorgxrdp's development branch, built and tested (an Xorg and a Wayland login) by rdp-release-kit $GITHUB_SHA. Not an xrdp release. Published once, never replaced." xrdp-preview)
+          notes=$(build/release-notes.sh "xrdp $version, our release of xrdp (fork release-$version, commit $sha: its development branch with Wayland sessions for GNOME, KDE and sway, AV1 and pacing), and xorgxrdp's development branch, built and tested (an Xorg and a Wayland login) by rdp-release-kit $GITHUB_SHA. Published once, never replaced; the rolling release carries the same packages." xrdp)
           build/publish-prerelease.sh "$tag" "$title" "$notes" upload/*
 
-  # PipeWire's xrdp module for Fedora (Fedora does not package it), for the
-  # stable and the preview xrdp alike: its own pre-release
+  # PipeWire's xrdp module for Fedora (Fedora does not package it): its own
+  # pre-release
   # pipewire-module-xrdp-<YYYYMMDD>.<N>-<kit commit>, published only when
   # what it is built from changes. Its title names those inputs and not the
   # kit commit, so prerelease-tag.sh finds the earlier release of the same
   # inputs and publish-prerelease.sh leaves it as it is.
   pipewire-xrdp-release:
     if: github.event_name != 'pull_request'
-    needs: [scripts, xrdp-preview]
+    needs: [scripts, xrdp]
     runs-on: ubuntu-24.04
     concurrency: publish-pipewire-xrdp-${{ github.sha }}
     permissions:
@@ -377,14 +311,14 @@ jobs:
       - uses: actions/checkout@v7
       - uses: actions/download-artifact@v8
         with:
-          pattern: xrdp-preview-fedora-*
-          path: dist/xrdp-preview
+          pattern: xrdp-fedora-*
+          path: dist/xrdp
       - name: Publish the pre-release, if its inputs changed
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           read -r version sha < <(awk '$1 == "pipewire_xrdp" { print $2, $4 }' sources.lock)
-          fedora=$(awk '/^fedora:/ { sub("fedora:", "", $1); print $1 }' distros-preview.list | sort -n | paste -sd, -)
+          fedora=$(awk '/^fedora:/ { sub("fedora:", "", $1); print $1 }' distros.list | sort -n | paste -sd, -)
           # the source, the Fedora releases and architectures, their build
           # dependencies, the packaging
           inputs=$({ grep '^pipewire_xrdp ' sources.lock; echo "$fedora x86_64 aarch64"; cat deps/rpm.txt build/package-rpm.sh; } |
@@ -392,7 +326,7 @@ jobs:
           title="pipewire-module-xrdp $version (${sha:0:12}) for Fedora $fedora (inputs $inputs)"
           tag=$(build/prerelease-tag.sh pipewire-module-xrdp "$title")
           mkdir -p upload
-          find dist/xrdp-preview -type f -name 'pipewire-module-xrdp-*.rpm' -exec cp {} upload/ \;
+          find dist/xrdp -type f -name 'pipewire-module-xrdp-*.rpm' -exec cp {} upload/ \;
           ls upload/*.rpm > /dev/null
           (cd upload && sha256sum -- *.rpm > SHA256SUMS)
           notes=$(build/release-notes.sh "PipeWire's xrdp module (the sink and source that carry an xrdp session's sound and microphone), release v$version of neutrinolabs/pipewire-module-xrdp ($sha), unpatched, built by rdp-release-kit $GITHUB_SHA for Fedora $fedora, which does not package it. Debian 12 (backports), 13 and Ubuntu 24.04 and newer package it themselves (apt install pipewire-module-xrdp). Published once, never replaced; a new one only when its inputs change." xrdp)
@@ -509,7 +443,7 @@ jobs:
           echo "$GITHUB_SHA" > dist/handoff/KIT_COMMIT
           # GitHub turns '~' in asset names into '.': name them so first
           for f in dist/xrdp/debian-13/*.deb; do
-            cp "$f" "dist/handoff/$(basename "$f" | tr '~' '.')"
+            cp "$f" "dist/handoff/$(basename "$f" | tr '~+' '..')"
           done
           (cd dist/handoff && sha256sum freerdp-web-page.zip > freerdp-web-page.zip.sha256 &&
             sha256sum -- * > ../SHA256SUMS && mv ../SHA256SUMS .)
@@ -537,17 +471,17 @@ jobs:
   # The multi-monitor ladder (test/screens.sh), one server per runner: rung
   # 1, the one-monitor login, then on the same kind of server the rung above
   # it, the pinned page's All screens test: rung 2 with Xorg, against xrdp's
-  # release and the preview; rung 3, GNOME and KDE on Wayland through the
-  # preview. A failure says at once whether it is basic (rung 1) or one of
+  # upstream release (Debian 13's own packages) and the kit's xrdp; rung 3,
+  # GNOME and KDE on Wayland through the kit's xrdp. A failure says at once whether it is basic (rung 1) or one of
   # several monitors. Nothing waits for it: a red rung shows in the run, the
   # products are published all the same
   screens:
-    needs: [releases, wasm-build, xrdp, xrdp-preview]
+    needs: [releases, wasm-build, xrdp]
     if: "!cancelled() && needs.wasm-build.result == 'success'"
     strategy:
       fail-fast: false
       matrix:
-        server: [xrdp-original-xorg, xrdp-preview-xorg, xrdp-preview-gnome, xrdp-preview-kde]
+        server: [xrdp-original-xorg, xrdp-xorg, xrdp-gnome, xrdp-kde]
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
@@ -559,47 +493,41 @@ jobs:
       - run: chmod +x dist/wasm/rdp-gateway.sh
 
       # this run's packages; with scope "web" (no xrdp job ran) those of the
-      # newest pre-releases, which a full run built and tested
+      # newest pre-releases, which a full run built and tested. The original
+      # xrdp is Debian's own (test/screens.sh)
       - name: The xrdp packages of this run (xrdp-debian-13)
         if: needs.releases.outputs.scope == 'all'
         uses: actions/download-artifact@v8
         with:
           name: xrdp-debian-13
           path: dist/in/xrdp-debian-13
-      - name: The xrdp packages of this run (xrdp-preview-debian-13)
+      - name: The xrdp packages of this run (xrdp-fedora-45)
         if: needs.releases.outputs.scope == 'all'
         uses: actions/download-artifact@v8
         with:
-          name: xrdp-preview-debian-13
-          path: dist/in/xrdp-preview-debian-13
-      - name: The xrdp packages of this run (xrdp-preview-fedora-45)
-        if: needs.releases.outputs.scope == 'all'
-        uses: actions/download-artifact@v8
-        with:
-          name: xrdp-preview-fedora-45
-          path: dist/in/xrdp-preview-fedora-45
+          name: xrdp-fedora-45
+          path: dist/in/xrdp-fedora-45
       - name: The xrdp packages
         env:
           GH_TOKEN: ${{ github.token }}
           SCOPE: ${{ needs.releases.outputs.scope }}
         run: |
-          mkdir -p dist/xrdp/debian-13 dist/xrdp-preview/debian-13 dist/xrdp-preview/fedora-45
+          mkdir -p dist/xrdp/debian-13 dist/xrdp/fedora-45
           if [ "$SCOPE" = all ]; then
               cp dist/in/xrdp-debian-13/debian-13/* dist/xrdp/debian-13/
-              cp dist/in/xrdp-preview-debian-13/debian-13/* dist/xrdp-preview/debian-13/
-              cp dist/in/xrdp-preview-fedora-45/fedora-45/* dist/xrdp-preview/fedora-45/
+              cp dist/in/xrdp-fedora-45/fedora-45/* dist/xrdp/fedora-45/
           else
+              # the newest xrdp-<date>.<N>-* (xrdp-preview-* before them)
               newest() {
                   gh release list -R "$GITHUB_REPOSITORY" -L 100 --json tagName,isPrerelease,isDraft,publishedAt \
                       -q "[.[] | select(.isPrerelease and (.isDraft | not) and (.tagName | startswith(\"$1-\")))] | sort_by(.publishedAt) | last | .tagName"
               }
               get() { gh release download "$1" -R "$GITHUB_REPOSITORY" -D "$2" -p "$3"; echo "$3 of $1"; }
-              get "$(newest web)" dist/xrdp/debian-13 '*.deb'
-              get "$(newest xrdp-preview)" dist/xrdp-preview/debian-13 '*debian-13_amd64.deb'
-              get "$(newest xrdp-preview)" dist/xrdp-preview/fedora-45 '*fc45.x86_64.rpm'
-              get "$(newest pipewire-module-xrdp)" dist/xrdp-preview/fedora-45 '*fc45.x86_64.rpm'
+              get "$(newest xrdp)" dist/xrdp/debian-13 '*debian-13_amd64.deb'
+              get "$(newest xrdp)" dist/xrdp/fedora-45 '*fc45.x86_64.rpm'
+              get "$(newest pipewire-module-xrdp)" dist/xrdp/fedora-45 '*fc45.x86_64.rpm'
           fi
-          ls dist/xrdp/* dist/xrdp-preview/*
+          ls dist/xrdp/*
 
       # the test drivers use Node's WebSocket (Node 22+); the checks use uvx
       - uses: actions/setup-node@v7
@@ -609,7 +537,7 @@ jobs:
 
       # KDE's xrdp is compiled in its image from these
       - name: Cache sources
-        if: matrix.server == 'xrdp-preview-kde'
+        if: matrix.server == 'xrdp-kde'
         uses: actions/cache@v6
         with:
           path: ~/.cache/rdp-release-kit/sources
@@ -618,7 +546,7 @@ jobs:
       # GNOME and KDE run systemd in a rootful podman container, as the
       # demos do (demo.yml says why each line is needed)
       - name: Tools
-        if: matrix.server == 'xrdp-preview-gnome' || matrix.server == 'xrdp-preview-kde'
+        if: matrix.server == 'xrdp-gnome' || matrix.server == 'xrdp-kde'
         run: |
           printf '#!/bin/sh\nexec sudo podman "$@"\n' | sudo tee /usr/local/bin/podman-root > /dev/null
           sudo chmod 755 /usr/local/bin/podman-root
@@ -630,8 +558,8 @@ jobs:
 
       - name: The ladder
         env:
-          PODMAN: ${{ (matrix.server == 'xrdp-preview-gnome' || matrix.server == 'xrdp-preview-kde') && '/usr/local/bin/podman-root' || '' }}
-          SERVER_RUN_OPTS: ${{ (matrix.server == 'xrdp-preview-gnome' || matrix.server == 'xrdp-preview-kde') && '--security-opt apparmor=unconfined' || '' }}
+          PODMAN: ${{ (matrix.server == 'xrdp-gnome' || matrix.server == 'xrdp-kde') && '/usr/local/bin/podman-root' || '' }}
+          SERVER_RUN_OPTS: ${{ (matrix.server == 'xrdp-gnome' || matrix.server == 'xrdp-kde') && '--security-opt apparmor=unconfined' || '' }}
         run: test/screens.sh dist/wasm/web dist/wasm/rdp-gateway.sh dist/wasm/tests "${{ matrix.server }}"
 
       - name: Keep the ladder's logs and screenshots
@@ -643,12 +571,12 @@ jobs:
           if-no-files-found: ignore
           retention-days: 3
 
-  # The demo videos of this commit's web client and xrdp preview
+  # The demo videos of this commit's web client and xrdp
   # (.github/workflows/demo.yml), published as the pre-release demo-* for
   # freerdp-web's splash and carried by the release below
   demo:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    needs: [wasm, xrdp-preview-release, pipewire-xrdp-release]
+    needs: [wasm, xrdp-release, pipewire-xrdp-release]
     permissions:
       contents: write
     uses: ./.github/workflows/demo.yml
@@ -679,7 +607,7 @@ jobs:
           pattern: sdl3-freerdp-*
           path: dist
           merge-multiple: true
-      # the preview's packages have their own pre-release: left out below
+      # the xrdp packages and PipeWire's xrdp module (Fedora)
       - uses: actions/download-artifact@v8
         with:
           pattern: xrdp-*
@@ -696,13 +624,13 @@ jobs:
 
       - name: The files
         run: |
-          # assets are flat and GitHub turns '~' into '.': name the files
-          # so first, so SHA256SUMS matches what is downloaded
+          # assets are flat and GitHub turns '~' and '+' into '.': name the
+          # files so first, so SHA256SUMS matches what is downloaded
           mkdir -p upload
           find dist -type f \( -name '*.tar.xz' -o -name '*.zip' -o -name '*.deb' -o -name '*.rpm' \
               -o -path 'dist/demo/*' \) \
-              ! -name '*~preview*' ! -name SHA256SUMS | while read -r f; do
-            cp "$f" "upload/$(basename "$f" | tr '~' '.')"
+              ! -name SHA256SUMS | while read -r f; do
+            cp "$f" "upload/$(basename "$f" | tr '~+' '..')"
           done
           (cd upload && sha256sum -- * > ../SHA256SUMS) && mv SHA256SUMS upload/
           ls upload
@@ -721,7 +649,9 @@ jobs:
           xrdp=$(awk '$1 == "xrdp" { print $2 }' sources.lock)
           title="FreeRDP preview $freerdp clients, xrdp $xrdp packages (kit ${GITHUB_SHA:0:12})"
           tag=$(build/prerelease-tag.sh release "$title")
-          summary="Rolling release $tag of rdp-release-kit, built and tested from $GITHUB_SHA: FreeRDP's SDL3 client for Linux, Windows and macOS, built from our preview of FreeRDP master (preview $freerdp, commit ${freerdp_commit:0:12}, with the fixes upstream has merged since its last release, such as the Opus microphone), each with freerdp-tk (a window to save and open connections) and the Python that runs it, and xrdp packages for Debian, Ubuntu and Fedora, on x86_64 and ARM64. Published once, never replaced.
+          # a row per distribution: sessions, direct links, the command
+          install=$(build/xrdp-install-notes.sh upload "https://github.com/$GITHUB_REPOSITORY/releases/download/$tag")
+          summary="Rolling release $tag of rdp-release-kit, built and tested from $GITHUB_SHA: FreeRDP's SDL3 client for Linux, Windows and macOS, built from our preview of FreeRDP master (preview $freerdp, commit ${freerdp_commit:0:12}, with the fixes upstream has merged since its last release, such as the Opus microphone), each with freerdp-tk (a window to save and open connections) and the Python that runs it, and our xrdp for Debian, Ubuntu and Fedora (Xorg and Wayland sessions: GNOME, KDE, sway), on x86_64 and ARM64. Published once, never replaced.
 
           ## Download and run
 
@@ -733,10 +663,12 @@ jobs:
           | Windows ARM64 | \`sdl3-freerdp-$freerdp-windows-aarch64.zip\` | the same |
           | macOS Apple Silicon | \`sdl3-freerdp-$freerdp-macos-arm64.tar.xz\` | unpack, then double-click \`freerdp-tk.command\` (or \`bin/sdl-freerdp /v:server /u:user\`); downloaded with a browser, clear macOS's quarantine first: \`xattr -dr com.apple.quarantine sdl3-freerdp-*\` (not notarized) |
           | macOS Intel | \`sdl3-freerdp-$freerdp-macos-x86_64.tar.xz\` | the same |
-          | xrdp server | \`xrdp_*~<release>_<arch>.deb\` + \`xorgxrdp_*\` (Debian, Ubuntu), \`xrdp-*.fc<N>.<arch>.rpm\` + \`xorgxrdp-*\` (Fedora) | \`sudo apt install ./xrdp_*.deb ./xorgxrdp_*.deb\` or \`sudo dnf install ./xrdp-*.rpm ./xorgxrdp-*.rpm\` |
+          | xrdp server | see Install xrdp below | |
 
           The Linux client runs on glibc 2.34 and newer (RHEL 9, Debian 12, Ubuntu 22.04, Fedora 35 and newer) with PulseAudio's or PipeWire's libpulse; nothing else to install. The macOS client runs on macOS 12 and newer. Check a download: \`sha256sum -c --ignore-missing SHA256SUMS\`; its origin: \`gh attestation verify <file> -R $GITHUB_REPOSITORY\`. Each archive's MANIFEST lists what it was built from.
 
-          The demo videos (\`xrdp-original-*.mp4\` with xrdp's release, \`xrdp-preview-*.mp4\` with the preview, \`grd-gnome.mp4\`, \`demo.json\`) are this build's web client and xrdp preview, recorded on throwaway servers: everything shown is synthetic. Big Buck Bunny © Blender Foundation, CC BY 3.0; WebGL Aquarium © Google, BSD."
+          $install
+
+          The demo videos (\`xrdp-original-*.mp4\` with xrdp's upstream release as Debian 13 ships it, \`xrdp-preview-*.mp4\` with this release's xrdp, \`grd-gnome.mp4\`, \`demo.json\`) are this build's web client and xrdp, recorded on throwaway servers: everything shown is synthetic. Big Buck Bunny © Blender Foundation, CC BY 3.0; WebGL Aquarium © Google, BSD."
           notes=$(build/release-notes.sh "$summary" linux windows macos web xrdp)
           LATEST=1 build/publish-prerelease.sh "$tag" "$title" "$notes" upload/*
