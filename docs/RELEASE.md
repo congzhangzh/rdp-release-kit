@@ -43,10 +43,8 @@ once and never replaced ([Frozen releases](#frozen-releases)).
 - freerdp-web is pinned only by its GitHub point releases, as a whole:
   the version column is the release (`20261025.1`), the commit is the one its
   tag `20261025.1` points to (`build/check-release-pins.sh`, in CI), and
-  `check-upstream.sh` watches its tags like any upstream. Its GitHub
-  Pages are freerdp-web's own: a tag publishes nothing; freerdp-web publishes
-  a tag by hand once the kit has built and tested that page (client "exact"),
-  after a login from the very files going live (its `login` job).
+  `check-upstream.sh` watches its tags like any upstream. A tag publishes
+  nothing: the site is published from the kit (below).
 - [`signed.lock`](../signed.lock) and [`keys/`](../keys): the release key
   each signed tarball must verify against. None today: xrdp and xorgxrdp's
   release tarballs were the only signed ones, and both are git pins now.
@@ -95,7 +93,7 @@ upstream tag / frozen branch
   → main: CI again; the products go to their pre-releases (web-…, xrdp-…)
   → all green: the release <YYYYMMDD>.<N>, made latest: every product,
     SHA256SUMS, build provenance attestations
-  → consumers download and verify (freerdp-web publishes on purpose)
+  → consumers download and verify; the site, by hand, from a release (site workflow)
 ```
 
 - **Watching upstream**: [`check-upstream.sh`](../check-upstream.sh)
@@ -108,13 +106,18 @@ upstream tag / frozen branch
   makes releases (tags `20261025.1`, no prefix; earlier `v20261021.1`, `v0.4.12`). The kit pins
   a release when one comes out (the upstream check opens the issue), tests the client with it,
   and makes `web-<YYYYMMDD>.<N>-<kit commit>`; the kit's release carries the client and that
-  freerdp-web release as one whole. freerdp-web then publishes its Pages from the tag, by hand,
-  with that very client (`kit-release.sh` finds it), after its own login from the files going
-  live. So the site only gets a page and a client the kit tested together, and a kit change
-  may break the page: the kit's test fails, nothing reaches the site, and the page is fixed
-  and released after (2026-10-25: the live site never breaks; the kit may).
-- **Pages**: only freerdp-web has them; the kit publishes none (its old
-  address kept the redirect GitHub last deployed).
+  freerdp-web release as one whole. The kit then publishes the site from a release, by hand
+  (the `site` workflow): that release's client, page and demos, after freerdp-web's page test
+  and a login from the files going live, and a login from the live site after. So the site
+  only gets a page and a client the kit tested together, and a kit change may break the page:
+  the kit's test fails, nothing reaches the site, and the page is fixed and released after
+  (2026-10-25: the live site never breaks; the kit may). Until 2026-10-27 freerdp-web
+  published it, pulling the kit's pre-releases back (`kit-release.sh`, `fetch-media.sh`): a
+  cycle, which every renamed demo video had to cross twice.
+- **Pages**: the site is freerdp-web's address, served from its branch `gh-pages`, which only
+  the kit's `site` workflow writes (a deploy key for that repository alone, secret
+  `FREERDP_WEB_PAGES_KEY`); each publish is a commit there, so every site that was live stays
+  in its history. The kit's own old address kept the redirect GitHub last deployed.
 
 ### Our own releases of an upstream: picked from the fork
 
@@ -169,7 +172,7 @@ The site only ever gets a page and a client that the kit tested together:
 | 2 | freerdp-web | the release: the version in the manifest, CHANGELOG, release notes, the tag `<YYYYMMDD>.<N>`, a GitHub Release. A tag publishes nothing |
 | 3 | the kit | pin it (`freerdp_web`), with any kit change it needs; push |
 | 4 | the kit | CI builds the client with that page, logs in, and publishes `web-<YYYYMMDD>.<N>-<kit commit>`, titled with the page commit |
-| 5 | freerdp-web | `gh workflow run pages.yml --ref <tag> -f publish=true`: the kit's client of that very page ("exact"), a login from exactly the files going live (Asyncify and JSPI), then the deploy, then a login from the live site |
+| 5 | the kit | once a release carries it: `gh workflow run site.yml -f release=<YYYYMMDD>.<N> -f publish=true` (empty release: the latest): freerdp-web's page test, a login from exactly the files going live (Asyncify and JSPI), then the deploy to `gh-pages`, then a login from the live site |
 
 A kit change may break the page: then step 4 fails, nothing new reaches
 the site, and the page is fixed and released after it.
@@ -309,7 +312,7 @@ move while builds don't, and versions that only go up.
 | kit `release` job | `<YYYYMMDD>.<N>` (`build/prerelease-tag.sh release`), published by `publish-prerelease.sh` with `LATEST=1`: the same rules, but a release, made latest |
 | kit pushes | a push that changes only documentation (or only the upstream check) runs no build, so it makes no new pre-release |
 | package revisions | `0kit<N>`, rule 4 |
-| freerdp-web [`kit-release.sh`](https://github.com/congzhangzh/freerdp-web/blob/main/kit-release.sh) | rule 3: the newest published `web-*`, or the newest build of a page commit; withdrawn ones and drafts skipped; the older names `web-<page, 12>-<kit, 12>` and `web-<page, 12>` are still found. `site.sh` and `pages.yml` use it |
+| (until 2026-10-27) freerdp-web [`kit-release.sh`](https://github.com/congzhangzh/freerdp-web/blob/main/kit-release.sh) | rule 3: the newest published `web-*`, or the newest build of a page commit; withdrawn ones and drafts skipped; the older names `web-<page, 12>-<kit, 12>` and `web-<page, 12>` are still found. `site.sh` and `pages.yml` use it |
 
 The order of the pushes: freerdp-web first (it finds both names), then the
 kit, then immutable releases turned on (rule 6, after a trial).

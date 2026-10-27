@@ -13,6 +13,22 @@ toolchain) gets an entry here in the same commit.
 
 ## 2026-10-27
 
+- **The kit publishes the site** (聪哥's decision; same address,
+  congzhangzh.github.io/freerdp-web/). freerdp-web published it, pulling the kit's
+  pre-releases back (its client, `web-*`, and the demo set, `demo-*`), with the videos'
+  addresses in its own `media.json` at the tag being published: a cycle, which every
+  renamed demo video had to cross twice. Now one direction: freerdp-web holds the page's
+  source and tags, the kit pins a tag, builds, tests, records, and publishes. The new
+  `site` workflow (by hand, never on its own) takes one kit release (default the latest):
+  `build/site.sh` assembles its web client and page, its demos with their addresses
+  (`build/site-anchors.json`, moved here from `media.json`; an unknown video stops it) and
+  `RELEASE`; then freerdp-web's page test (`test-page.mjs` at the page's commit) and a
+  browser login from exactly those files (Asyncify, JSPI) to the release's xrdp; with
+  **publish**, a commit to freerdp-web's branch `gh-pages` (a deploy key for that
+  repository, secret `FREERDP_WEB_PAGES_KEY`), which its Pages serve, then a login from the
+  live site. Locally, from release `20261027.2`: the site assembled (5 videos), the page
+  test passed, the login from its files 5 of 5.
+
 - **The demo videos lose "preview" too** (聪哥's decision): `xrdp-gnome`,
   `xrdp-gnome-screens` and `xrdp-kde` (the kit's xrdp), formerly `xrdp-preview-*`;
   `xrdp-original-xfce` and `grd-gnome` keep theirs. freerdp-web's `media.json` knows

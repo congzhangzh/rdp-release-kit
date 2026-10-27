@@ -1,0 +1,206 @@
+name: site
+
+# The web client's site, congzhangzh.github.io/freerdp-web/, published from a
+# kit release by hand, never on its own: Run workflow, pick the release
+# (default: the latest), tick "publish". Without it, every check runs and
+# nothing goes live. One direction only: freerdp-web holds the page's
+# source and its tags; the kit pins a tag, builds and tests the client with
+# it, records the demos, and publishes the site. (Until 2026-10-27
+# freerdp-web published it, pulling the kit's pre-releases back: a cycle.)
+#
+# The site is the release's web client and page, its demo videos with their
+# lasting addresses (build/site-anchors.json), and RELEASE (build/site.sh).
+# Before it goes live: freerdp-web's own page test at the page's commit
+# (test-page.mjs), and a browser login from exactly these files to the
+# release's xrdp, with each build of the client. It goes to freerdp-web's
+# branch gh-pages, which its Pages serve, as a commit of its own (every site
+# that was ever live stays in that branch's history), pushed with a deploy
+# key for that repository alone (secret FREERDP_WEB_PAGES_KEY). Then a login
+# from the published site.
+on:
+  workflow_dispatch:
+    inputs:
+      release:
+        description: "The kit release to publish (<YYYYMMDD>.<N>); empty: the latest"
+        type: string
+        default: ""
+      publish:
+        description: Publish it (without, only the checks)
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+env:
+  PAGES_REPO: congzhangzh/freerdp-web
+  PAGES_URL: https://congzhangzh.github.io/freerdp-web/
+
+# one publish at a time; a second waits
+concurrency:
+  group: site
+  cancel-in-progress: false
+
+jobs:
+  site:
+    runs-on: ubuntu-24.04
+    outputs:
+      release: ${{ steps.site.outputs.release }}
+      page: ${{ steps.site.outputs.page }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: The site, from the release
+        id: site
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE: ${{ inputs.release }}
+        run: |
+          [ -n "$RELEASE" ] || RELEASE=$(gh release view -R "$GITHUB_REPOSITORY" --json tagName -q .tagName)
+          page=$(build/site.sh "$RELEASE" site)
+          echo "release=$RELEASE" >> "$GITHUB_OUTPUT"
+          echo "page=$page" >> "$GITHUB_OUTPUT"
+          sed -n '1,2p' site/MANIFEST
+          echo "### Site from kit release $RELEASE (freerdp-web ${page:0:12})" >> "$GITHUB_STEP_SUMMARY"
+
+      # the page's own test, from its source at that commit, in a short
+      # path: Chrome's singleton socket must fit a Unix socket's 108 bytes
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - name: The page with the client (freerdp-web's test-page.mjs)
+        env:
+          PAGE: ${{ steps.site.outputs.page }}
+        run: |
+          src=$(mktemp -d /tmp/page-XXXXXX)
+          curl -fsSL "https://github.com/$PAGES_REPO/archive/$PAGE.tar.gz" | tar -xz --strip-components=1 -C "$src"
+          (cd "$src" && node test-page.mjs "$GITHUB_WORKSPACE/site" "$GITHUB_WORKSPACE/out/page")
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: site
+          path: site/
+          include-hidden-files: true   # .well-known/, .nojekyll
+          retention-days: 7
+      - name: Keep the page test's screenshots and log
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-page
+          path: out/
+          if-no-files-found: ignore
+          retention-days: 7
+
+  # a browser login from exactly the files going live, served without
+  # COOP/COEP (as GitHub Pages), to the release's own xrdp packages
+  login:
+    needs: [site]
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        engine: [asyncify, jspi]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        with:
+          name: site
+          path: site
+      - name: The release's xrdp packages, and the page's gateway script
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE: ${{ needs.site.outputs.release }}
+          PAGE: ${{ needs.site.outputs.page }}
+        run: |
+          gh release download "$RELEASE" -R "$GITHUB_REPOSITORY" -D dist/xrdp/debian-13 -p '*debian-13_amd64.deb'
+          ls dist/xrdp/debian-13
+          curl -fsSL -o rdp-gateway.sh "https://raw.githubusercontent.com/$PAGES_REPO/$PAGE/rdp-gateway.sh"
+          chmod +x rdp-gateway.sh
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+      - name: Log in from these files (${{ matrix.engine }})
+        run: WASM_ENGINE=${{ matrix.engine }} test/wasm-session.sh "$PWD/site" rdp-gateway.sh
+      - name: Keep the logs and screenshot
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-login-${{ matrix.engine }}
+          path: dist/test/
+          if-no-files-found: ignore
+          retention-days: 7
+
+  deploy:
+    if: inputs.publish
+    needs: [site, login]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: site
+          path: site
+      - name: To freerdp-web's gh-pages, as a commit of its own
+        env:
+          KEY: ${{ secrets.FREERDP_WEB_PAGES_KEY }}
+          RELEASE: ${{ needs.site.outputs.release }}
+          PAGE: ${{ needs.site.outputs.page }}
+        run: |
+          [ -n "$KEY" ] || { echo "no deploy key: the secret FREERDP_WEB_PAGES_KEY is not set" >&2; exit 1; }
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$KEY" > ~/.ssh/pages_key && chmod 600 ~/.ssh/pages_key
+          ssh-keyscan -t ed25519 github.com >> ~/.ssh/known_hosts 2> /dev/null
+          export GIT_SSH_COMMAND="ssh -i $HOME/.ssh/pages_key -o IdentitiesOnly=yes"
+          git config --global user.name "rdp-release-kit"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if git clone -q --branch gh-pages --single-branch "git@github.com:$PAGES_REPO.git" pages; then :; else
+            # the first publish: a branch with no history of its own
+            git init -q -b gh-pages pages && git -C pages remote add origin "git@github.com:$PAGES_REPO.git"
+          fi
+          find pages -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
+          cp -a site/. pages/
+          git -C pages add -A
+          git -C pages commit -q -m "Site: kit release $RELEASE (freerdp-web ${PAGE:0:12})" \
+              -m "Published by rdp-release-kit's site workflow, run $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" ||
+              echo "the site is unchanged: nothing to commit"
+          git -C pages push -q origin gh-pages
+          git -C pages log -1 --format='gh-pages: %h %s'
+
+  # a login from the published site, as a user would, once GitHub serves it
+  check:
+    needs: [site, deploy]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - name: Wait until this release's site is served
+        env:
+          RELEASE: ${{ needs.site.outputs.release }}
+        run: |
+          for i in $(seq 60); do
+            [ "$(curl -fsSL "${PAGES_URL}RELEASE?$i" 2> /dev/null)" = "$RELEASE" ] && exit 0
+            sleep 10
+          done
+          echo "kit release $RELEASE did not appear at $PAGES_URL in 10 minutes" >&2; exit 1
+      - name: The release's xrdp packages, and the page's gateway script
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE: ${{ needs.site.outputs.release }}
+          PAGE: ${{ needs.site.outputs.page }}
+        run: |
+          gh release download "$RELEASE" -R "$GITHUB_REPOSITORY" -D dist/xrdp/debian-13 -p '*debian-13_amd64.deb'
+          curl -fsSL -o rdp-gateway.sh "https://raw.githubusercontent.com/$PAGES_REPO/$PAGE/rdp-gateway.sh"
+          chmod +x rdp-gateway.sh
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+      - name: Log in from the published site
+        run: PAGE_URL="${PAGES_URL}index.html" test/wasm-session.sh - rdp-gateway.sh
+      - name: Keep the logs and screenshot
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-published
+          path: dist/test/
+          if-no-files-found: ignore
+          retention-days: 7

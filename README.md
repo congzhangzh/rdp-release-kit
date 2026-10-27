@@ -285,14 +285,23 @@ To come: `test/fetch-release.sh <tag>`, fetching a release's web client and
 xrdp packages (checked against `SHA256SUMS`), so the tests run on released
 builds as easily as on local ones; xrdp with GNOME on Xorg.
 
-The web client is published on freerdp-web's own GitHub Pages; this kit
-builds and tests it. On each push the wasm job hands the tested client of
-the pinned page over as a pre-release `web-<YYYYMMDD>.<N>-<kit commit>`
-(with the xrdp packages for the published site's login check), published
-once and never replaced (docs/RELEASE.md, "Frozen releases"); freerdp-web's workflow
-downloads it and publishes it, only on purpose (a `v*` tag there, or *Run
-workflow* with **publish**). This repository has no Pages of its own: the
-web client's site is freerdp-web's. A pull request builds and tests only.
+**The site** (congzhangzh.github.io/freerdp-web/) is published from here,
+by hand, from a kit release: *Run workflow* on `site` (the release, default
+the latest; tick **publish**). `build/site.sh <release> <dir>` assembles it:
+the release's web client and page, its demo videos with their lasting
+addresses (`build/site-anchors.json`), `RELEASE`. Before it goes live,
+freerdp-web's page test (`test-page.mjs` at the page's commit) and a browser
+login from exactly those files to the release's xrdp, Asyncify and JSPI;
+then it goes to freerdp-web's branch `gh-pages` as a commit of its own (a
+deploy key for that repository, secret `FREERDP_WEB_PAGES_KEY`), which its
+Pages serve, and a login from the published site checks it. Without
+**publish**, every check runs and nothing goes live. freerdp-web holds the
+page's source and its release tags, which the kit pins; until 2026-10-27 it
+published the site itself, pulling the kit's pre-releases back, a cycle that
+made every rename a two-repository dance. The pre-release
+`web-<YYYYMMDD>.<N>-<kit commit>` (the tested client of the pinned page,
+published once on each push) stays, for anyone who wants that client alone.
+A pull request builds and tests only.
 
 ## xrdp packages
 

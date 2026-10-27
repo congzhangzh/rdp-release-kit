@@ -16,7 +16,7 @@ on:
     branches: [main]
     # a change no build reads makes no new release (docs/RELEASE.md,
     # "Frozen releases")
-    paths-ignore: ['**.md', 'docs/**', '.github/workflows/upstream.yml', '.github/workflows/pins.yml', 'check-upstream.sh', 'pins.notes', 'build/pins-table.sh', 'build/release-notes.sh', 'build/xrdp-install-notes.sh', 'LICENSE', 'NOTICE']
+    paths-ignore: ['**.md', 'docs/**', '.github/workflows/upstream.yml', '.github/workflows/pins.yml', 'check-upstream.sh', 'pins.notes', 'build/pins-table.sh', 'build/release-notes.sh', 'build/xrdp-install-notes.sh', 'build/site.sh', 'build/site-anchors.json', '.github/workflows/site.yml', 'LICENSE', 'NOTICE']
   pull_request:
   workflow_dispatch:
 
