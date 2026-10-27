@@ -11,11 +11,12 @@
 # pull requests whose code compiles under Emscripten only, the browser
 # clipboard (#13733), the Web Audio microphone (#13811), the MessageChannel
 # yield (#13864), the page's monitors (#13865) and no connection dialog window
-# (#13860). Master has the
+# (#13860), and one for every client: SDL3 clipboard events with every field
+# set (#13872). Master has the
 # rest of ours: AV1 (#13731), sound (#13732), H.264 through WebCodecs
 # (#13812), #13838, #13839, and the Opus microphone fix (#13810, which 3.32.2
 # lacks)
-freerdp     20261026.3 git+https://github.com/congzhangzh/FreeRDP.git                                        cef3ddb474ef197413356630398480d400b79247
+freerdp     20261026.4 git+https://github.com/congzhangzh/FreeRDP.git                                        c12c6df85789c3757b24a76a74ed3f4978ffa667
 sdl3        3.4.18   https://github.com/libsdl-org/SDL/releases/download/release-3.4.18/SDL3-3.4.18.tar.gz        9c75cf16330322c217dedd2e0609f1124f1b54b8633e763467b4684d0f4334a3
 sdl3_ttf    3.2.2    https://github.com/libsdl-org/SDL_ttf/releases/download/release-3.2.2/SDL3_ttf-3.2.2.tar.gz   63547d58d0185c833213885b635a2c0548201cc8f301e6587c0be1a67e1e045d
 freetype    2.15.0   https://download.savannah.gnu.org/releases/freetype/freetype-2.15.0.tar.xz                   93cd47eb719c325107f2d3cf087d06299e944c3b48a40b55537302304dea1dd5

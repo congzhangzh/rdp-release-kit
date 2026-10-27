@@ -11,6 +11,20 @@ from right now, and what our own changes to a source fix:
 Every change that alters what is built (a pin, a build option, a patch, a
 toolchain) gets an entry here in the same commit.
 
+## 2026-10-27
+
+- **FreeRDP `release-20261026.4`** (`c12c6df85`): `release-20261026.3` plus our pull request
+  #13872, for every client: the SDL3 client's clipboard events start from `{}` and set
+  every field. A brace initializer only set the event union's first member, so the event
+  for a new server format list carried `num_mime_types` from the stack; a negative value
+  aborted the client on the server's next copy (7 of 10 runs of a gcc 16 Debug build
+  against xrdp), and 1 would have read a stray pointer. The kit's optimised build happened
+  not to abort before the change either. Locally, from the rebuilt tree (`SRC_freerdp`):
+  `xrdp-session.sh debian:13` 8 of 8, `wasm-session.sh` 5 of 5 on Asyncify and on JSPI;
+  the clipboard against xrdp, the same as with `release-20261026.3`: native server → local
+  text 6 of 6, local → server 3 of 3, freerdp-web's `test-clip.mjs` (text and images both
+  ways) 2 of 2.
+
 ## 2026-10-26
 
 **Several monitors: tests as a ladder, and a demo**
