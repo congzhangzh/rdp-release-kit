@@ -10,9 +10,9 @@
 # xrdp-gnome-screens is xrdp-gnome on two screens (test/wasm-demo-screens.mjs:
 # All screens, Separate screens). Each video is named for the server it
 # shows, the xrdp ones by which xrdp: xrdp-original-* (xrdp's upstream
-# release, Debian 13's own packages), xrdp-preview-* (the kit's xrdp; the
-# names stay, freerdp-web's media.json gives them their lasting address);
-# grd-gnome is gnome-remote-desktop.
+# release, Debian 13's own packages), xrdp-gnome*, xrdp-kde (the kit's
+# xrdp; xrdp-preview-* until 2026-10-27, which freerdp-web's media.json
+# still knows); grd-gnome is gnome-remote-desktop.
 #
 # Out: dist/demo/ (OUT=<dir> for another). KIT_COMMIT=<sha> records another
 # commit than HEAD; KIT_COMMIT=newest takes the newest pre-release of each
@@ -74,9 +74,9 @@ name() {
     case $1 in
         xrdp) echo xrdp-original-xfce ;;
         gnome) echo grd-gnome ;;
-        xrdp-gnome) echo xrdp-preview-gnome ;;
-        xrdp-kde) echo xrdp-preview-kde ;;
-        xrdp-gnome-screens) echo xrdp-preview-gnome-screens ;;
+        xrdp-gnome) echo xrdp-gnome ;;
+        xrdp-kde) echo xrdp-kde ;;
+        xrdp-gnome-screens) echo xrdp-gnome-screens ;;
     esac
 }
 title() {

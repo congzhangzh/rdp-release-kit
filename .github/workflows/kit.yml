@@ -669,6 +669,6 @@ jobs:
 
           $install
 
-          The demo videos (\`xrdp-original-*.mp4\` with xrdp's upstream release as Debian 13 ships it, \`xrdp-preview-*.mp4\` with this release's xrdp, \`grd-gnome.mp4\`, \`demo.json\`) are this build's web client and xrdp, recorded on throwaway servers: everything shown is synthetic. Big Buck Bunny © Blender Foundation, CC BY 3.0; WebGL Aquarium © Google, BSD."
+          The demo videos (\`xrdp-original-*.mp4\` with xrdp's upstream release as Debian 13 ships it, \`xrdp-gnome*.mp4\`, \`xrdp-kde.mp4\` with this release's xrdp, \`grd-gnome.mp4\`, \`demo.json\`) are this build's web client and xrdp, recorded on throwaway servers: everything shown is synthetic. Big Buck Bunny © Blender Foundation, CC BY 3.0; WebGL Aquarium © Google, BSD."
           notes=$(build/release-notes.sh "$summary" linux windows macos web xrdp)
           LATEST=1 build/publish-prerelease.sh "$tag" "$title" "$notes" upload/*

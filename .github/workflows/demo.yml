@@ -141,7 +141,7 @@ jobs:
           import glob, json, os, shutil, sys
           src, out = sys.argv[1], sys.argv[2]
           # by the videos' names (test/record-demos.sh)
-          order = ["xrdp-preview-gnome", "xrdp-preview-gnome-screens", "xrdp-preview-kde", "xrdp-original-xfce", "grd-gnome"]
+          order = ["xrdp-gnome", "xrdp-gnome-screens", "xrdp-kde", "xrdp-original-xfce", "grd-gnome"]
           recorded, videos = {}, {}
           for f in glob.glob(f"{src}/demo-*/demo.json"):
               d = json.load(open(f, encoding="utf-8"))

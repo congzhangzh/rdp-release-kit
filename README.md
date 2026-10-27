@@ -273,10 +273,9 @@ encodes them at 720p, and writes `demo.json`. A recording passes only if
 the session sent its picture, the remote desktop shows detail, and the web
 video can be heard. Each is named for what it shows, the xrdp ones by which
 xrdp: `xrdp-original-xfce` (xrdp's upstream release, Debian 13's own
-packages), `xrdp-preview-gnome`, `xrdp-preview-gnome-screens` (two screens),
-`xrdp-preview-kde` (the kit's xrdp; the names stay, as freerdp-web's
-`media.json` gives them their lasting address), and `grd-gnome`
-(gnome-remote-desktop). After every green build on main, the
+packages), `xrdp-gnome`, `xrdp-gnome-screens` (two screens), `xrdp-kde`
+(the kit's xrdp; `xrdp-preview-*` until 2026-10-27, which freerdp-web's
+`media.json` still knows), and `grd-gnome` (gnome-remote-desktop). After every green build on main, the
 `demo` workflow records them, each on its own runner, and publishes them once as
 `demo-<YYYYMMDD>.<N>-<kit commit>`; freerdp-web's splash takes the newest
 set every time it publishes. A push to the branch `demo-ci` records

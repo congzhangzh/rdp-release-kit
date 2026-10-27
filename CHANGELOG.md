@@ -13,6 +13,11 @@ toolchain) gets an entry here in the same commit.
 
 ## 2026-10-27
 
+- **The demo videos lose "preview" too** (聪哥's decision): `xrdp-gnome`,
+  `xrdp-gnome-screens` and `xrdp-kde` (the kit's xrdp), formerly `xrdp-preview-*`;
+  `xrdp-original-xfce` and `grd-gnome` keep theirs. freerdp-web's `media.json` knows
+  both names (the old ones stay as aliases), so its splash finds every demo set.
+
 - **One xrdp: ours, with Xorg and Wayland sessions, in the rolling release** (聪哥's
   decision). The kit built two xrdp lines: xrdp's release 0.10.6.1 (Xorg only, no
   `libwlup.so`), which the rolling release carried, and our release as a preview, in
