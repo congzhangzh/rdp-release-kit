@@ -13,6 +13,42 @@ toolchain) gets an entry here in the same commit.
 
 ## 2026-10-26
 
+**Several monitors: tests as a ladder, and a demo**
+
+- **`test/screens.sh`, the multi-monitor ladder** (CI job `screens`): for each server, rung 1
+  is the one-monitor browser login (`wasm-session.sh`, unchanged); on a fresh server of the
+  same kind, the rung above it runs freerdp-web's own All screens tests
+  (`SCREENS=<tests> wasm-session.sh`, the pinned page's `test-screens*.mjs`, which wasm-build
+  now hands on in `dist/wasm/tests/`). Rung 2, Xorg: `xrdp-original-xorg` (xrdp's release)
+  and `xrdp-preview-xorg`, a monitor per screen and one wide desktop. Rung 3, Wayland
+  through the preview's wlup: `xrdp-preview-gnome`, `xrdp-preview-kde`, a desktop monitor
+  per screen with this window's the primary, its windows kept there. The summary says
+  whether a failure is basic (rung 1 fails already) or one of several monitors only.
+  Nothing waits for the job: a red rung shows, the products are published all the same.
+  Local run with freerdp-web 20261026.6's tests, client web-20261026.9 (FreeRDP
+  release-20261026.3), xrdp preview 6b3df599: xrdp 0.10.6.1 rung 1 5/0, separate 19/0
+  (one NOTE: its Reconnect keeps one monitor, fixed in devel 5376e6de), span 18/0;
+  the preview with Xorg 5/0, 20/0, 18/0; GNOME 5/0, 5/0. KDE runs in CI only (here
+  `/dev/udmabuf` is not open to the user). The GNOME and KDE images carry foot, the
+  terminal the wlup test opens.
+- **Demo `xrdp-preview-gnome-screens`**: All screens on two screens side by side
+  (`test/wasm-demo-screens.mjs`, `DEMO_SCREENS=1`): the page on the left of two 960 × 1080
+  screens, Separate screens, the terminal staying on GNOME's primary, Super+Shift+Right
+  moving it to the other screen, the overview over both, one screen again. Both windows
+  are recorded by Chrome's screencast and composed by ffmpeg; a pixel that changes ten
+  times a second keeps each window sending frames (a screencast sends one only when the
+  window is composited, so a still window held a frame from the middle of an animation).
+  The second window is not clicked to fill its screen: headless Chrome gives that full
+  screen at the origin of its emulated screens.
+- **Demo names say which xrdp**: `xrdp-original-xfce` (xrdp's release),
+  `xrdp-preview-gnome`, `xrdp-preview-kde` (the preview), `grd-gnome`
+  (gnome-remote-desktop), instead of `demo-<server>`; freerdp-web 20261026.6's
+  `media.json` maps them to the same lasting addresses.
+- **freerdp-web `20261026.6`** (`95c836b4`): the page of `.5`, with the All screens tests
+  the kit runs (`ENGINE` for podman, `PASSWORD`, a short temporary profile, a white xterm,
+  xrdp 0.10.6's Reconnect as a NOTE, a wait for the terminal before Separate screens)
+  and the new demo names.
+
 **Releases: rolling, by date**
 
 - **xrdp preview `release-20261026.4`** (`6b3df599`): `release-20261026.3` plus: a session's

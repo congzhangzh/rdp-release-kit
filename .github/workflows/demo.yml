@@ -27,10 +27,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        server: [xrdp, gnome, xrdp-gnome, xrdp-kde]
+        server: [xrdp, gnome, xrdp-gnome, xrdp-kde, xrdp-gnome-screens]
     runs-on: ubuntu-24.04
-    # KDE is new here: its video joins once it records, the others publish without it
-    continue-on-error: ${{ matrix.server == 'xrdp-kde' }}
+    # KDE and the two screens' demo are new here: their videos join once they
+    # record, the others publish without them
+    continue-on-error: ${{ matrix.server == 'xrdp-kde' || matrix.server == 'xrdp-gnome-screens' }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -139,16 +140,17 @@ jobs:
           python3 - dist/in dist/demo << 'EOF'
           import glob, json, os, shutil, sys
           src, out = sys.argv[1], sys.argv[2]
-          order = ["xrdp-gnome", "xrdp-kde", "xrdp", "gnome"]
+          # by the videos' names (test/record-demos.sh)
+          order = ["xrdp-preview-gnome", "xrdp-preview-gnome-screens", "xrdp-preview-kde", "xrdp-original-xfce", "grd-gnome"]
           recorded, videos = {}, {}
           for f in glob.glob(f"{src}/demo-*/demo.json"):
               d = json.load(open(f, encoding="utf-8"))
               recorded = recorded or d["recorded"]
               for v in d["videos"]:
-                  server = os.path.basename(v["src"])[len("demo-"):-len(".mp4")]
+                  video = os.path.basename(v["src"])[:-len(".mp4")]
                   for name in (os.path.basename(v["src"]), os.path.basename(v["poster"])):
                       shutil.copy(f"{os.path.dirname(f)}/{name}", f"{out}/{name}")
-                  videos[server] = v
+                  videos[video] = v
           if not videos:
               sys.exit("no demo was recorded")
           json.dump({"recorded": recorded, "videos": [videos[s] for s in order if s in videos]},

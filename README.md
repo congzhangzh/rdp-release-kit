@@ -73,7 +73,7 @@ same tables are in the notes of every release.
 | Linux client `sdl-freerdp` + `freerdp-tk` | freerdp 20261026.3, sdl3 3.4.18, sdl3_ttf 3.2.2, freetype 2.15.0, openssl 3.5.9, opus 1.6.1, dav1d 1.5.4, zlib 1.3.2, jansson 2.15.1, freerdp_tk 0.1.1, python_linux_x86_64 3.13.17+20261021, python_linux_aarch64 3.13.17+20261021 | `build/check-portable.sh` (only glibc ≥ 2.34, libgcc_s and libpulse from the host), `test/smoke.sh` (starts and finds its libraries on Alma 9, Rocky 10, Debian 12/13, Ubuntu 22.04/24.04, Fedora 43, Tumbleweed, Arch; there the bundled Python loads Tk and freerdp-tk) |
 | Windows client `sdl-freerdp.exe` + `freerdp-tk` | freerdp 20261026.3, sdl3 3.4.18, sdl3_ttf 3.2.2, freetype 2.15.0, libressl 4.4.0, opus 1.6.1, dav1d 1.5.4, zlib 1.3.2, jansson 2.15.1, llvm_mingw 20261020, freerdp_tk 0.1.1, python_windows_x86_64 3.13.17+20261021, python_windows_aarch64 3.13.17+20261021 | `build/check-windows.sh` (needs only Windows' own DLLs) |
 | macOS client `sdl-freerdp` + `freerdp-tk` | freerdp 20261026.3, sdl3 3.4.18, sdl3_ttf 3.2.2, freetype 2.15.0, openssl 3.5.9, opus 1.6.1, dav1d 1.5.4, zlib 1.3.2, jansson 2.15.1, freerdp_tk 0.1.1, python_macos_arm64 3.13.17+20261021, python_macos_x86_64 3.13.17+20261021 | `build/check-macos.sh` (only macOS's own libraries and frameworks, minimum macOS 12.0, an ad-hoc signature); the bundled Python loads Tk and freerdp-tk; arm64 on macos-15, x86_64 on macos-15-intel |
-| Web client + freerdp-web page | freerdp 20261026.3, sdl3_wasm 3.4.18+timer, sdl3_ttf 3.2.2, freetype 2.15.0, libressl 4.4.0, opus 1.6.1, dav1d 1.5.4, zlib 1.3.2, jansson 2.15.1, freerdp_web 20261026.5 | `test/wasm-session.sh`: a browser logs in to xrdp through SSH + websockify, the page served without COOP/COEP headers (as GitHub Pages) |
+| Web client + freerdp-web page | freerdp 20261026.3, sdl3_wasm 3.4.18+timer, sdl3_ttf 3.2.2, freetype 2.15.0, libressl 4.4.0, opus 1.6.1, dav1d 1.5.4, zlib 1.3.2, jansson 2.15.1, freerdp_web 20261026.6 | `test/wasm-session.sh`: a browser logs in to xrdp through SSH + websockify, the page served without COOP/COEP headers (as GitHub Pages) |
 | xrdp packages (.deb, .rpm) | xrdp 0.10.6.1, xorgxrdp 0.10.5, x264 b35605a, opus 1.6.1, pipewire_xrdp 0.2 | `check-deps.sh`, then `test/xrdp-session.sh`: install in a fresh container of each release, log in over RDP, an Xorg session with an xterm comes up |
 | xrdp preview packages | xrdp_preview 20261026.4, librfxcodec 0badc06, libpainter 379b8fb, xorgxrdp_preview 20261018.1, x264 b35605a, opus 1.6.1 | `test/xrdp-session.sh --preview`: the Xorg login, then a Wayland one (sway) captured at the client's size |
 
@@ -84,7 +84,7 @@ Pins that are not a plain upstream release:
 | `freerdp` | 20261026.3 [`cef3ddb47`](https://github.com/congzhangzh/FreeRDP/commit/cef3ddb474ef197413356630398480d400b79247) | FreeRDP master @ b2403bb99 (2026-10-23) | our release, picked from integration-latest on the fork; every client, native and web, builds it, not an upstream release; master has the Opus microphone fix #13810 that 3.32.2 lacks, and our merged AV1 #13731, sound #13732, H.264 through WebCodecs #13812, #13838, #13839. 5 commits of open pull requests for Emscripten builds (not compiled natively): clipboard #13733, microphone #13811, each as of 2026-10-25, the MessageChannel yield #13864 (pollset_poll's yield waits on a MessageChannel task, not setTimeout's clamped 4 ms; as of 2026-10-26), the page's monitors #13865 (the page splits the one canvas into a monitor per screen for the display layout; as of 2026-10-26), and no connection dialog window #13860 (its SDL window took the session's canvas: after a reconnect the canvas was 0 x 0 and the keys went nowhere; as of 2026-10-25) | the native clients' smoke and xrdp login tests, the web login test; freerdp-web's suite on Asyncify and JSPI (22 of 22) and a forced-yield throughput check (53–57 → 1913–2291 kB/s); each pull request's own CI upstream | [FreeRDP#13733](https://github.com/FreeRDP/FreeRDP/issues/13733) [FreeRDP#13811](https://github.com/FreeRDP/FreeRDP/issues/13811) [FreeRDP#13864](https://github.com/FreeRDP/FreeRDP/issues/13864) [FreeRDP#13865](https://github.com/FreeRDP/FreeRDP/issues/13865) [FreeRDP#13860](https://github.com/FreeRDP/FreeRDP/issues/13860) |
 | `freerdp_tk` | 0.1.1 [`167afad97`](https://github.com/congzhangzh/freerdp-tk/commit/167afad977b38f6ae51a86921b601f07472dca15) | its release 0.1.1 | our own connection window (Tkinter), shipped with the clients and their Python; `freerdp-tk` / `freerdp-tk.cmd` starts it | the smoke test loads it with the bundled Python on every distribution | — |
 | `sdl3_wasm` | 3.4.18+timer [`1d615c14f`](https://github.com/congzhangzh/SDL/commit/1d615c14f95a3389bf0026e719144ad51378e40c) | SDL `release-3.4.18` | 1 commit: the Emscripten timers are safe to use from any thread. Since 4d8f84f161 (in 3.2.30 and 3.4) they run with pthreads too, but a timeout belongs to the thread that set it: a timer removed from another thread fired through a freed entry ("table index is out of bounds" in `SDL_Emscripten_TimerHelper`), in about 1 of 3 first sessions. 3.4.18 already has upstream's `FS.mkdir("/tmp/filedrop")` guard, which 3.2.30 needed backported (a second window, FreeRDP's retry dialog, threw `EEXIST` and hung a JSPI client after a network drop) | freerdp-web's whole suite on Asyncify and JSPI builds, 28 of 28 runs, `test-capture` and `test-reconnect` included, with the page's pointer-event fix (SDL 3.4 reads the mouse from pointer events); `SDL_timer.c` compiles with `-Werror` | [SDL#16587](https://github.com/libsdl-org/SDL/issues/16587) |
-| `freerdp_web` | 20261026.5 [`5788b715c`](https://github.com/congzhangzh/freerdp-web/commit/5788b715ccd058bb8dc016bcab3c11c081fed861) | its release 20261026.5 | our own page, taken by its release tag | its unit tests and page checks (freerdp-web CI), then the web login test | — |
+| `freerdp_web` | 20261026.6 [`95c836b46`](https://github.com/congzhangzh/freerdp-web/commit/95c836b46f14d4e164f771f092a2f0a23a1a0ad1) | its release 20261026.6 | our own page, taken by its release tag | its unit tests and page checks (freerdp-web CI), then the web login test | — |
 | `xrdp_preview` | 20261026.4 [`6b3df5996`](https://github.com/congzhangzh/xrdp/commit/6b3df5996d393bcd28b2e31a1c20d01677e0329e) | xrdp devel @ 5943357a (2026-10-14) | 124 commits on their way upstream: Wayland sessions (wlup: sway, GNOME, KDE), GNOME and KDE with a monitor per RDP monitor and the client's primary as their own (branches feature-wlup-mutter-multimon, feature-wlup-kwin-multimon), and a max_fps setting for them, AV1 with 4:4:4, encoder paced by the client's frame acknowledgements, Opus sound fixes (#3922: 2 of its 3 commits); plus the JPEG quality byte compared as unsigned, so it builds on ARM64 (branch caps-jpeg-quality-unsigned) | the preview login test, Xorg and Wayland, on x86_64 and ARM64; the ARM64 fix also by a build with -funsigned-char, which fails without it | [xrdp#3904](https://github.com/neutrinolabs/xrdp/issues/3904) [xrdp#3911](https://github.com/neutrinolabs/xrdp/issues/3911) [xrdp#3912](https://github.com/neutrinolabs/xrdp/issues/3912) [xrdp#3913](https://github.com/neutrinolabs/xrdp/issues/3913) [xrdp#3914](https://github.com/neutrinolabs/xrdp/issues/3914) [xrdp#3915](https://github.com/neutrinolabs/xrdp/issues/3915) [xrdp#3922](https://github.com/neutrinolabs/xrdp/issues/3922) |
 | `x264` | `b35605ace` | x264 `stable` branch | unchanged: x264 has no releases | the xrdp login tests (H.264) | — |
 | `pipewire_xrdp` | 0.2 [`748f562d6`](https://github.com/neutrinolabs/pipewire-module-xrdp/commit/748f562d616590c678d5b06722f3fe5ae9707465) | release v0.2 | unchanged, pinned by its tag's commit; built for Fedora only, which does not package it | built in the Fedora xrdp jobs | — |
@@ -230,6 +230,23 @@ run systemd as PID 1, so they need podman (rootless here; `PODMAN=` another).
 KWin 6.8 renders in software with `/dev/udmabuf`, no GPU, DRM node or vgem;
 the user running podman must be able to open it (group `kvm`).
 
+**Several monitors: a ladder.** `test/screens.sh <page dir> <rdp-gateway.sh>
+<tests dir> [server …]` runs, for each server, rung 1, the one-monitor login
+above, and then, on a fresh server of the same kind, the rung above it:
+freerdp-web's own All screens tests (`test-screens*.mjs` of the page; CI
+takes the pinned page's), through `SCREENS=<tests dir> test/wasm-session.sh`.
+Rung 2 is xrdp with Xorg, against xrdp's release (`xrdp-original-xorg`) and
+the preview (`xrdp-preview-xorg`): two screens as a monitor each and as one
+wide desktop, the second window's picture, mouse, keys, the captured cursor,
+Reconnect, closing it. Rung 3 is GNOME and KDE on Wayland through the
+preview's wlup (`xrdp-preview-gnome`, `xrdp-preview-kde`): a desktop monitor
+per screen, this window's the primary, the session's windows kept on it,
+also after Reconnect. Its summary (`dist/test/screens/summary.md`) says at
+once whether a failure is basic (rung 1 fails already) or one of several
+monitors (rung 1 passes, the rung above fails). The CI's `screens` job runs
+it for each server on a runner of its own; nothing waits for it, so a red
+rung shows without holding a release back.
+
 `DEMO_VIDEO=demo.mp4 test/wasm-session.sh …` (with any `SERVER=`)
 records a demo instead, at 1920 × 1080 with sound: `test/wasm-demo.mjs`
 plays a visit (the page, the SSH line, the form, the settings, a session,
@@ -243,15 +260,21 @@ CC BY 3.0) and the WebGL Aquarium (© Google, BSD), are fetched once by
 into the repository. Everything else is synthetic: the user, the password,
 the throwaway server. Chrome runs muted, so nothing plays on this
 computer's speakers; `KEEP=1` leaves the server running to look inside.
+With `DEMO_SCREENS=1` (and `SERVER=xrdp-gnome`), `test/wasm-demo-screens.mjs`
+records All screens instead: the page on the left of two 960 × 1080 screens,
+Separate screens opens a window on the right one, and both windows' screencasts
+are put side by side in one 1920 × 1080 video (no sound).
 
 The demo videos are a kit product. `test/record-demos.sh [server …]` records
 them with what a kit commit published (its web client and xrdp preview,
 checked against their `SHA256SUMS`; `KIT_COMMIT=newest` for the newest),
 encodes them at 720p, and writes `demo.json`. A recording passes only if
 the session sent its picture, the remote desktop shows detail, and the web
-video can be heard. After every green build on main, the `demo` workflow
-records Xfce, GNOME (gnome-remote-desktop), and GNOME and KDE through the
-xrdp preview, each on its own runner, and publishes them once as
+video can be heard. Each is named for what it shows, the xrdp ones by which
+xrdp: `xrdp-original-xfce` (xrdp's release), `xrdp-preview-gnome`,
+`xrdp-preview-gnome-screens` (two screens), `xrdp-preview-kde` (the preview),
+and `grd-gnome` (gnome-remote-desktop). After every green build on main, the
+`demo` workflow records them, each on its own runner, and publishes them once as
 `demo-<YYYYMMDD>.<N>-<kit commit>`; freerdp-web's splash takes the newest
 set every time it publishes. A push to the branch `demo-ci` records
 without publishing.

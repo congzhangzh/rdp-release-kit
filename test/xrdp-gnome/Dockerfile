@@ -8,7 +8,8 @@
 #
 # The capabilities hold inside the user namespace only (the container's
 # root is the user who runs it); systemd needs CAP_SYS_ADMIN to start
-# polkit, which GNOME asks. Used by wasm-session.sh with SERVER=xrdp-gnome.
+# polkit, which GNOME asks. Used by wasm-session.sh with SERVER=xrdp-gnome;
+# foot is the terminal freerdp-web's All screens test opens (SCREENS=).
 # Everything in it is synthetic: user tester, password kit-test-pw, the
 # TLS key xrdp's package made when the image was built.
 #
@@ -23,6 +24,7 @@ RUN dnf -y -q install --setopt=install_weak_deps=False \
         ptyxis nautilus gnome-text-editor adwaita-sans-fonts adwaita-mono-fonts \
         adwaita-icon-theme gnome-backgrounds glibc-langpack-en procps-ng hostname \
         firefox \
+        foot \
     && dnf clean all > /dev/null
 COPY pkgs/ /pkgs/
 RUN dnf -y -q install /pkgs/*.rpm && dnf clean all > /dev/null && rm -rf /pkgs

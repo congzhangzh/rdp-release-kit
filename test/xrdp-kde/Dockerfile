@@ -47,7 +47,7 @@ RUN pacman -Syu --noconfirm --needed systemd polkit openssh openssl inetutils pr
         kwin plasma-workspace plasma-desktop konsole dolphin breeze breeze-icons noto-fonts \
         mesa xorg-xwayland pipewire pipewire-pulse wireplumber firefox python \
         pam fuse3 pixman libjpeg-turbo opus x264 aom wayland libxkbcommon libxkbfile libei \
-        libx11 libxfixes libxrandr python-numpy python-requests > /dev/null \
+        libx11 libxfixes libxrandr python-numpy python-requests foot > /dev/null \
     && pacman -Scc --noconfirm > /dev/null
 # websockify, which Arch does not package: the PyPI wheel, pinned by its
 # SHA-256 (its numpy and requests from Arch; its token plugins' jwcrypto and

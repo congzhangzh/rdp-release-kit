@@ -423,6 +423,13 @@ jobs:
         run: |
           ./build-wasm.sh
           cp ~/.cache/rdp-release-kit/wasm/src/freerdp_web/rdp-gateway.sh dist/wasm/
+          # the page's own All screens tests, for the multi-monitor ladder
+          # (the screens job); a page from before them has none
+          mkdir -p dist/wasm/tests
+          (cd ~/.cache/rdp-release-kit/wasm/src/freerdp_web &&
+              cp test-screens*.mjs test-connect.mjs test-keymap.py "$GITHUB_WORKSPACE/dist/wasm/tests/" 2> /dev/null) ||
+              echo "the pinned page has no All screens tests"
+          ls dist/wasm/tests
 
       - uses: actions/upload-artifact@v7
         with:
@@ -527,6 +534,115 @@ jobs:
           if-no-files-found: ignore
           retention-days: 3
 
+  # The multi-monitor ladder (test/screens.sh), one server per runner: rung
+  # 1, the one-monitor login, then on the same kind of server the rung above
+  # it, the pinned page's All screens test: rung 2 with Xorg, against xrdp's
+  # release and the preview; rung 3, GNOME and KDE on Wayland through the
+  # preview. A failure says at once whether it is basic (rung 1) or one of
+  # several monitors. Nothing waits for it: a red rung shows in the run, the
+  # products are published all the same
+  screens:
+    needs: [releases, wasm-build, xrdp, xrdp-preview]
+    if: "!cancelled() && needs.wasm-build.result == 'success'"
+    strategy:
+      fail-fast: false
+      matrix:
+        server: [xrdp-original-xorg, xrdp-preview-xorg, xrdp-preview-gnome, xrdp-preview-kde]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: wasm-build
+          path: dist/wasm
+      - run: chmod +x dist/wasm/rdp-gateway.sh
+
+      # this run's packages; with scope "web" (no xrdp job ran) those of the
+      # newest pre-releases, which a full run built and tested
+      - name: The xrdp packages of this run (xrdp-debian-13)
+        if: needs.releases.outputs.scope == 'all'
+        uses: actions/download-artifact@v8
+        with:
+          name: xrdp-debian-13
+          path: dist/in/xrdp-debian-13
+      - name: The xrdp packages of this run (xrdp-preview-debian-13)
+        if: needs.releases.outputs.scope == 'all'
+        uses: actions/download-artifact@v8
+        with:
+          name: xrdp-preview-debian-13
+          path: dist/in/xrdp-preview-debian-13
+      - name: The xrdp packages of this run (xrdp-preview-fedora-45)
+        if: needs.releases.outputs.scope == 'all'
+        uses: actions/download-artifact@v8
+        with:
+          name: xrdp-preview-fedora-45
+          path: dist/in/xrdp-preview-fedora-45
+      - name: The xrdp packages
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SCOPE: ${{ needs.releases.outputs.scope }}
+        run: |
+          mkdir -p dist/xrdp/debian-13 dist/xrdp-preview/debian-13 dist/xrdp-preview/fedora-45
+          if [ "$SCOPE" = all ]; then
+              cp dist/in/xrdp-debian-13/debian-13/* dist/xrdp/debian-13/
+              cp dist/in/xrdp-preview-debian-13/debian-13/* dist/xrdp-preview/debian-13/
+              cp dist/in/xrdp-preview-fedora-45/fedora-45/* dist/xrdp-preview/fedora-45/
+          else
+              newest() {
+                  gh release list -R "$GITHUB_REPOSITORY" -L 100 --json tagName,isPrerelease,isDraft,publishedAt \
+                      -q "[.[] | select(.isPrerelease and (.isDraft | not) and (.tagName | startswith(\"$1-\")))] | sort_by(.publishedAt) | last | .tagName"
+              }
+              get() { gh release download "$1" -R "$GITHUB_REPOSITORY" -D "$2" -p "$3"; echo "$3 of $1"; }
+              get "$(newest web)" dist/xrdp/debian-13 '*.deb'
+              get "$(newest xrdp-preview)" dist/xrdp-preview/debian-13 '*debian-13_amd64.deb'
+              get "$(newest xrdp-preview)" dist/xrdp-preview/fedora-45 '*fc45.x86_64.rpm'
+              get "$(newest pipewire-module-xrdp)" dist/xrdp-preview/fedora-45 '*fc45.x86_64.rpm'
+          fi
+          ls dist/xrdp/* dist/xrdp-preview/*
+
+      # the test drivers use Node's WebSocket (Node 22+); the checks use uvx
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+
+      # KDE's xrdp is compiled in its image from these
+      - name: Cache sources
+        if: matrix.server == 'xrdp-preview-kde'
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/rdp-release-kit/sources
+          key: sources-${{ hashFiles('sources.lock') }}
+
+      # GNOME and KDE run systemd in a rootful podman container, as the
+      # demos do (demo.yml says why each line is needed)
+      - name: Tools
+        if: matrix.server == 'xrdp-preview-gnome' || matrix.server == 'xrdp-preview-kde'
+        run: |
+          printf '#!/bin/sh\nexec sudo podman "$@"\n' | sudo tee /usr/local/bin/podman-root > /dev/null
+          sudo chmod 755 /usr/local/bin/podman-root
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+          sudo aa-teardown > /dev/null && echo "AppArmor profiles unloaded"
+          sudo systemctl restart docker
+          podman --version
+          ls -l /dev/udmabuf || true
+
+      - name: The ladder
+        env:
+          PODMAN: ${{ (matrix.server == 'xrdp-preview-gnome' || matrix.server == 'xrdp-preview-kde') && '/usr/local/bin/podman-root' || '' }}
+          SERVER_RUN_OPTS: ${{ (matrix.server == 'xrdp-preview-gnome' || matrix.server == 'xrdp-preview-kde') && '--security-opt apparmor=unconfined' || '' }}
+        run: test/screens.sh dist/wasm/web dist/wasm/rdp-gateway.sh dist/wasm/tests "${{ matrix.server }}"
+
+      - name: Keep the ladder's logs and screenshots
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-screens-${{ matrix.server }}
+          path: dist/test/screens/
+          if-no-files-found: ignore
+          retention-days: 3
+
   # The demo videos of this commit's web client and xrdp preview
   # (.github/workflows/demo.yml), published as the pre-release demo-* for
   # freerdp-web's splash and carried by the release below
@@ -621,6 +737,6 @@ jobs:
 
           The Linux client runs on glibc 2.34 and newer (RHEL 9, Debian 12, Ubuntu 22.04, Fedora 35 and newer) with PulseAudio's or PipeWire's libpulse; nothing else to install. The macOS client runs on macOS 12 and newer. Check a download: \`sha256sum -c --ignore-missing SHA256SUMS\`; its origin: \`gh attestation verify <file> -R $GITHUB_REPOSITORY\`. Each archive's MANIFEST lists what it was built from.
 
-          The demo videos (\`demo-*.mp4\`, \`demo.json\`) are this build's web client and xrdp preview, recorded on throwaway servers: everything shown is synthetic. Big Buck Bunny © Blender Foundation, CC BY 3.0; WebGL Aquarium © Google, BSD."
+          The demo videos (\`xrdp-original-*.mp4\` with xrdp's release, \`xrdp-preview-*.mp4\` with the preview, \`grd-gnome.mp4\`, \`demo.json\`) are this build's web client and xrdp preview, recorded on throwaway servers: everything shown is synthetic. Big Buck Bunny © Blender Foundation, CC BY 3.0; WebGL Aquarium © Google, BSD."
           notes=$(build/release-notes.sh "$summary" linux windows macos web xrdp)
           LATEST=1 build/publish-prerelease.sh "$tag" "$title" "$notes" upload/*

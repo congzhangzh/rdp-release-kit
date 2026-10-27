@@ -14,7 +14,7 @@ verify them; they never compile.
 | xrdp + xorgxrdp, `.deb` / `.rpm` for every release in `distros.list`, x86_64 and ARM64 | xrdp, xorgxrdp signed release tags | stable | `<YYYYMMDD>.<N>` |
 | Web client (WebAssembly) + the freerdp-web page | FreeRDP master + open pull requests, frozen on a fork branch; the page by a freerdp-web release (`YYYYMMDD.N`, earlier `vYYYYMMDD.N`, `vX.Y.Z`) | preview | `web-<YYYYMMDD>.<N>-<kit commit, 12>` on every push to main that changes a build; also inside every release |
 | xrdp preview packages: Wayland sessions, AV1, pacing | a frozen xrdp development commit + xorgxrdp devel | preview | `xrdp-preview-<YYYYMMDD>.<N>-<kit commit, 12>` |
-| Demo videos: Xfce, GNOME, and GNOME and KDE through the xrdp preview | recorded by `test/record-demos.sh` with that build's web client and xrdp preview (the `demo` workflow, called by the kit's run; every release carries the videos and waits for them) | preview | `demo-<YYYYMMDD>.<N>-<kit commit, 12>`; freerdp-web's splash takes the newest |
+| Demo videos: Xfce through xrdp's release (`xrdp-original-*`), GNOME (also on two screens) and KDE through the xrdp preview (`xrdp-preview-*`), GNOME through gnome-remote-desktop (`grd-gnome`) | recorded by `test/record-demos.sh` with that build's web client and xrdp preview (the `demo` workflow, called by the kit's run; every release carries the videos and waits for them) | preview | `demo-<YYYYMMDD>.<N>-<kit commit, 12>`; freerdp-web's splash takes the newest |
 
 **Stable** means: upstream release tags only, hashes (and signatures where
 upstream signs) checked, no patches. **Preview** means: a fixed commit of
@@ -73,6 +73,7 @@ Nothing is uploaded unless every gate of its product passes in CI.
 | | install in a fresh container, log in over RDP with the kit's client, an Xorg session and its xterm run | `test/xrdp-session.sh` |
 | xrdp preview | the same, then a Wayland login: sway starts for the user, wlup captures it at the client's size | `test/xrdp-session.sh --preview` |
 | Web client | page served without COOP/COEP, gateway over SSH, browser login starts a session | `test/wasm-session.sh` |
+| | several monitors, a ladder per server: rung 1 the login above; rung 2 freerdp-web's All screens test against xrdp's release and the preview with Xorg; rung 3 against GNOME and KDE through the preview (monitor per screen, primary, windows kept). Reported, never holds a release back | `test/screens.sh` (CI job `screens`) |
 | Published page | the same login from the live site | freerdp-web's `check` job |
 | Every push | no private details in the history | `privacy-scan` (pre-push hook) |
 

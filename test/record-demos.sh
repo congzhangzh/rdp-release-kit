@@ -5,7 +5,12 @@
 # each video at 720p with a poster, and writes demo.json (titles, captions
 # naming those pre-releases) and SHA256SUMS:
 #
-#   test/record-demos.sh [server ...]   default: xrdp gnome xrdp-gnome xrdp-kde
+#   test/record-demos.sh [server ...]   default: xrdp gnome xrdp-gnome xrdp-kde xrdp-gnome-screens
+#
+# xrdp-gnome-screens is xrdp-gnome on two screens (test/wasm-demo-screens.mjs:
+# All screens, Separate screens). Each video is named for the server it
+# shows, the xrdp ones by which xrdp: xrdp-original-* (xrdp's release),
+# xrdp-preview-* (the kit's preview); grd-gnome is gnome-remote-desktop.
 #
 # Out: dist/demo/ (OUT=<dir> for another). KIT_COMMIT=<sha> records another
 # commit than HEAD; KIT_COMMIT=newest takes the newest pre-release of each
@@ -19,7 +24,7 @@ OUT=${OUT:-$KIT/dist/demo}
 REPO=congzhangzh/rdp-release-kit
 COMMIT=${KIT_COMMIT:-$(git -C "$KIT" rev-parse HEAD)}
 SERVERS=("$@")
-[ ${#SERVERS[@]} -gt 0 ] || SERVERS=(xrdp gnome xrdp-gnome xrdp-kde)
+[ ${#SERVERS[@]} -gt 0 ] || SERVERS=(xrdp gnome xrdp-gnome xrdp-kde xrdp-gnome-screens)
 IN=$OUT/in
 rm -rf "$OUT"
 mkdir -p "$IN"
@@ -60,12 +65,24 @@ page=$(sed -n 's/^page: freerdp-web //p' "$IN/client/MANIFEST")
 curl -fsSL -o "$IN/rdp-gateway.sh" "https://raw.githubusercontent.com/congzhangzh/freerdp-web/$page/rdp-gateway.sh"
 chmod +x "$IN/rdp-gateway.sh"
 
+# the video's name: <name>.mp4, <name>.jpg (freerdp-web's media.json gives
+# each its lasting address)
+name() {
+    case $1 in
+        xrdp) echo xrdp-original-xfce ;;
+        gnome) echo grd-gnome ;;
+        xrdp-gnome) echo xrdp-preview-gnome ;;
+        xrdp-kde) echo xrdp-preview-kde ;;
+        xrdp-gnome-screens) echo xrdp-preview-gnome-screens ;;
+    esac
+}
 title() {
     case $1 in
         xrdp) echo "xrdp + Xfce" ;;
         gnome) echo "gnome-remote-desktop + GNOME Wayland" ;;
         xrdp-gnome) echo "xrdp preview + GNOME Wayland, AV1" ;;
         xrdp-kde) echo "xrdp preview + KDE Plasma Wayland, AV1" ;;
+        xrdp-gnome-screens) echo "xrdp preview + GNOME Wayland, two screens" ;;
     esac
 }
 caption() {
@@ -75,6 +92,7 @@ caption() {
         gnome) echo "gnome-remote-desktop with GNOME Shell on Wayland, headless, on Debian 13: the same visit, with GNOME Console started from the search. $credits" ;;
         xrdp-gnome) echo "The xrdp preview with GNOME on Wayland, Fedora 45: sesman starts a GNOME session and xrdp sends it in AV1, decoded by the browser. The same visit, the terminal started from the search, then Firefox on the server with web video and WebGL, with sound. $credits" ;;
         xrdp-kde) echo "The xrdp preview with KDE Plasma on Wayland (KWin 6.8, Arch): sesman starts Plasma, KWin renders in software (no GPU) and xrdp sends it in AV1, decoded by the browser. The same visit, Konsole started from the launcher, then Firefox on the server with web video and WebGL, with sound. $credits" ;;
+        xrdp-gnome-screens) echo "The page's All screens on a computer with two screens, side by side: the xrdp preview with GNOME on Wayland, Fedora 45. Separate screens gives GNOME a monitor for each screen, the page's screen the primary, where the terminal stays; Super+Shift+Right moves it to the other screen, and closing the second screen's window brings one screen back." ;;
     esac
 }
 
@@ -88,9 +106,15 @@ keep_logs() {
 
 # record <server> <video> <packages>: the session, then its sound. The last
 # 30 s show the web video, so they must be heard: a peak above -50 dB (a
-# healthy recording peaks near -11 dB, silence is -91)
+# healthy recording peaks near -11 dB, silence is -91). The two screens'
+# demo has no sound
 record() {
     local peak
+    if [ "$1" = xrdp-gnome-screens ]; then
+        SERVER=xrdp-gnome DEMO_SCREENS=1 DEMO_VIDEO=$2 "$KIT/test/wasm-session.sh" "$IN/client" "$IN/rdp-gateway.sh" \
+            "$3" > "$OUT/$1.log" 2>&1
+        return
+    fi
     SERVER=$1 DEMO_VIDEO=$2 "$KIT/test/wasm-session.sh" "$IN/client" "$IN/rdp-gateway.sh" "$3" \
         > "$OUT/$1.log" 2>&1 || return 1
     peak=$(ffmpeg -hide_banner -sseof -30 -i "$2" -map 0:a -af volumedetect -f null - 2>&1 |
@@ -121,19 +145,20 @@ for server in "${SERVERS[@]}"; do
     grep -E '^(PASS|demo:)' "$OUT/$server.log"
     keep_logs "$server"
     # as the site's videos: 720p, H.264 CRF 28, AAC 96 kbit/s, a poster from 70 %
+    file=$OUT/$(name "$server")
     ffmpeg -v error -y -i "$raw" -vf "scale=1280:720:flags=lanczos,format=yuv420p" -c:v libx264 -crf 28 \
-        -preset slow -profile:v high -c:a aac -b:a 96k -movflags +faststart "$OUT/demo-$server.mp4"
+        -preset slow -profile:v high -c:a aac -b:a 96k -movflags +faststart "$file.mp4"
     len=$(ffprobe -v error -show_entries format=duration -of csv=p=0 "$raw")
     ffmpeg -v error -y -ss "$(awk -v d="$len" 'BEGIN { printf "%.1f", d * 0.7 }')" -i "$raw" -frames:v 1 \
-        -vf scale=1280:720:flags=lanczos -q:v 4 "$OUT/demo-$server.jpg"
+        -vf scale=1280:720:flags=lanczos -q:v 4 "$file.jpg"
     rm -f "$raw"
 done
 
 # demo.json, as freerdp-web's splash reads it: the recorded servers, in the
 # splash's order, with what they were recorded with
-for server in xrdp-gnome xrdp-kde xrdp gnome; do
-    if [ -f "$OUT/demo-$server.mp4" ]; then
-        printf '%s\t%s\t%s\n' "$server" "$(title "$server")" "$(caption "$server")"
+for server in xrdp-gnome xrdp-gnome-screens xrdp-kde xrdp gnome; do
+    if [ -f "$OUT/$(name "$server").mp4" ]; then
+        printf '%s\t%s\t%s\n' "$(name "$server")" "$(title "$server")" "$(caption "$server")"
     fi
 done > "$OUT/videos.tsv"
 python3 - "$OUT" "$COMMIT" "$WEB" "$PREVIEW" "${PIPEWIRE:-}" << 'EOF'
@@ -141,9 +166,9 @@ import json, sys
 out, commit, web, preview, pw = sys.argv[1:6]
 videos = []
 for line in open(f"{out}/videos.tsv", encoding="utf-8"):
-    server, title, caption = line.rstrip("\n").split("\t")
-    videos.append({"title": title, "src": f"demo/demo-{server}.mp4",
-                   "poster": f"demo/demo-{server}.jpg", "caption": caption})
+    name, title, caption = line.rstrip("\n").split("\t")
+    videos.append({"title": title, "src": f"demo/{name}.mp4",
+                   "poster": f"demo/{name}.jpg", "caption": caption})
 recorded = {"kit": commit, "web": web, "xrdp-preview": preview}
 if pw:
     recorded["pipewire-module-xrdp"] = pw
@@ -152,5 +177,5 @@ with open(f"{out}/demo.json", "w", encoding="utf-8") as f:
 EOF
 rm -f "$OUT/videos.tsv"
 rm -rf "$IN"
-(cd "$OUT" && sha256sum -- demo.json demo-*.mp4 demo-*.jpg > SHA256SUMS && cat SHA256SUMS)
+(cd "$OUT" && sha256sum -- demo.json ./*.mp4 ./*.jpg | sed 's| \./| |' > SHA256SUMS && cat SHA256SUMS)
 exit $status
