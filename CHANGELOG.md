@@ -13,6 +13,18 @@ toolchain) gets an entry here in the same commit.
 
 ## 2026-10-27
 
+- **xrdp preview `release-20261027.1`** (`8ef7574a`): `release-20261026.4` plus KDE's
+  multi-monitor layout on KWin 6.8: xrdp bound `kde_output_management_v2` version 18, and
+  KWin 6.8 takes custom modes only from version 22, so it refused every resize ("too old
+  kde-output-management-v2 protocol versions"); after a Reconnect the output stayed as wide
+  as the whole desktop. xrdp now binds the newest version both sides know. The kit's KDE
+  server (Arch, KWin 6.8.1): freerdp-web's test-screens-wlup 5 of 5 (0 refusals, against 3
+  and a 1280-wide output with `.4`). Also: the fork's wlup end-to-end CI runs again (the
+  backpressure suite never built the client image its GNOME image needs), an end-to-end
+  check that GNOME's primary is the client's and is Meta-0, and two lines astyle wanted.
+  On that commit the fork's CI passed build-and-test and the wlup suites: sway 42 of 42
+  and 57 of 57, GNOME 46 of 46, backpressure on Xorg, sway and GNOME; its runner has no
+  vgem, so xrdp's own KDE suite was skipped there (KDE: the kit's test above).
 - **FreeRDP `release-20261026.4`** (`c12c6df85`): `release-20261026.3` plus our pull request
   #13872, for every client: the SDL3 client's clipboard events start from `{}` and set
   every field. A brace initializer only set the event union's first member, so the event
