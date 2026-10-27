@@ -13,6 +13,31 @@ toolchain) gets an entry here in the same commit.
 
 ## 2026-10-27
 
+- **FreeRDP release-20261027.1** (`1ba0aa521`): integration-latest rebuilt on the same
+  master (b2403bb99) with two more of our open pull requests, both for every client:
+  hotkeys read the key event's own modifiers (#13852; `SDL_GetModState()` is the state
+  after every queued event, so in the browser, where the main loop takes a batch of key
+  events between two yields, a quick Right Shift + D was missed and a `d` typed just
+  before Shift disconnected the session), and the physical monitor size goes out in
+  millimetres (#13805; SDL3 sent pixels, so a 2880-pixel window was announced as a
+  2.88 m monitor; it sends 0, "not given", as SDL3 has no physical size). #13733 and
+  #13811 were rebased onto that master upstream; their patches did not change. Tested
+  before the pick: the web client built from it, a browser login with Asyncify and with
+  JSPI (5 of 5 each), the native Linux client built.
+- **freerdp-tk 0.3.0**: the connection window keeps passwords in the system's own store
+  (Credential Manager, Keychain, Secret Service or KWallet; asks again when the server
+  rejects one), runs before/after commands around a session, picks the monitors to use,
+  and starts only the FreeRDP 3 SDL client. It needs `keyring`, which the bundled Python
+  lacks: `build/launcher.sh` now installs what freerdp-tk's own `uv.lock` (at the pinned
+  tag) lists for the target OS, each wheel checked against the lock's SHA-256 by pip
+  (`--require-hashes`): keyring and jaraco's helpers everywhere, pywin32-ctypes on
+  Windows, SecretStorage with jeepney and cryptography on Linux. Their licences go to
+  `licenses/freerdp_tk/needs/`, their versions into the MANIFEST; the build imports
+  keyring and its backend's libraries with the bundled Python (Linux, macOS). Without
+  them 0.3.0 still runs, but cannot remember a password.
+- The upstream check watches SDL's stable line (3.4) for the web client too, as it
+  builds 3.4 since 2026-10-25; it still watched 3.2.
+
 - **The kit publishes the site** (聪哥's decision; same address,
   congzhangzh.github.io/freerdp-web/). freerdp-web published it, pulling the kit's
   pre-releases back (its client, `web-*`, and the demo set, `demo-*`), with the videos'

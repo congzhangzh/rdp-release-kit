@@ -15,10 +15,10 @@ cd "$(dirname "$0")"
 
 # name  repository  tag pattern (ERE)  tag prefix to drop
 # Lines follow the stable series the kit pins on purpose: OpenSSL's 3.5
-# LTS, SDL's stable (even) minor releases, SDL 3.2 for the web client.
+# LTS, SDL's stable (even) minor releases, for the native and the web client alike.
 WATCH=(
 	"sdl3        https://github.com/libsdl-org/SDL.git            ^release-3\.[0-9]*[02468]\.[0-9]+$   release-"
-	"sdl3_wasm   https://github.com/libsdl-org/SDL.git            ^release-3\.2\.[0-9]+$               release-"
+	"sdl3_wasm   https://github.com/libsdl-org/SDL.git            ^release-3\.[0-9]*[02468]\.[0-9]+$   release-"
 	"sdl3_ttf    https://github.com/libsdl-org/SDL_ttf.git        ^release-3\.[0-9]*[02468]\.[0-9]+$   release-"
 	"freetype    https://gitlab.freedesktop.org/freetype/freetype.git ^VER-[0-9]+-[0-9]+-[0-9]+$      VER-"
 	"openssl     https://github.com/openssl/openssl.git           ^openssl-3\.5\.[0-9]+$               openssl-"
