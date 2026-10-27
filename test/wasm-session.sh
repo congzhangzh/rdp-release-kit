@@ -48,7 +48,7 @@
 # with one as wide as both (span), as the user "test" (password "test") in an
 # X session with only an xterm; it runs "docker" itself. With CAPTURE=1 the
 # page's test-capture.mjs (mouse and keyboard capture) runs there too, if
-# <dir> has it. SERVER=xrdp-gnome or
+# <dir> has it, and with RECONNECT=1 its test-reconnect.mjs. SERVER=xrdp-gnome or
 # xrdp-kde: test-screens-wlup.mjs (a desktop monitor per screen, this
 # window's primary, its windows kept there). A page without the test is a
 # SKIP. Output then in dist/test/wasm-screens/. These are the ladder's upper
@@ -301,7 +301,7 @@ if [ -n "${SCREENS:-}" ]; then
         fi
         echo "== $name ($script)"
         mkdir -p "$out"
-        env "$@" GATEWAY=127.0.0.1:"$LOCAL_WS_PORT" PAGE="$page" node "$TESTS/$script" "$out" 2>&1 | tee "$out.log"
+        env GATEWAY=127.0.0.1:"$LOCAL_WS_PORT" PAGE="$page" "$@" node "$TESTS/$script" "$out" 2>&1 | tee "$out.log"
         if [ "${PIPESTATUS[0]}" = 0 ]; then
             echo "PASS  $name: $(grep -c '^PASS ' "$out.log") checks"
         else
@@ -314,14 +314,22 @@ if [ -n "${SCREENS:-}" ]; then
         run screens-separate test-screens.mjs MODE=separate XRDP="$NAME"
         run screens-span test-screens.mjs MODE=span XRDP="$NAME"
         # CAPTURE=1: the page's mouse and keyboard capture test too, on the same server
-        [ -z "${CAPTURE:-}" ] || run capture test-capture.mjs XRDP="$NAME" ;;
+        [ -z "${CAPTURE:-}" ] || run capture test-capture.mjs XRDP="$NAME"
+        # RECONNECT=1: the page's reconnect test, with a websockify of its own (6082) to
+        # the RDP port; the session ends when its xterm does; WebAuthn wants localhost
+        [ -z "${RECONNECT:-}" ] || run reconnect test-reconnect.mjs XRDP="$NAME" \
+            XRDP_ADDR=127.0.0.1:"$LOCAL_RDP_PORT" SESSION_PROC=xterm PAGE="${page/127.0.0.1/localhost}" ;;
     xrdp-gnome | xrdp-kde)
         run "screens-${SERVER#xrdp-}" test-screens-wlup.mjs DESKTOP="${SERVER#xrdp-}" CONTAINER="$NAME" \
             ENGINE="$ENGINE" PASSWORD=kit-test-pw ;;
     *) echo "SCREENS: no All screens test for SERVER=$SERVER" >&2; exit 1 ;;
     esac
-    [ "$SERVER" = xrdp ] || "$ENGINE" exec "$NAME" sh -c 'tail -n 200 /var/log/xrdp.log /var/log/xrdp-sesman.log;
-        echo "== the session"; journalctl -b --no-pager -n 300 _UID=1000' > "$OUT/server.log" 2>&1
+    if [ "$SERVER" = xrdp ]; then
+        "$ENGINE" exec "$NAME" sh -c 'tail -n 300 /var/log/xrdp.log /var/log/xrdp-sesman.log' > "$OUT/server.log" 2>&1
+    else
+        "$ENGINE" exec "$NAME" sh -c 'tail -n 200 /var/log/xrdp.log /var/log/xrdp-sesman.log;
+            echo "== the session"; journalctl -b --no-pager -n 300 _UID=1000' > "$OUT/server.log" 2>&1
+    fi
     [ -z "${MUTTER_DEBUG:-}" ] ||
         "$ENGINE" exec "$NAME" journalctl -b --no-pager -o short-precise _UID=1000 > "$OUT/session.journal" 2>&1
     echo "All screens: $([ $status = 0 ] && echo passed || echo FAILED) (logs, screenshots: $OUT)"
