@@ -68,9 +68,13 @@ for image in "${IMAGES[@]}"; do
     overrides "$work"
     # the release's marks in distros-preview.list (see there)
     NO_AV1=
+    NO_SWAY=
     [ $FLAVOUR = preview ] && awk -v i="$image" \
         '$1 == i { for (k = 2; k <= NF; k++) if ($k == "no-av1") f = 1 } END { exit !f }' \
         "$KIT/$LIST" && NO_AV1=1
+    [ $FLAVOUR = preview ] && awk -v i="$image" \
+        '$1 == i { for (k = 2; k <= NF; k++) if ($k == "no-sway") f = 1 } END { exit !f }' \
+        "$KIT/$LIST" && NO_SWAY=1
     echo "### $image${NO_AV1:+ (no AV1)}"
     if ! builder=$(FLAVOUR=$FLAVOUR NO_AV1=$NO_AV1 builder "$image" xrdp); then
         echo "### $image: FAILED"
@@ -81,7 +85,7 @@ for image in "${IMAGES[@]}"; do
     # shellcheck disable=SC2016
     if ! "$ENGINE" run --rm -v "$KIT":/kit:ro -v "$SOURCES":/sources -v "$OUT":/out \
             -v "$work":/work "${CACHE[@]}" "${OVERRIDE[@]}" -e OWNER="$(owner)" \
-            -e FLAVOUR="$FLAVOUR" -e NO_AV1="$NO_AV1" -e KIT_REV="$KIT_REV" "$builder" \
+            -e FLAVOUR="$FLAVOUR" -e NO_AV1="$NO_AV1" -e NO_SWAY="$NO_SWAY" -e KIT_REV="$KIT_REV" "$builder" \
             bash -c '/kit/build/build-xrdp-pkg.sh /kit /sources /out; rc=$?;
                      [ -z "$OWNER" ] || chown -R "$OWNER" /out /work /sources ${CCACHE_DIR:-}
                      exit $rc'; then

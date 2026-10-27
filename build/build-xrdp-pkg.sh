@@ -120,8 +120,10 @@ if [ "$FLAVOUR" = preview ]; then
     EXTRA=(--enable-wlup)
     [ -z "$NO_AV1" ] && EXTRA+=(--enable-av1)
     # the GNOME backend needs libei and PipeWire (GNOME 46 and newer)
+    WLUP_GNOME=
     if pkg-config --exists libei-1.0 libpipewire-0.3 libsystemd; then
         EXTRA+=(--enable-wlup-mutter)
+        WLUP_GNOME=1
     fi
     # an old warning in xrdp_mm.c, an error with -O2 on devel
     CFLAGS="$CFLAGS -Wno-error=nonnull"
@@ -202,6 +204,32 @@ if [ "$FLAVOUR" = preview ] && [ -z "$NO_AV1" ]; then
     sed -i 's/^order = \[ "H\.264", "RFX" \]$/order = [ "AV1", "H.264", "RFX" ]/' \
         "$STAGE/xrdp/etc/xrdp/gfx.toml"
     grep -q '^order = \[ "AV1", "H\.264", "RFX" \]$' "$STAGE/xrdp/etc/xrdp/gfx.toml"
+fi
+# The preview's Wayland sessions are on the login screen's list (xrdp.ini
+# only has them commented out): GNOME when its backend was built, sway
+# unless the release's sway is too old (NO_SWAY=1, a release marked
+# no-sway). They go after [Xorg], which stays the default: with no
+# autorun=, xrdp starts the first session for a client that sends a
+# password
+if [ "$FLAVOUR" = preview ]; then
+    INI=$STAGE/xrdp/etc/xrdp/xrdp.ini
+    SESSIONS=$(mktemp)
+    if [ -n "${WLUP_GNOME:-}" ]; then
+        printf '%s\n' '[GNOME]' 'name=GNOME (Wayland)' 'lib=libwlup.so' 'username=ask' \
+            'password=ask' 'port=-1' 'code=31' 'backend=mutter' '' >> "$SESSIONS"
+    fi
+    if [ -z "${NO_SWAY:-}" ]; then
+        printf '%s\n' '[Wayland]' 'name=Sway (Wayland)' 'lib=libwlup.so' 'username=ask' \
+            'password=ask' 'port=-1' 'code=30' 'xkb_layout=us' '' >> "$SESSIONS"
+    fi
+    awk -v f="$SESSIONS" '
+        /^\[Xvnc\]/ && !done { while ((getline l < f) > 0) print l; done = 1 }
+        { print }
+        END { if (!done) exit 1 }' "$INI" > "$INI.new"
+    mv "$INI.new" "$INI"
+    rm -f "$SESSIONS"
+    [ -z "${WLUP_GNOME:-}" ] || grep -q '^\[GNOME\]$' "$INI"
+    [ -n "${NO_SWAY:-}" ] || grep -q '^\[Wayland\]$' "$INI"
 fi
 XORG_ABI=$(pkg-config --variable=abi_videodrv xorg-server | cut -d. -f1)
 ARCH_DEB=$(dpkg --print-architecture 2> /dev/null || true)

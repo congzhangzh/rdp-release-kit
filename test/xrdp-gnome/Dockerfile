@@ -41,9 +41,11 @@ RUN mkdir -p /etc/systemd/system/user-.slice.d /etc/systemd/user.conf.d \
     && printf '[Slice]\nTasksMax=infinity\n' > /etc/systemd/system/user-.slice.d/10-tasks.conf \
     && printf '[Manager]\nDefaultTasksMax=infinity\n' > /etc/systemd/user.conf.d/10-tasks.conf
 # a GNOME login, the one xrdp starts (code=31: sesman's [GNOME], gnome-session), and AV1
-# first for the clients that offer it (the others get H.264); sshd for the gateway
-RUN printf '\n[GNOME]\nname=GNOME\nlib=libwlup.so\nusername=ask\npassword=ask\nport=-1\ncode=31\nbackend=mutter\n' \
-        >> /etc/xrdp/xrdp.ini \
+# first for the clients that offer it (the others get H.264); sshd for the gateway.
+# The packages list the GNOME session; an older one did not: add it then
+RUN { grep -q '^\[GNOME\]$' /etc/xrdp/xrdp.ini \
+      || printf '\n[GNOME]\nname=GNOME\nlib=libwlup.so\nusername=ask\npassword=ask\nport=-1\ncode=31\nbackend=mutter\n' \
+             >> /etc/xrdp/xrdp.ini; } \
     && sed -i 's/^autorun=.*/autorun=GNOME/' /etc/xrdp/xrdp.ini \
     && sed -i 's/^order = \[ "H.264", "RFX" \]/order = [ "AV1", "H.264", "RFX" ]/' /etc/xrdp/gfx.toml \
     && grep -q '^order = \[ "AV1", "H.264", "RFX" \]' /etc/xrdp/gfx.toml \

@@ -126,8 +126,11 @@ elif ls /usr/lib*/xrdp/libwlup.so > /dev/null 2>&1; then
     mkdir -p /home/wayuser/.config/sway
     printf 'exec foot\n' > /home/wayuser/.config/sway/config
     chown -R wayuser: /home/wayuser/.config
-    printf '\n[Wayland]\nname=Wayland\nlib=libwlup.so\nusername=ask\npassword=ask\nport=-1\ncode=30\nxkb_layout=us\n' \
-        >> /etc/xrdp/xrdp.ini
+    # the package lists it (an older one did not: add it then)
+    check "the package lists the Wayland (sway) session" 'grep -q "^\[Wayland\]$" /etc/xrdp/xrdp.ini'
+    grep -q '^\[Wayland\]$' /etc/xrdp/xrdp.ini ||
+        printf '\n[Wayland]\nname=Wayland\nlib=libwlup.so\nusername=ask\npassword=ask\nport=-1\ncode=30\nxkb_layout=us\n' \
+            >> /etc/xrdp/xrdp.ini
     sed -i '/^\[Globals\]/,/^\[/ s|^#\?autorun=.*|autorun=Wayland|' /etc/xrdp/xrdp.ini
     pkill -x xrdp; sleep 1
     xrdp --nodaemon > /out/xrdp-wayland.out 2>&1 &

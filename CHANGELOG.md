@@ -13,6 +13,15 @@ toolchain) gets an entry here in the same commit.
 
 ## 2026-10-27
 
+- **xrdp preview: the Wayland sessions are on the login screen.** The preview packages
+  (rpm and deb) list `[GNOME]` (code 31, backend `mutter`) when the GNOME backend was
+  built, and `[Wayland]` (sway, code 30) unless the release is marked `no-sway`; xrdp's
+  own `xrdp.ini` only has them commented out, so after installing a package the login
+  screen offered Xorg and Xvnc only, and a Wayland session took an edit by hand. They come
+  after `[Xorg]`, which stays the default: with no `autorun=`, xrdp starts the first
+  session for a client that sends a password. `build-xrdp.sh` passes the `no-sway` mark
+  to the build as `NO_SWAY`. The tests add the sections only when an older package lacks
+  them, and `xrdp-session.sh --preview` checks that the package lists sway.
 - **freerdp-web `20261027.2`** (`77fc7eb3`): a logoff is the end of the session, not a lost
   connection. xrdp's development branch (the preview's base) ends a session the server
   ends as Windows does, with Set Error Info `ERRINFO_LOGOFF_BY_USER` and the Disconnect
