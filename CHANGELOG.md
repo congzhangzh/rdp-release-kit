@@ -13,6 +13,17 @@ toolchain) gets an entry here in the same commit.
 
 ## 2026-10-27
 
+- **freerdp-web `20261027.1`** (`f18a3428`): a session the server ends (a log out) now ends in
+  the page too, with the end bar, and Reconnect logs in again (the browser's FreeRDP never
+  exits after a clean end, so the page waited for it); the mouse and the keys are released
+  by themselves when the session is over; Info names each codec with its colour and says
+  whether the browser decodes it in hardware. Its tests: All screens on KWin 6.8 (outputs
+  kscreen-doctor lists without `enabled`), a retry while the X session's authority is not
+  ready, and the client's log when a logoff shows no end bar. On the kit's servers, page as
+  `7a30440` (the tag only adds the version and release notes): capture 15 of 15 on xrdp
+  0.10.6.1 and on the preview; reconnect 11 of 11 on 0.10.6.1, 10 of 11 on the preview (a
+  server logoff reaches the page as a lost connection: xrdp's side, being looked into);
+  All screens on Xorg and KDE green, GNOME as before (a Mutter race).
 - **xrdp preview `release-20261027.1`** (`8ef7574a`): `release-20261026.4` plus KDE's
   multi-monitor layout on KWin 6.8: xrdp bound `kde_output_management_v2` version 18, and
   KWin 6.8 takes custom modes only from version 22, so it refused every resize ("too old
