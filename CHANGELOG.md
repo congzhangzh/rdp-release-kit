@@ -13,6 +13,19 @@ toolchain) gets an entry here in the same commit.
 
 ## 2026-10-27
 
+- **freerdp-web `20261027.2`** (`77fc7eb3`): a logoff is the end of the session, not a lost
+  connection. xrdp's development branch (the preview's base) ends a session the server
+  ends as Windows does, with Set Error Info `ERRINFO_LOGOFF_BY_USER` and the Disconnect
+  Provider Ultimatum, and FreeRDP's SDL3 client then exits with its code 2, `LOGOFF`
+  (`client/SDL/SDL3/sdl_utils.hpp`); the page took every exit for a lost connection and
+  reconnected, starting a new session. It now maps the client's codes: logoff, idle and
+  logon timeouts, a connection replaced or denied, missing privileges, licensing and the
+  like end the session ("The session ended: logged off."), with Reconnect offered; only a
+  lost connection retries on its own. xrdp 0.10.6.1 sends no error info, so its client never
+  exits and the page's own watchdog ended the session there. On the kit's servers (page as
+  `bb26d25`; the tag adds only the version and release notes): reconnect 11 of 11 on the
+  preview ("The session ended: logged off.") and on 0.10.6.1; capture 15 of 15 on the
+  preview; All screens on Xorg green.
 - **freerdp-web `20261027.1`** (`f18a3428`): a session the server ends (a log out) now ends in
   the page too, with the end bar, and Reconnect logs in again (the browser's FreeRDP never
   exits after a clean end, so the page waited for it); the mouse and the keys are released
@@ -22,7 +35,8 @@ toolchain) gets an entry here in the same commit.
   ready, and the client's log when a logoff shows no end bar. On the kit's servers, page as
   `7a30440` (the tag only adds the version and release notes): capture 15 of 15 on xrdp
   0.10.6.1 and on the preview; reconnect 11 of 11 on 0.10.6.1, 10 of 11 on the preview (a
-  server logoff reaches the page as a lost connection: xrdp's side, being looked into);
+  server logoff reached the page as a lost connection; first put down here as xrdp's
+  side, it was the page's: see `20261027.2`);
   All screens on Xorg and KDE green, GNOME as before (a Mutter race).
 - **xrdp preview `release-20261027.1`** (`8ef7574a`): `release-20261026.4` plus KDE's
   multi-monitor layout on KWin 6.8: xrdp bound `kde_output_management_v2` version 18, and
