@@ -274,11 +274,11 @@ the session sent its picture, the remote desktop shows detail, and the web
 video can be heard. Each is named for what it shows, the xrdp ones by which
 xrdp: `xrdp-original-xfce` (xrdp's upstream release, Debian 13's own
 packages), `xrdp-gnome`, `xrdp-gnome-screens` (two screens), `xrdp-kde`
-(the kit's xrdp; `xrdp-preview-*` until 2026-10-27, which freerdp-web's
-`media.json` still knows), and `grd-gnome` (gnome-remote-desktop). After every green build on main, the
+(the kit's xrdp; `xrdp-preview-*` until 2026-10-27, which
+`build/site-anchors.json` still knows), and `grd-gnome` (gnome-remote-desktop). After every green build on main, the
 `demo` workflow records them, each on its own runner, and publishes them once as
-`demo-<YYYYMMDD>.<N>-<kit commit>`; freerdp-web's splash takes the newest
-set every time it publishes. A push to the branch `demo-ci` records
+`demo-<YYYYMMDD>.<N>-<kit commit>`; the rolling release carries them too, and
+the site, published from a rolling release, shows that release's set. A push to the branch `demo-ci` records
 without publishing.
 
 To come: `test/fetch-release.sh <tag>`, fetching a release's web client and

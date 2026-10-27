@@ -312,7 +312,7 @@ move while builds don't, and versions that only go up.
 | kit `release` job | `<YYYYMMDD>.<N>` (`build/prerelease-tag.sh release`), published by `publish-prerelease.sh` with `LATEST=1`: the same rules, but a release, made latest |
 | kit pushes | a push that changes only documentation (or only the upstream check) runs no build, so it makes no new pre-release |
 | package revisions | `0kit<N>`, rule 4 |
-| (until 2026-10-27) freerdp-web [`kit-release.sh`](https://github.com/congzhangzh/freerdp-web/blob/main/kit-release.sh) | rule 3: the newest published `web-*`, or the newest build of a page commit; withdrawn ones and drafts skipped; the older names `web-<page, 12>-<kit, 12>` and `web-<page, 12>` are still found. `site.sh` and `pages.yml` use it |
+| freerdp-web [`kit-release.sh`](https://github.com/congzhangzh/freerdp-web/blob/main/kit-release.sh) | rule 3: the newest published `web-*`, or the newest build of a page commit; withdrawn ones and drafts skipped; the older names `web-<page, 12>-<kit, 12>` and `web-<page, 12>` are still found. Its `site.sh` uses it for a local preview (until 2026-10-27 its `pages.yml` also published with it) |
 
 The order of the pushes: freerdp-web first (it finds both names), then the
 kit, then immutable releases turned on (rule 6, after a trial).
