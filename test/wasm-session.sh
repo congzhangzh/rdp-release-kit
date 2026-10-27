@@ -46,7 +46,9 @@
 # login: the same server, the remote desktop on two screens. SERVER=xrdp:
 # test-screens.mjs, once with a monitor per screen (MODE=separate) and once
 # with one as wide as both (span), as the user "test" (password "test") in an
-# X session with only an xterm; it runs "docker" itself. SERVER=xrdp-gnome or
+# X session with only an xterm; it runs "docker" itself. With CAPTURE=1 the
+# page's test-capture.mjs (mouse and keyboard capture) runs there too, if
+# <dir> has it. SERVER=xrdp-gnome or
 # xrdp-kde: test-screens-wlup.mjs (a desktop monitor per screen, this
 # window's primary, its windows kept there). A page without the test is a
 # SKIP. Output then in dist/test/wasm-screens/. These are the ladder's upper
@@ -286,6 +288,7 @@ if [ -n "${SCREENS:-}" ]; then
     # with "Socket path too long" from a CI runner's workspace)
     TESTS=$(mktemp -d /tmp/screens-XXXXXX)
     cp "$SCREENS"/test-*.mjs "$SCREENS"/test-*.py "$TESTS/" 2> /dev/null
+    mkdir -p "$TESTS/.chrome"   # test-capture.mjs makes its profile in it, but not the folder
     page=${PAGE_URL:-http://127.0.0.1:8199/index.html}
     status=0
     # run <name> <script> <env>...: the test's own lines, and one verdict line
@@ -309,7 +312,9 @@ if [ -n "${SCREENS:-}" ]; then
     case $SERVER in
     xrdp)
         run screens-separate test-screens.mjs MODE=separate XRDP="$NAME"
-        run screens-span test-screens.mjs MODE=span XRDP="$NAME" ;;
+        run screens-span test-screens.mjs MODE=span XRDP="$NAME"
+        # CAPTURE=1: the page's mouse and keyboard capture test too, on the same server
+        [ -z "${CAPTURE:-}" ] || run capture test-capture.mjs XRDP="$NAME" ;;
     xrdp-gnome | xrdp-kde)
         run "screens-${SERVER#xrdp-}" test-screens-wlup.mjs DESKTOP="${SERVER#xrdp-}" CONTAINER="$NAME" \
             ENGINE="$ENGINE" PASSWORD=kit-test-pw ;;
