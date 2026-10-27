@@ -24,13 +24,17 @@
 # SERVER=xrdp-gnome: GNOME on Wayland through the kit's xrdp preview, with
 # AV1 (test/xrdp-gnome/: Fedora 45, systemd under rootless podman). The
 # packages dir then holds the preview's Fedora 45 packages (default
-# dist/xrdp-preview/fedora-45).
+# dist/xrdp-preview/fedora-45). MUTTER_DEBUG=<topics> (Mutter's, e.g.
+# geometry,window-state) turns them on in the session; the session's whole
+# journal is then kept as session.journal.
 #
 # SERVER=xrdp-kde: KDE Plasma on Wayland through the xrdp preview, with AV1
 # (test/xrdp-kde/: Arch with KWin 6.8, xrdp compiled there from the pinned
 # sources). KWin renders in software with the host's /dev/udmabuf: no GPU,
 # no DRM node, no vgem; the user running podman must be able to open it
-# (group kvm). PODMAN=<command> runs another podman for both, e.g. a
+# (group kvm). XRDP_PREVIEW_TAR=<tar> compiles an xrdp tree under test
+# there instead of the pinned one (git archive --prefix=xrdp_preview/
+# <commit>). PODMAN=<command> runs another podman for both, e.g. a
 # rootful one on a CI runner; SERVER_RUN_OPTS=<options> adds options to
 # their container (e.g. what an older podman's defaults need).
 #
@@ -171,6 +175,9 @@ if [ "$SERVER" = xrdp-gnome ]; then
     # PipeWire's xrdp module, the session's sound (the kit's package; Fedora has none)
     cp "$PKGS"/pipewire-module-xrdp-*.fc45.x86_64.rpm "$ctx/pkgs/" 2> /dev/null ||
         { echo "no pipewire-module-xrdp *fc45* package in $PKGS (a pipewire-module-xrdp-* pre-release)" >&2; exit 1; }
+    # the user's systemd hands environment.d to the session, gnome-shell too
+    [ -z "${MUTTER_DEBUG:-}" ] || printf 'RUN mkdir -p /etc/environment.d && echo MUTTER_DEBUG=%s > /etc/environment.d/90-mutter-debug.conf\n' \
+        "$MUTTER_DEBUG" >> "$ctx/Dockerfile"
 else
     echo "== server: KDE Plasma on Wayland through the xrdp preview (AV1), Arch (KWin 6.8), systemd under podman"
     IMAGE=kit-xrdp-kde:arch HOST=rdp-kde
@@ -185,6 +192,10 @@ else
     # xrdp is compiled in the image from the pinned sources, checked as every build's are
     mkdir -p "$ctx/src"
     for src in xrdp_preview librfxcodec libpainter pipewire_xrdp; do
+        if [ "$src" = xrdp_preview ] && [ -n "${XRDP_PREVIEW_TAR:-}" ]; then
+            cp "$XRDP_PREVIEW_TAR" "$ctx/src/$src.tar" || exit 1
+            continue
+        fi
         # shellcheck disable=SC2016 # for the inner shell
         file=$(KIT=$KIT SOURCES=${SOURCES:-$HOME/.cache/rdp-release-kit/sources} WORK=$ctx/work SRC=$src \
             bash -c '. "$KIT/build/lib.sh" && fetch "$SRC"') || { echo "$src: no checked source" >&2; exit 1; }
@@ -306,6 +317,8 @@ if [ -n "${SCREENS:-}" ]; then
     esac
     [ "$SERVER" = xrdp ] || "$ENGINE" exec "$NAME" sh -c 'tail -n 200 /var/log/xrdp.log /var/log/xrdp-sesman.log;
         echo "== the session"; journalctl -b --no-pager -n 300 _UID=1000' > "$OUT/server.log" 2>&1
+    [ -z "${MUTTER_DEBUG:-}" ] ||
+        "$ENGINE" exec "$NAME" journalctl -b --no-pager -o short-precise _UID=1000 > "$OUT/session.journal" 2>&1
     echo "All screens: $([ $status = 0 ] && echo passed || echo FAILED) (logs, screenshots: $OUT)"
     exit $status
 fi
