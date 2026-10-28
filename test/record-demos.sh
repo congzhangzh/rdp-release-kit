@@ -82,13 +82,15 @@ name() {
         xrdp-gnome-screens) echo xrdp-gnome-screens ;;
     esac
 }
+# one pattern: <server> + <desktop> <Wayland|Xorg>[, <codec>][ / Two monitors]; a codec only
+# where the server's log names it (xrdp's AV1 encoder)
 title() {
     case $1 in
-        xrdp) echo "upstream xrdp + Xfce" ;;
+        xrdp) echo "upstream xrdp + Xfce Xorg" ;;
         gnome) echo "gnome-remote-desktop + GNOME Wayland" ;;
         xrdp-gnome) echo "xrdp + GNOME Wayland, AV1" ;;
         xrdp-kde) echo "xrdp + KDE Plasma Wayland, AV1" ;;
-        xrdp-gnome-screens) echo "xrdp + GNOME Wayland, two screens" ;;
+        xrdp-gnome-screens) echo "xrdp + GNOME Wayland, AV1 / Two monitors" ;;
     esac
 }
 caption() {
