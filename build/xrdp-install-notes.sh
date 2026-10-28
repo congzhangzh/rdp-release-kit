@@ -65,15 +65,18 @@ grep -v -E '^\s*(#|$)' "$KIT/distros.list" | while read -r image rest; do
     # shellcheck disable=SC2016 # expanded by the container shell
     distro=$("$ENGINE" run --rm "$image" sh -c '. /etc/os-release; echo "$ID-${VERSION_ID:-$VERSION_CODENAME}"')
     wayland=GNOME
-    [[ " $rest " == *" no-kde "* ]] || wayland+=", KDE"
+    [[ " $rest " == *" no-kde "* ]] || wayland+=", KDE Plasma"
+    # sway writes its name in lowercase
     [[ " $rest " == *" no-sway "* ]] || wayland+=", sway"
-    # in xrdp.ini's order, the default first
-    sessions="Xorg, $wayland"
+    # a line per kind ("<kind>: …", which the site's page shows a line each), the login
+    # screen's default named: Xorg on Debian and Ubuntu
+    sessions="Wayland: $wayland; Xorg: the default session"
     case $distro in
     fedora-*)
         fc=fc${distro#fedora-}
         name="Fedora ${distro#fedora-}"
-        sessions="$wayland; Xorg with xorgxrdp"
+        # Wayland first: GNOME is the default; Xorg needs xorgxrdp, its command below the table
+        sessions="Wayland: ${wayland/GNOME/GNOME (the default)}; Xorg: with xorgxrdp, below"
         cmd="sudo dnf install"
         for p in xrdp pipewire-module-xrdp xorgxrdp; do
             f=$(asset "$p-[0-9]*.$fc.x86_64.rpm")

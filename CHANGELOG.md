@@ -13,6 +13,11 @@ toolchain) gets an entry here in the same commit.
 
 ## 2026-10-28
 
+- **The install table's sessions, a line per kind** (聪哥: Wayland and Xorg on one line
+  confused): "Wayland: GNOME, KDE Plasma, sway; Xorg: the default session" (Debian, Ubuntu) and
+  "Wayland: GNOME (the default), KDE Plasma, sway; Xorg: with xorgxrdp, below" (Fedora), in
+  the notes and `install.json`; the site's page (freerdp-web `20261028.9`) shows each part on its
+  own line. "KDE" is "KDE Plasma"; sway keeps the lowercase its project writes.
 - **freerdp-web `20261028.8`** (`20261028.6` and `.7` before it): the slogan "You here, you in
   the cloud: one desktop.", 蛮蛮 and the twins take turns beside the tagline, like a marquee,
   without caption or buttons; each plays to its end and holds 3 s; the mascot videos play for
