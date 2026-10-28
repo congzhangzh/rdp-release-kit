@@ -13,6 +13,15 @@ toolchain) gets an entry here in the same commit.
 
 ## 2026-10-27
 
+- **Fedora is Wayland first**: Fedora's desktops have no Xorg session any
+  more, so its packages list the Wayland sessions first in `xrdp.ini` (GNOME, KDE, sway,
+  then Xorg). With no `autorun=`, xrdp starts the first session for a client that sends a
+  password, so GNOME is now Fedora's default. Its `xrdp` only *suggests* `xorgxrdp`
+  (it recommended it): dnf installs recommended packages, and could take Fedora's own
+  xorgxrdp, built for xrdp 0.10. The release notes' Fedora command installs `xrdp` and
+  `pipewire-module-xrdp`; xorgxrdp has its own line under the table. Debian and Ubuntu
+  are unchanged (Xorg first, xorgxrdp recommended). `test/xrdp-session.sh` checks the
+  default per family and picks the Xorg session with `autorun=Xorg`.
 - **FreeRDP release-20261027.1** (`1ba0aa521`): integration-latest rebuilt on the same
   master (b2403bb99) with two more of our open pull requests, both for every client:
   hotkeys read the key event's own modifiers (#13852; `SDL_GetModState()` is the state

@@ -4,7 +4,7 @@
 # client, and checks that an Xorg session (xorgxrdp) with an xterm comes
 # up, then a Wayland one (sway) unless the release is marked no-sway in
 # distros.list; and that the login screen lists the Wayland sessions the
-# release has (GNOME; KDE unless no-kde):
+# release has (GNOME; KDE unless no-kde) and the default (Fedora: GNOME):
 #
 #   test/xrdp-session.sh <image> [client archive]
 #
@@ -68,7 +68,8 @@ else
 fi
 check "the packages install" '[ -x /usr/sbin/xrdp ] && [ -x /usr/sbin/xrdp-sesman ]'
 check "host keys were made on install" '[ -s /etc/xrdp/cert.pem ] && [ -s /etc/xrdp/rsakeys.ini ]'
-# the Wayland module, and the login screen's sessions (Xorg stays first, the default)
+# the Wayland module, and the login screen's sessions: the first is the
+# default, GNOME on Fedora (Wayland first), Xorg on Debian and Ubuntu
 check "the package has the Wayland module (libwlup)" 'ls /usr/lib*/xrdp/libwlup.so > /dev/null 2>&1'
 check "the login screen lists GNOME (code 31)" 'grep -q "^\[GNOME\]$" /etc/xrdp/xrdp.ini'
 if [ -n "$NO_KDE" ]; then
@@ -76,8 +77,14 @@ if [ -n "$NO_KDE" ]; then
 else
     check "the login screen lists KDE (code 32)" 'grep -q "^\[KDE\]$" /etc/xrdp/xrdp.ini'
 fi
-check "Xorg is still the first session" \
-    '[ "$(sed -n "s/^\[\(.*\)\]$/\1/p" /etc/xrdp/xrdp.ini | grep -v -x -E "Globals|Logging|LoggingPerLogger|Channels" | head -1)" = Xorg ]'
+first_session() { sed -n 's/^\[\(.*\)\]$/\1/p' /etc/xrdp/xrdp.ini | grep -v -x -E 'Globals|Logging|LoggingPerLogger|Channels' | head -1; }
+if command -v rpm > /dev/null; then
+    check "GNOME is the first session (Fedora: Wayland first)" '[ "$(first_session)" = GNOME ]'
+    check "xrdp only suggests xorgxrdp (dnf would install a recommended one)" \
+        '! rpm -q --recommends xrdp | grep -q xorgxrdp && rpm -q --suggests xrdp | grep -q xorgxrdp'
+else
+    check "Xorg is still the first session" '[ "$(first_session)" = Xorg ]'
+fi
 # Fedora: the kit's own build of PipeWire's xrdp module (Debian and Ubuntu
 # package it), where PipeWire looks for modules, and its session autostart
 if command -v rpm > /dev/null; then
@@ -93,6 +100,8 @@ echo 'tester:kit-test-pw' | chpasswd
 printf '#!/bin/sh\nexec xterm -geometry 100x30+50+50\n' > /home/tester/.xsession
 chmod +x /home/tester/.xsession
 sed -i '/^\[Globals\]/,/^\[/ s|^port=.*|port=tcp://.:3389|' /etc/xrdp/xrdp.ini
+# the Xorg session first, whichever is the default
+sed -i '/^\[Globals\]/,/^\[/ s|^#\?autorun=.*|autorun=Xorg|' /etc/xrdp/xrdp.ini
 xrdp-sesman --nodaemon > /out/sesman.out 2>&1 &
 xrdp --nodaemon > /out/xrdp.out 2>&1 &
 sleep 3

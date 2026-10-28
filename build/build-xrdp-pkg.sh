@@ -202,10 +202,12 @@ fi
 # The Wayland sessions are on the login screen's list (xrdp.ini only has
 # them commented out): GNOME and KDE when their backends were built, sway
 # unless the release's sway is too old (NO_SWAY=1, a release marked
-# no-sway). They go after [Xorg], which stays the default: with no
-# autorun=, xrdp starts the first session for a client that sends a
-# password. sesman.ini has the [GNOME], [KDE] and [Wayland] sections that
-# start them
+# no-sway). With no autorun=, xrdp starts the first session for a client
+# that sends a password, so their place decides the default: on Fedora,
+# whose desktops are Wayland only, they go first and GNOME is the default
+# (xorgxrdp is only suggested there); on Debian and Ubuntu they go after
+# [Xorg], which stays the default. sesman.ini has the [GNOME], [KDE] and
+# [Wayland] sections that start them
 INI=$STAGE/xrdp/etc/xrdp/xrdp.ini
 SESSIONS=$(mktemp)
 if [ -n "$WLUP_GNOME" ]; then
@@ -220,8 +222,10 @@ if [ -z "$NO_SWAY" ]; then
     printf '%s\n' '[Wayland]' 'name=Sway (Wayland)' 'lib=libwlup.so' 'username=ask' \
         'password=ask' 'port=-1' 'code=30' 'xkb_layout=us' '' >> "$SESSIONS"
 fi
-awk -v f="$SESSIONS" '
-    /^\[Xvnc\]/ && !done { while ((getline l < f) > 0) print l; done = 1 }
+BEFORE=Xvnc
+[ $FAMILY = deb ] || BEFORE=Xorg
+awk -v f="$SESSIONS" -v before="[$BEFORE]" '
+    $0 == before && !done { while ((getline l < f) > 0) print l; done = 1 }
     { print }
     END { if (!done) exit 1 }' "$INI" > "$INI.new"
 mv "$INI.new" "$INI"

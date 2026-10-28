@@ -75,7 +75,7 @@ same tables are in the notes of every release.
 | Windows client `sdl-freerdp.exe` + `freerdp-tk` | freerdp 20261027.1, sdl3 3.4.18, sdl3_ttf 3.2.2, freetype 2.15.0, libressl 4.4.0, opus 1.6.1, dav1d 1.5.4, zlib 1.3.2, jansson 2.15.1, llvm_mingw 20261020, freerdp_tk 0.3.0, python_windows_x86_64 3.13.17+20261021, python_windows_aarch64 3.13.17+20261021 | `build/check-windows.sh` (needs only Windows' own DLLs) |
 | macOS client `sdl-freerdp` + `freerdp-tk` | freerdp 20261027.1, sdl3 3.4.18, sdl3_ttf 3.2.2, freetype 2.15.0, openssl 3.5.9, opus 1.6.1, dav1d 1.5.4, zlib 1.3.2, jansson 2.15.1, freerdp_tk 0.3.0, python_macos_arm64 3.13.17+20261021, python_macos_x86_64 3.13.17+20261021 | `build/check-macos.sh` (only macOS's own libraries and frameworks, minimum macOS 12.0, an ad-hoc signature); the bundled Python loads Tk and freerdp-tk; arm64 on macos-15, x86_64 on macos-15-intel |
 | Web client + freerdp-web page | freerdp 20261027.1, sdl3_wasm 3.4.18+timer, sdl3_ttf 3.2.2, freetype 2.15.0, libressl 4.4.0, opus 1.6.1, dav1d 1.5.4, zlib 1.3.2, jansson 2.15.1, freerdp_web 20261027.2 | `test/wasm-session.sh`: a browser logs in to xrdp through SSH + websockify, the page served without COOP/COEP headers (as GitHub Pages) |
-| xrdp packages (.deb, .rpm) | xrdp 20261027.1, librfxcodec 0badc06, libpainter 379b8fb, xorgxrdp 20261018.1, x264 b35605a, opus 1.6.1, pipewire_xrdp 0.2 | `check-deps.sh`, then `test/xrdp-session.sh`: install in a fresh container of each release, log in over RDP: an Xorg session (xorgxrdp) with an xterm, then a Wayland one (sway, unless the release is marked no-sway) captured at the client's size; the login screen lists GNOME, and KDE unless no-kde |
+| xrdp packages (.deb, .rpm) | xrdp 20261027.1, librfxcodec 0badc06, libpainter 379b8fb, xorgxrdp 20261018.1, x264 b35605a, opus 1.6.1, pipewire_xrdp 0.2 | `check-deps.sh`, then `test/xrdp-session.sh`: install in a fresh container of each release, log in over RDP: an Xorg session (xorgxrdp) with an xterm, then a Wayland one (sway, unless the release is marked no-sway) captured at the client's size; the login screen lists GNOME, and KDE unless no-kde; the default is GNOME on Fedora (Wayland first), Xorg elsewhere |
 
 Pins that are not a plain upstream release:
 
@@ -351,9 +351,14 @@ preview packages (`0.10.80~preview.<N>.<commit>`), which it upgrades, and
 before xrdp's next release. Services are not started on install, and the
 host keys are made on install, never shipped.
 
-The login screen (`xrdp.ini`) lists `[Xorg]` first, the default, then the
-Wayland sessions the release has: `[GNOME]` (code 31), `[KDE]` (code 32)
-and `[Wayland]` (sway, code 30); `sesman.ini` starts them. The releases in
+The login screen (`xrdp.ini`) lists `[Xorg]` and the Wayland sessions the
+release has: `[GNOME]` (code 31), `[KDE]` (code 32) and `[Wayland]` (sway,
+code 30); `sesman.ini` starts them. The first one is the default (xrdp
+starts it for a client that sends a password). Fedora is Wayland first: its
+desktops have no Xorg session, so the Wayland sessions come first, GNOME is
+the default, and `xrdp` only suggests `xorgxrdp` (dnf installs recommended
+packages, and Fedora's own xorgxrdp is built for xrdp 0.10). Debian and
+Ubuntu list `[Xorg]` first, and `xrdp` recommends `xorgxrdp`. The releases in
 `distros.list` are marked for what they cannot have: `no-sway` (sway older
 than 1.11, wlroots 0.19: the module captures the screen through the
 `ext-image-copy-capture` protocols), `no-kde` (plasma-wayland-protocols
@@ -364,11 +369,12 @@ fall back to H.264). Marks go after the image, as many as needed:
 backend needs GNOME 46 or newer.
 
 `test/xrdp-session.sh` logs in twice: to an Xorg session (xorgxrdp, an
-xterm), then to a Wayland one (sway, headless, with a terminal), checking
+xterm, picked with `autorun=Xorg`), then to a Wayland one (sway, headless, with a terminal), checking
 that sesman starts sway for the user and that the module captures its
 output at the client's size; a release marked `no-sway` skips the second.
 It also checks that the package has the Wayland module and that the login
-screen lists GNOME, and KDE unless the release is marked `no-kde`. The
+screen lists GNOME, and KDE unless the release is marked `no-kde`, and
+which session is the default (GNOME on Fedora, Xorg elsewhere). The
 GNOME and KDE logins themselves run in `test/wasm-session.sh`
 (`SERVER=xrdp-gnome`, `SERVER=xrdp-kde`) and the demos.
 

@@ -5,8 +5,10 @@
 #                  <pipewire-module-xrdp version>
 #
 # rpmbuild adds the shared-library Requires on its own; xorgxrdp also
-# requires the Xorg video driver ABI it was built for. Host keys are made
-# in %post.
+# requires the Xorg video driver ABI it was built for. xrdp only suggests
+# xorgxrdp: Fedora's sessions are Wayland (GNOME first in xrdp.ini), and
+# dnf installs what a package recommends, from Fedora's own repositories
+# too. Host keys are made in %post.
 set -euo pipefail
 # what the packages are built from, and the sessions they have (the
 # release's marks, set by build-xrdp-pkg.sh)
@@ -44,7 +46,7 @@ Summary: Remote Desktop Protocol (RDP) server (rdp-release-kit build)
 License: Apache-2.0 AND GPL-2.0-or-later
 URL: https://www.xrdp.org/
 Requires: openssl
-Recommends: xorgxrdp
+Suggests: xorgxrdp
 
 %description
 xrdp $FROM, with H.264 (x264) and Opus built in.$EXTRAS

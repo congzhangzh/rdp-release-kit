@@ -20,6 +20,9 @@ ENGINE=${ENGINE:-$(command -v docker || command -v podman)}
 
 # one asset, by glob, for the x86_64 build: its name, or nothing
 asset() { (cd "$DIR" && find . -maxdepth 1 -name "$1" -printf '%f\n' | head -1); }
+# Fedora's xorgxrdp commands, printed after the table
+XORG=$(mktemp)
+trap 'rm -f "$XORG"' EXIT
 
 cat << 'EOF'
 ## Install xrdp
@@ -28,7 +31,9 @@ The packages hold our release of xrdp (its development branch with Wayland
 sessions, AV1 and pacing) and xorgxrdp's development branch, for Xorg and
 Wayland sessions. They replace xrdp 0.10.6.1 and the kit's earlier preview
 packages (their version sorts higher). Pick the session on xrdp's login
-screen; Xorg is the default.
+screen. Fedora is Wayland first: GNOME is the default and the command
+installs no xorgxrdp (the Xorg session's driver; see below the table).
+Debian and Ubuntu keep Xorg as the default.
 
 | Release | Sessions | Download and install (x86_64 and ARM64) |
 |---|---|---|
@@ -36,18 +41,27 @@ EOF
 grep -v -E '^\s*(#|$)' "$KIT/distros.list" | while read -r image rest; do
     # shellcheck disable=SC2016 # expanded by the container shell
     distro=$("$ENGINE" run --rm "$image" sh -c '. /etc/os-release; echo "$ID-${VERSION_ID:-$VERSION_CODENAME}"')
-    sessions="Xorg, GNOME"
-    [[ " $rest " == *" no-kde "* ]] || sessions+=", KDE"
-    [[ " $rest " == *" no-sway "* ]] || sessions+=", sway"
+    wayland=GNOME
+    [[ " $rest " == *" no-kde "* ]] || wayland+=", KDE"
+    [[ " $rest " == *" no-sway "* ]] || wayland+=", sway"
+    # in xrdp.ini's order, the default first
+    sessions="Xorg, $wayland"
     case $distro in
     fedora-*)
         fc=fc${distro#fedora-}
         name="Fedora ${distro#fedora-}"
+        sessions="$wayland; Xorg with xorgxrdp"
         cmd="sudo dnf install"
-        for p in xrdp xorgxrdp pipewire-module-xrdp; do
+        for p in xrdp pipewire-module-xrdp xorgxrdp; do
             f=$(asset "$p-[0-9]*.$fc.x86_64.rpm")
             [ -n "$f" ] || { echo "xrdp-install-notes.sh: no $p for $distro in $DIR" >&2; exit 1; }
-            cmd+=" $URL/${f%.x86_64.rpm}.\$(uname -m).rpm"
+            f="$URL/${f%.x86_64.rpm}.\$(uname -m).rpm"
+            if [ $p = xorgxrdp ]; then
+                # shellcheck disable=SC2016 # Markdown's backquotes
+                printf -- '- %s: `sudo dnf install %s`\n' "$name" "$f" >> "$XORG"
+            else
+                cmd+=" $f"
+            fi
         done ;;
     *)
         case $distro in
@@ -67,6 +81,13 @@ grep -v -E '^\s*(#|$)' "$KIT/distros.list" | while read -r image rest; do
     esac
     printf '| %s | %s | `%s` |\n' "$name" "$sessions" "$cmd"
 done
+cat << 'EOF'
+
+On Fedora, the Xorg session needs this release's xorgxrdp as well (not
+Fedora's own, which is built for xrdp 0.10):
+
+EOF
+cat "$XORG"
 cat << 'EOF'
 
 Then start it: `sudo systemctl enable --now xrdp`. Whether a package has the
