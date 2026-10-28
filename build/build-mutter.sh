@@ -11,8 +11,9 @@
 #   build/build-mutter.sh --key         the key that names the inputs
 #
 # Then, in a fresh Fedora 45 container: the two packages install over
-# Fedora's, gnome-shell from Fedora installs with them, keeps them and
-# starts (--version); libmutter needs no library it lacks.
+# Fedora's, Fedora's gnome-shell of the same version (an update in testing
+# may be newer) installs with them, keeps them and starts (--version);
+# libmutter needs no library it lacks.
 # ENGINE (docker first, else podman); CONTAINER_OPTS are passed to every
 # container (e.g. --memory=3g); MUTTER_JOBS caps the build's jobs (a link
 # with LTO takes about 1 GB each).
@@ -74,10 +75,12 @@ cp ~/rpmbuild/RPMS/*/mutter-[0-9]*.rpm ~/rpmbuild/RPMS/noarch/mutter-common-*.rp
 ls "$OUT"/mutter-[0-9]*.rpm "$OUT"/mutter-common-*.rpm > /dev/null
 
 # shellcheck disable=SC2016 # expanded by the container shell
-"$ENGINE" run --rm "${opts[@]}" -v "$OUT:/out:ro,Z" fedora:45 bash -euo pipefail -c '
+"$ENGINE" run --rm "${opts[@]}" -v "$OUT:/out:ro,Z" -e SHELL_VERSION="${version%%-*}" fedora:45 bash -euo pipefail -c '
 dnf -y -q install /out/mutter-[0-9]*.rpm /out/mutter-common-*.rpm
-dnf -y -q --setopt=install_weak_deps=False install gnome-shell
-rpm -q mutter mutter-common | grep -q 0kit || { rpm -q mutter mutter-common; echo "gnome-shell replaced our mutter" >&2; exit 1; }
+dnf -y -q --setopt=install_weak_deps=False install "gnome-shell-$SHELL_VERSION"
+# both ours still (no grep -q in a pipe: under pipefail, rpm dies of SIGPIPE)
+q=$(rpm -q mutter mutter-common)
+[ "$(grep -c 0kit <<< "$q")" = 2 ] || { echo "$q"; echo "gnome-shell replaced our mutter" >&2; exit 1; }
 ! ldd /usr/lib64/libmutter-*.so.0 | grep "not found"
 gnome-shell --version
 rpm -q mutter mutter-common
