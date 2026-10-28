@@ -657,6 +657,22 @@ jobs:
           title="RDP All in One (browser, clients, server) $tag"
           # a row per distribution: sessions, direct links, the command
           install=$(build/xrdp-install-notes.sh upload "https://github.com/$GITHUB_REPOSITORY/releases/download/$tag")
+          # the same as data, with the clients, for the site's "Get a server"
+          # page (build/site.sh copies it next to the page); not attested
+          # like the files above, its checksum joins SHA256SUMS
+          base="https://github.com/$GITHUB_REPOSITORY/releases/download/$tag"
+          # shellcheck disable=SC2046 # one argument per client archive
+          build/xrdp-install-notes.sh --json upload "$base" |
+            jq --arg r "$tag" --arg u "https://github.com/$GITHUB_REPOSITORY/releases/tag/$tag" --arg b "$base" '
+              def platform: capture("-(?<os>linux|windows|macos)-(?<arch>[a-z0-9_]+)\\.") |
+                ({linux: "Linux", windows: "Windows", macos: "macOS"}[.os]) + " " +
+                (if .os == "macos" then {arm64: "Apple Silicon", x86_64: "Intel"}[.arch]
+                 else {x86_64: "x86_64", aarch64: "ARM64"}[.arch] end);
+              {release: $r, url: $u} + . +
+              {clients: [$ARGS.positional[] | {platform: platform, file: ., url: ($b + "/" + .)}]}' \
+              --args $(cd upload && ls sdl3-freerdp-*-linux-*.tar.xz sdl3-freerdp-*-windows-*.zip sdl3-freerdp-*-macos-*.tar.xz) \
+            > upload/install.json
+          (cd upload && sha256sum install.json >> SHA256SUMS)
           summary="Rolling release $tag of rdp-release-kit, built and tested from $GITHUB_SHA: FreeRDP's SDL3 client for Linux, Windows and macOS, built from our release of FreeRDP master ($freerdp, commit ${freerdp_commit:0:12}, with the fixes upstream has merged since its last release, such as the Opus microphone), each with freerdp-tk (a window to save and open connections) and the Python that runs it, and our xrdp for Debian, Ubuntu and Fedora (Xorg and Wayland sessions: GNOME, KDE, sway), on x86_64 and ARM64. Published once, never replaced.
 
           ## Download and run

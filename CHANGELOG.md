@@ -13,6 +13,12 @@ toolchain) gets an entry here in the same commit.
 
 ## 2026-10-28
 
+- **`install.json` for the site's "Get a server" page**: the rolling release carries the
+  install table as data (`build/xrdp-install-notes.sh --json`: one entry per distribution
+  release with its sessions, its command and Fedora's xorgxrdp command, plus the start
+  command), with the client archives and their links; `build/site.sh` puts it next to the
+  page. Its checksum is in `SHA256SUMS`; it is not attested, being made after the tag. A
+  release without it (before today) still makes a site; the page then links to the releases.
 - **Release titles end with their tag** (聪哥's wish): the rolling release is "RDP All in
   One (browser, clients, server) `<YYYYMMDD>.<N>`", the pre-releases "Web client
   `web-…`", "xrdp packages `xrdp-…`", "pipewire-module-xrdp for Fedora … `pipewire-module-xrdp-…`"

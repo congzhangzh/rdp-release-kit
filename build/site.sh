@@ -10,7 +10,9 @@
 # videos, its xrdp packages. The site is that client and page
 # (freerdp-web-<version>.zip), the videos in demo/ with demo.json, each video
 # given its lasting address from build/site-anchors.json ("id", "aliases"),
-# and RELEASE, the release's tag, which the published site's check reads.
+# RELEASE, the release's tag, which the published site's check reads, and
+# install.json, what the page's "Get a server" shows (releases from
+# 2026-10-28 on; without it the page links to the kit's releases).
 # Every file is checked against the release's SHA256SUMS. Prints the page's
 # freerdp-web commit (its MANIFEST), whose test-page.mjs checks the files.
 #
@@ -27,7 +29,7 @@ REPO=${GITHUB_REPOSITORY:-congzhangzh/rdp-release-kit}
 DL=$(mktemp -d)
 trap 'rm -rf "$DL"' EXIT
 gh release download "$TAG" -R "$REPO" -D "$DL" -p SHA256SUMS -p 'freerdp-web-*.zip' \
-    -p demo.json -p '*.mp4' -p '*.jpg' > /dev/null
+    -p demo.json -p '*.mp4' -p '*.jpg' -p install.json > /dev/null
 (cd "$DL" && sha256sum -c --ignore-missing --quiet SHA256SUMS) ||
     { echo "site.sh: $TAG: a file does not match its SHA256SUMS" >&2; exit 1; }
 zip=$(find "$DL" -maxdepth 1 -name 'freerdp-web-*.zip' | head -1)
@@ -41,6 +43,7 @@ page=$(sed -n 's/^page: freerdp-web \([0-9a-f]\{40\}\).*/\1/p' "$SITE/MANIFEST")
 # directories such as the page's .well-known/
 touch "$SITE/.nojekyll"
 echo "$TAG" > "$SITE/RELEASE"
+[ ! -f "$DL/install.json" ] || cp "$DL/install.json" "$SITE/"
 
 python3 - "$DL" "$SITE/demo" "$KIT/build/site-anchors.json" << 'EOF'
 import json, os, shutil, sys

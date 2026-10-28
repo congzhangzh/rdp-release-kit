@@ -4,7 +4,11 @@
 # (its marks), and a command that downloads and installs them on x86_64
 # and ARM64 alike:
 #
-#   build/xrdp-install-notes.sh <dir> <download URL>
+#   build/xrdp-install-notes.sh [--json] <dir> <download URL>
+#
+# --json prints the same as data for the site's "Get a server" page (the
+# release's install.json): {"server": [{"name", "sessions", "command",
+# "more": [{"what", "command"}]}], "start"}.
 #
 # <dir> holds the release's assets (the xrdp, xorgxrdp and, for Fedora,
 # pipewire-module-xrdp packages, named as uploaded: '~' and '+' are '.'),
@@ -15,6 +19,8 @@
 set -euo pipefail
 
 KIT=$(cd "$(dirname "$0")/.." && pwd)
+JSON=
+[ "${1:-}" != --json ] || { JSON=1; shift; }
 DIR=$1 URL=$2
 ENGINE=${ENGINE:-$(command -v docker || command -v podman)}
 
@@ -22,9 +28,21 @@ ENGINE=${ENGINE:-$(command -v docker || command -v podman)}
 asset() { (cd "$DIR" && find . -maxdepth 1 -name "$1" -printf '%f\n' | head -1); }
 # Fedora's xorgxrdp commands, printed after the table
 XORG=$(mktemp)
-trap 'rm -f "$XORG"' EXIT
+trap 'rm -f "$XORG" "$XORG.rows"' EXIT
 
-cat << 'EOF'
+START='sudo systemctl enable --now xrdp'
+# one release's row: name, sessions, command, and Fedora's xorgxrdp command
+row() {
+    if [ -n "$JSON" ]; then
+        jq -cn --arg n "$1" --arg s "$2" --arg c "$3" --arg x "${4:-}" \
+            '{name: $n, sessions: $s, command: $c,
+              more: (if $x == "" then [] else [{what: "Xorg session (xorgxrdp)", command: $x}] end)}'
+    else
+        printf '| %s | %s | `%s` |\n' "$1" "$2" "$3"
+    fi
+}
+
+[ -n "$JSON" ] || cat << 'EOF'
 ## Install xrdp
 
 The packages hold our release of xrdp (its development branch with Wayland
@@ -39,6 +57,7 @@ Debian and Ubuntu keep Xorg as the default.
 |---|---|---|
 EOF
 grep -v -E '^\s*(#|$)' "$KIT/distros.list" | while read -r image rest; do
+    xorg=
     # shellcheck disable=SC2016 # expanded by the container shell
     distro=$("$ENGINE" run --rm "$image" sh -c '. /etc/os-release; echo "$ID-${VERSION_ID:-$VERSION_CODENAME}"')
     wayland=GNOME
@@ -57,6 +76,7 @@ grep -v -E '^\s*(#|$)' "$KIT/distros.list" | while read -r image rest; do
             [ -n "$f" ] || { echo "xrdp-install-notes.sh: no $p for $distro in $DIR" >&2; exit 1; }
             f="$URL/${f%.x86_64.rpm}.\$(uname -m).rpm"
             if [ $p = xorgxrdp ]; then
+                xorg="sudo dnf install $f"
                 # shellcheck disable=SC2016 # Markdown's backquotes
                 printf -- '- %s: `sudo dnf install %s`\n' "$name" "$f" >> "$XORG"
             else
@@ -79,8 +99,13 @@ grep -v -E '^\s*(#|$)' "$KIT/distros.list" | while read -r image rest; do
         # Debian and Ubuntu package PipeWire's xrdp module themselves
         cmd+=" && sudo apt install ./xrdp_*.deb ./xorgxrdp_*.deb pipewire-module-xrdp" ;;
     esac
-    printf '| %s | %s | `%s` |\n' "$name" "$sessions" "$cmd"
-done
+    row "$name" "$sessions" "$cmd" "$xorg"
+done > "$XORG.rows"
+if [ -n "$JSON" ]; then
+    jq -s --arg start "$START" '{server: ., start: $start}' "$XORG.rows"
+    exit 0
+fi
+cat "$XORG.rows"
 cat << 'EOF'
 
 On Fedora, the Xorg session needs this release's xorgxrdp as well (not
