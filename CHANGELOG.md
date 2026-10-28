@@ -13,6 +13,16 @@ toolchain) gets an entry here in the same commit.
 
 ## 2026-10-28
 
+- **FreeRDP `release-20261028.1`** (`b53133ba`): integration-latest rebuilt on master
+  `670e10b29`. Upstream merged four of our pull requests today, which drop out of the
+  integration: the Web Audio microphone (#13811), no connection dialog window (#13860), SDL3
+  clipboard events with every field set (#13872) and hotkeys from the key event's own modifiers
+  (#13852). Master also brings upstream's hardening (invalid order bounds, messages and
+  fastpath input before activation, the brush cache, H.264 reset bounds, smartcard strings)
+  and 39 other commits. Still carried: the browser clipboard (#13733), the MessageChannel yield
+  (#13864), the page's monitors (#13865) and the physical monitor size (#13805). Tested before
+  the pick: Linux and Windows clients built from it, xrdp logins on Fedora 45 (19/19) and
+  Debian 13 (12/12), browser logins with Asyncify and JSPI (5/5 each).
 - **freerdp-web `20261028.1`** (`cb551db5`): no change to the page itself; its screens tests.
   `test-screens-wlup.mjs` waited for a dark canvas before Separate screens, and GNOME's overview
   right after login is dark too: on a slow server foot opened only after the layout change (12

@@ -7,17 +7,17 @@
 # name      version  url                                                                                      sha256
 # FreeRDP, for every client (Linux, Windows, macOS, web): our release, not an
 # upstream one. A ripe commit of our integration-latest, picked on the fork as
-# release-<YYYYMMDD>.<N>: FreeRDP master b2403bb99 (2026-10-23) plus five open
+# release-<YYYYMMDD>.<N>: FreeRDP master 670e10b29 (2026-10-28) plus three open
 # pull requests whose code compiles under Emscripten only, the browser
-# clipboard (#13733), the Web Audio microphone (#13811), the MessageChannel
-# yield (#13864), the page's monitors (#13865) and no connection dialog window
-# (#13860), and three for every client: SDL3 clipboard events with every field
-# set (#13872), hotkeys read from the key event's own modifiers (#13852) and the
-# physical monitor size in millimetres, not pixels (#13805). Master has the
-# rest of ours: AV1 (#13731), sound (#13732), H.264 through WebCodecs
-# (#13812), #13838, #13839, and the Opus microphone fix (#13810, which 3.32.2
-# lacks)
-freerdp     20261027.1 git+https://github.com/congzhangzh/FreeRDP.git                                        1ba0aa521abb05ab8a857ebc7f1d63766b5673d8
+# clipboard (#13733), the MessageChannel yield (#13864) and the page's monitors
+# (#13865), and one for every client: the physical monitor size in
+# millimetres, not pixels (#13805). Master has the rest of ours: AV1 (#13731),
+# sound (#13732), H.264 through WebCodecs (#13812), #13838, #13839, the Opus
+# microphone fix (#13810, which 3.32.2 lacks), and since 2026-10-28 the Web
+# Audio microphone (#13811), no connection dialog window (#13860), SDL3
+# clipboard events with every field set (#13872) and hotkeys read from the key
+# event's own modifiers (#13852)
+freerdp     20261028.1 git+https://github.com/congzhangzh/FreeRDP.git                                        b53133babf818f4e59cfac967326d6399c470091
 sdl3        3.4.18   https://github.com/libsdl-org/SDL/releases/download/release-3.4.18/SDL3-3.4.18.tar.gz        9c75cf16330322c217dedd2e0609f1124f1b54b8633e763467b4684d0f4334a3
 sdl3_ttf    3.2.2    https://github.com/libsdl-org/SDL_ttf/releases/download/release-3.2.2/SDL3_ttf-3.2.2.tar.gz   63547d58d0185c833213885b635a2c0548201cc8f301e6587c0be1a67e1e045d
 freetype    2.15.0   https://download.savannah.gnu.org/releases/freetype/freetype-2.15.0.tar.xz                   93cd47eb719c325107f2d3cf087d06299e944c3b48a40b55537302304dea1dd5
