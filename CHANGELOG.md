@@ -11,6 +11,21 @@ from right now, and what our own changes to a source fix:
 Every change that alters what is built (a pin, a build option, a patch, a
 toolchain) gets an entry here in the same commit.
 
+## 2026-10-28
+
+- **freerdp-web `20261028.1`** (`cb551db5`): no change to the page itself; its screens tests.
+  `test-screens-wlup.mjs` waited for a dark canvas before Separate screens, and GNOME's overview
+  right after login is dark too: on a slow server foot opened only after the layout change (12
+  of 30 runs with the GNOME server held to one CPU), and the windows-stay check failed for
+  another reason than the Mutter race it tests. foot now has a background of its own and the
+  test waits for it (9 of 9 in time). Both screens tests closing the second window could hang
+  on a `window.close()` that never answers (3 times in 60 runs); they wait 5 s at most. Local
+  ladder with them: Xorg (Debian's xrdp and ours) and GNOME passed; KDE runs in CI only (it
+  needs `/dev/udmabuf`).
+- **`test/wasm-session.sh`**: `EXTRA_RPMS=<dir>` installs more Fedora 45 packages into the
+  GNOME image (used to test a patched Mutter), and the image's `pkgs/` is fresh each run: it
+  kept every earlier run's packages.
+
 ## 2026-10-27
 
 - **The GNOME All screens check is a known failure**: `test/screens.sh` keeps a list of
