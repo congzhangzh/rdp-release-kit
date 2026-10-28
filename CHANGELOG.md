@@ -13,6 +13,9 @@ toolchain) gets an entry here in the same commit.
 
 ## 2026-10-28
 
+- **freerdp-web `20261028.10`** (`9f3ede1`): English and Simplified Chinese, following the
+  browser's language (English the default; the 🌐 Language switch overrides it), and About with
+  a row per decoder.
 - **The install table's sessions, a line per kind** (聪哥: Wayland and Xorg on one line
   confused): "Wayland: GNOME, KDE Plasma, sway; Xorg: the default session" (Debian, Ubuntu) and
   "Wayland: GNOME (the default), KDE Plasma, sway; Xorg: with xorgxrdp, below" (Fedora), in
