@@ -13,6 +13,10 @@ toolchain) gets an entry here in the same commit.
 
 ## 2026-10-28
 
+- **freerdp-web `20261028.5`** (`1f38b97`; `20261028.4` before it): a second mascot, 蛮蛮, the
+  paired bird of the Classic of Mountains and Seas (one wing and one eye each, they fly only
+  together), with a Twins / 蛮蛮 switch under the card, and its still picture for reduced
+  motion.
 - **freerdp-web `20261028.3`** (`fb688e9`): a mascot beside the tagline, entangled twins (you
   here, you in the cloud), a muted 10 s loop (66 KB) made with Google Gemini (Veo); still for
   reduced motion, gone during a session.
