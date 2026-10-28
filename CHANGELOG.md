@@ -13,6 +13,15 @@ toolchain) gets an entry here in the same commit.
 
 ## 2026-10-28
 
+- **Demo titles in one pattern** (聪哥): `<server> + <desktop> <Wayland|Xorg>[, <codec>][ / Two
+  monitors]`, a codec only where the server's log names it (xrdp's AV1 encoder, the two-screen
+  demo's too): "xrdp + GNOME Wayland, AV1 / Two monitors" (was "…, two screens") and
+  "upstream xrdp + Xfce Xorg" (was "upstream xrdp + Xfce"); the others already fit.
+- **The browser login test reloads a page that is not cross-origin isolated after 15 s**
+  (`test/wasm-session.mjs`): served without COOP/COEP, the page is isolated only after
+  coi-serviceworker's reload, which a cold Chrome sometimes lost; the screens ladder's rung 1
+  then failed before the login began (runs 40717903650 and 40722131197, a different Xorg server
+  each time; rung 2 passed against the same server).
 - **freerdp-web `20261028.5`** (`1f38b97`; `20261028.4` before it): a second mascot, 蛮蛮, the
   paired bird of the Classic of Mountains and Seas (one wing and one eye each, they fly only
   together), with a Twins / 蛮蛮 switch under the card, and its still picture for reduced

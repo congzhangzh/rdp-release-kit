@@ -64,7 +64,14 @@ if (!/^http:\/\/(127\.0\.0\.1|localhost)[:/]/.test(url)) {
 await send("Runtime.enable"); await send("Page.enable"); await send("Log.enable");
 await send("Page.navigate", { url });
 let isolated = false;
-for (let i = 0; i < 100 && !isolated; i++) { await sleep(300); isolated = await ev("self.crossOriginIsolated === true"); }
+for (let i = 0; i < 100 && !isolated; i++) {
+  await sleep(300);
+  isolated = await ev("self.crossOriginIsolated === true");
+  // served without COOP/COEP, the page is isolated only after coi-serviceworker's reload; on a
+  // cold Chrome (a job's first page) that reload was sometimes lost, and the login never began
+  // (screens rung 1 in CI, 2026-10-28): reload once ourselves halfway
+  if (!isolated && i === 49) { console.log("not cross-origin isolated after 15 s: reloading once"); await send("Page.reload"); }
+}
 console.log(`cross-origin isolated: ${isolated}`);
 if (!isolated) done(1);
 
