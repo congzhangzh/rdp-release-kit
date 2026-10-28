@@ -1,11 +1,14 @@
 #!/bin/bash
 # Prints the tag of a pre-release (docs/RELEASE.md, "Frozen releases"):
 #
-#   prerelease-tag.sh <kind> <title>      kind: web, xrdp, pipewire-module-xrdp, demo, release
+#   prerelease-tag.sh <kind> <key>        kind: web, xrdp, pipewire-module-xrdp, demo, release
 #
-# - A release with this title, published or a draft an earlier run left,
-#   keeps its tag: the title names the inputs and the kit commit, so a
-#   second run of one commit publishes nothing new.
+# - The key names the inputs and the kit commit. A release with this key,
+#   published or a draft an earlier run left, keeps its tag, so a second
+#   run of one commit publishes nothing new. The key is the marker
+#   "<!-- kit-key: <key> -->" in the notes (the workflows add it), the title
+#   then being "<name> <tag>"; releases from before 2026-10-28 have it as
+#   their title.
 # - Otherwise <kind>-<YYYYMMDD>.<N>-<kit commit, 12>: the UTC date, and N
 #   one more than the highest N of that kind and day among the releases
 #   (drafts too) and the tags (a tag can outlive its release). The date
@@ -25,8 +28,12 @@ case $KIND in
     *) echo "prerelease-tag.sh: unknown kind: $KIND" >&2; exit 1 ;;
 esac
 
-releases=$(gh api --paginate "repos/$REPO/releases?per_page=100" -q '.[] | [.tag_name, .name] | @tsv')
-earlier=$(awk -F'\t' -v t="$TITLE" '$2 == t { print $1; exit }' <<< "$releases")
+# a release's key: the marker line in its notes (kit-key: <key>), which
+# publishes it under a title that ends with its tag; before 2026-10-28 the
+# title itself was the key
+releases=$(gh api --paginate "repos/$REPO/releases?per_page=100" \
+    -q '.[] | [.tag_name, .name, (((.body // "") | capture("<!-- kit-key: (?<k>.*?) -->") | .k) // "")] | @tsv')
+earlier=$(awk -F'\t' -v t="$TITLE" '$2 == t || $3 == t { print $1; exit }' <<< "$releases")
 if [ -n "$earlier" ]; then
     echo "$earlier"
     exit 0

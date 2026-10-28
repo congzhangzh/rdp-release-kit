@@ -171,7 +171,7 @@ The site only ever gets a page and a client that the kit tested together:
 | 1 | freerdp-web | the page change on main; the site is untouched |
 | 2 | freerdp-web | the release: the version in the manifest, CHANGELOG, release notes, the tag `<YYYYMMDD>.<N>`, a GitHub Release. A tag publishes nothing |
 | 3 | the kit | pin it (`freerdp_web`), with any kit change it needs; push |
-| 4 | the kit | CI builds the client with that page, logs in, and publishes `web-<YYYYMMDD>.<N>-<kit commit>`, titled with the page commit |
+| 4 | the kit | CI builds the client with that page, logs in, and publishes `web-<YYYYMMDD>.<N>-<kit commit>`, keyed with the page commit |
 | 5 | the kit | once a release carries it: `gh workflow run site.yml -f release=<YYYYMMDD>.<N> -f publish=true` (empty release: the latest): freerdp-web's page test, a login from exactly the files going live (Asyncify and JSPI), then the deploy to `gh-pages`, then a login from the live site |
 
 A kit change may break the page: then step 4 fails, nothing new reaches
@@ -236,9 +236,11 @@ move while builds don't, and versions that only go up.
 
 ### Rules
 
-1. **Each pre-release records every input.** Its title names the source
+1. **Each pre-release records every input.** Its key names the source
    commit and the kit commit; its name, the date, the build number and
-   the kit commit. The kit commit fixes everything else
+   the kit commit. The key is a line `<!-- kit-key: <key> -->` in its
+   notes, and the title is "<what> <name>", so every title ends with its
+   tag (since 2026-10-28; before, the key was the title). The kit commit fixes everything else
    through `sources.lock`: FreeRDP, Emscripten, every dependency, the
    build scripts.
 
@@ -248,17 +250,19 @@ move while builds don't, and versions that only go up.
    a month later can differ. That is why a name is built and published
    once, and never again.
 
-   | Product | Name |
-   |---|---|
-   | Web client | `web-<YYYYMMDD>.<N>-<kit commit, 12>`, titled "Web client for freerdp-web <page commit, 12> (kit <kit commit, 12>)" |
-   | xrdp | `xrdp-<YYYYMMDD>.<N>-<kit commit, 12>`, titled "xrdp <version> <xrdp commit, 12> (kit <kit commit, 12>)"; until 2026-10-27 `xrdp-preview-…`, which keep their names |
-   | Release | `<YYYYMMDD>.<N>`, titled "FreeRDP preview <version> clients, xrdp <version> packages (kit <kit commit, 12>)"; made latest |
+   | Product | Name | Title | Key |
+   |---|---|---|---|
+   | Web client | `web-<YYYYMMDD>.<N>-<kit commit, 12>` | "Web client <name>" | "Web client for freerdp-web <page commit, 12> (kit <kit commit, 12>)" |
+   | xrdp | `xrdp-<YYYYMMDD>.<N>-<kit commit, 12>`; until 2026-10-27 `xrdp-preview-…`, which keep their names | "xrdp packages <name>" | "xrdp <version> <xrdp commit, 12> (kit <kit commit, 12>)" |
+   | PipeWire's xrdp module | `pipewire-module-xrdp-<YYYYMMDD>.<N>-<kit commit, 12>` | "pipewire-module-xrdp for Fedora <releases> <name>" | "pipewire-module-xrdp <version> (<commit, 12>) for Fedora <releases> (inputs <hash, 12>)" |
+   | Demo videos | `demo-<YYYYMMDD>.<N>-<kit commit, 12>` | "Demo videos <name>" | "Demo videos with <web pre-release> (kit <kit commit, 12>)" |
+   | Release | `<YYYYMMDD>.<N>`; made latest | "RDP All in One (browser, clients, server) <name>" | "FreeRDP <version> clients, xrdp <version> packages (kit <kit commit, 12>)" |
 
    Pre-releases are made continuously, so they are named by date (since
    21 October 2026): the UTC date of the build and N, that day's build
    number of that kind (`build/prerelease-tag.sh`). The name sorts and
-   says how new a build is; the title names its inputs, and a second run
-   of one kit commit finds its title and keeps the name, so it publishes
+   says how new a build is; the key names its inputs, and a second run
+   of one kit commit finds its key and keeps the name, so it publishes
    nothing new. N counts drafts and tags without a release too, so a name
    is never used twice. Two kit commits published at the same moment can
    get the same N; their kit commits still keep the names apart. Names
@@ -277,7 +281,8 @@ move while builds don't, and versions that only go up.
    publish jobs share a `concurrency` group per tag.
 3. **Pointers move; releases don't.** "The newest tested web client" is a
    query: the newest published `web-*`, as `site.sh` reads it now. "The
-   client for page P" is the newest web pre-release titled for P. A moving git tag such
+   client for page P" is the newest web pre-release keyed for P
+   (freerdp-web's `kit-release.sh` reads the key's page commit). A moving git tag such
    as `web-latest` is not used, because a moving tag is exactly what rule
    2 forbids.
 4. **A version is one set of bytes.** A package keeps the upstream

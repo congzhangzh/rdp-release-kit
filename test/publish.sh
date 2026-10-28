@@ -32,12 +32,13 @@ echo "$*" >> "$S/gh.log"
 [ -f "$S/offline" ] && { echo "error connecting to api.github.com" >&2; exit 1; }
 notfound() { echo "gh: Not Found (HTTP 404)" >&2; exit 1; }
 if [ "$1 $2" = "release create" ]; then
-    tag=$3; shift 3; files=() title= pre=false
+    tag=$3; shift 3; files=() title= pre=false body=
     while [ $# -gt 0 ]; do
         case $1 in
             --title) title=$2; shift 2 ;;
             --prerelease) pre=true; shift ;;
-            --repo | --target | --notes) shift 2 ;;
+            --notes) body=$2; shift 2 ;;
+            --repo | --target) shift 2 ;;
             --*) shift ;;
             *) files+=("$(basename "$1") sha256:$(sha256sum < "$1" | cut -d' ' -f1)"); shift ;;
         esac
@@ -45,8 +46,8 @@ if [ "$1 $2" = "release create" ]; then
     [ -f "$S/drop" ] && unset 'files[-1]'
     [ -f "$S/corrupt" ] && files[-1]="${files[-1]% *} sha256:0000"
     id=$((100 + $(jq length "$S/releases.json")))
-    jq --arg t "$tag" --arg n "$title" --argjson id "$id" --argjson pre "$pre" \
-        '. + [{id: $id, tag_name: $t, name: $n, draft: true, prerelease: $pre,
+    jq --arg t "$tag" --arg n "$title" --arg b "$body" --argjson id "$id" --argjson pre "$pre" \
+        '. + [{id: $id, tag_name: $t, name: $n, body: $b, draft: true, prerelease: $pre,
                assets: [$ARGS.positional[] | split(" ") | {name: .[0], digest: .[1]}]}]' \
         "$S/releases.json" --args "${files[@]}" > "$S/r" && mv "$S/r" "$S/releases.json"
     exit 0
@@ -103,7 +104,7 @@ publish() { # <tag> <file>...; output in $out, exit status in $rc
     shift
     out=$(cd "$TMP" && PATH="$TMP/bin:$PATH" STATE="$TMP/state" GH_TOKEN=x \
         GITHUB_REPOSITORY=o/r GITHUB_SHA=0123456789abcdef LATEST=${LATEST:-} \
-        "$KIT/build/publish-prerelease.sh" "$tag" "${TITLE:-title}" notes "$@" 2>&1)
+        "$KIT/build/publish-prerelease.sh" "$tag" "${TITLE:-title}" "${NOTES:-notes}" "$@" 2>&1)
     rc=$?
 }
 published() { jq -r --arg t "$1" '[.[] | select(.tag_name == $t and (.draft | not))] | length' "$TMP/state/releases.json"; }
@@ -217,6 +218,21 @@ name release "FreeRDP 3.32.2 clients, xrdp 0.10.6.1 (kit k2)" fedcba9876543210
 check "the next one that day is .2; other kinds don't count" '[ "$out" = 20261021.2 ]'
 name stable "x"
 check "an unknown kind is refused" '[ $rc != 0 ]'
+# since 2026-10-28 the title ends with the tag; the key is a marker in the notes
+fresh
+key="Web client for freerdp-web p1 (kit k1)"
+name web "$key"
+first=$out
+TITLE="Web client $first" NOTES="the notes"$'\n\n'"<!-- kit-key: $key -->" publish "$first" client.zip
+name web "$key"
+check "a key in the notes finds the release whose title is its tag" '[ "$out" = "$first" ]'
+name web "Web client for freerdp-web p2 (kit k1)"
+check "another key is the next name" '[ "$out" = web-20261021.2-0123456789ab ]'
+name release "FreeRDP f1 clients, xrdp x1 packages (kit k1)"
+release=$out
+TITLE="RDP All in One (browser, clients, server) $release" NOTES="notes"$'\n\n'"<!-- kit-key: FreeRDP f1 clients, xrdp x1 packages (kit k1) -->" publish "$release" client.zip
+name release "FreeRDP f1 clients, xrdp x1 packages (kit k1)"
+check "the kit's release too" '[ "$out" = "$release" ] && [ "$out" = 20261021.1 ]'
 fresh
 touch "$TMP/state/offline"
 name web "Web client for freerdp-web p1 (kit k1)"

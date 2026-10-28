@@ -13,6 +13,15 @@ toolchain) gets an entry here in the same commit.
 
 ## 2026-10-28
 
+- **Release titles end with their tag** (聪哥's wish): the rolling release is "RDP All in
+  One (browser, clients, server) `<YYYYMMDD>.<N>`", the pre-releases "Web client
+  `web-…`", "xrdp packages `xrdp-…`", "pipewire-module-xrdp for Fedora … `pipewire-module-xrdp-…`"
+  and "Demo videos `demo-…`". The title was also the key that names a build's inputs and
+  keeps a second run of one commit from publishing again; the key is now a line
+  `<!-- kit-key: … -->` in the notes, and `build/prerelease-tag.sh` matches either, so
+  releases published before keep theirs. freerdp-web's `kit-release.sh` (967423b) reads the
+  page commit from the key too. "preview" leaves the rolling release's notes as well.
+  `test/publish.sh` 34/34.
 - **FreeRDP `release-20261028.1`** (`b53133ba`): integration-latest rebuilt on master
   `670e10b29`. Upstream merged four of our pull requests today, which drop out of the
   integration: the Web Audio microphone (#13811), no connection dialog window (#13860), SDL3

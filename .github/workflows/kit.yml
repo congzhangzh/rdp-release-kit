@@ -279,8 +279,10 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           read -r version sha < <(awk '$1 == "xrdp" { print $2, $4 }' sources.lock)
-          title="xrdp $version ${sha:0:12} (kit ${GITHUB_SHA:0:12})"
-          tag=$(build/prerelease-tag.sh xrdp "$title")
+          # the key names the inputs (build/prerelease-tag.sh); the title ends with the tag
+          key="xrdp $version ${sha:0:12} (kit ${GITHUB_SHA:0:12})"
+          tag=$(build/prerelease-tag.sh xrdp "$key")
+          title="xrdp packages $tag"
           # release assets are flat, and GitHub turns '~' and '+' in their
           # names into '.': give the files those names first, so SHA256SUMS
           # matches what is downloaded
@@ -291,7 +293,7 @@ jobs:
             cp "$f" "upload/$(basename "$f" | tr '~+' '..')"
           done
           (cd upload && sha256sum -- *.deb *.rpm > SHA256SUMS)
-          notes=$(build/release-notes.sh "xrdp $version, our release of xrdp (fork release-$version, commit $sha: its development branch with Wayland sessions for GNOME, KDE and sway, AV1 and pacing), and xorgxrdp's development branch, built and tested (an Xorg and a Wayland login) by rdp-release-kit $GITHUB_SHA. Published once, never replaced; the rolling release carries the same packages." xrdp)
+          notes=$(build/release-notes.sh "xrdp $version, our release of xrdp (fork release-$version, commit $sha: its development branch with Wayland sessions for GNOME, KDE and sway, AV1 and pacing), and xorgxrdp's development branch, built and tested (an Xorg and a Wayland login) by rdp-release-kit $GITHUB_SHA. Published once, never replaced; the rolling release carries the same packages." xrdp)$'\n\n'"<!-- kit-key: $key -->"
           build/publish-prerelease.sh "$tag" "$title" "$notes" upload/*
 
   # PipeWire's xrdp module for Fedora (Fedora does not package it): its own
@@ -323,13 +325,14 @@ jobs:
           # dependencies, the packaging
           inputs=$({ grep '^pipewire_xrdp ' sources.lock; echo "$fedora x86_64 aarch64"; cat deps/rpm.txt build/package-rpm.sh; } |
               sha256sum | cut -c1-12)
-          title="pipewire-module-xrdp $version (${sha:0:12}) for Fedora $fedora (inputs $inputs)"
-          tag=$(build/prerelease-tag.sh pipewire-module-xrdp "$title")
+          key="pipewire-module-xrdp $version (${sha:0:12}) for Fedora $fedora (inputs $inputs)"
+          tag=$(build/prerelease-tag.sh pipewire-module-xrdp "$key")
+          title="pipewire-module-xrdp for Fedora $fedora $tag"
           mkdir -p upload
           find dist/xrdp -type f -name 'pipewire-module-xrdp-*.rpm' -exec cp {} upload/ \;
           ls upload/*.rpm > /dev/null
           (cd upload && sha256sum -- *.rpm > SHA256SUMS)
-          notes=$(build/release-notes.sh "PipeWire's xrdp module (the sink and source that carry an xrdp session's sound and microphone), release v$version of neutrinolabs/pipewire-module-xrdp ($sha), unpatched, built by rdp-release-kit $GITHUB_SHA for Fedora $fedora, which does not package it. Debian 12 (backports), 13 and Ubuntu 24.04 and newer package it themselves (apt install pipewire-module-xrdp). Published once, never replaced; a new one only when its inputs change." xrdp)
+          notes=$(build/release-notes.sh "PipeWire's xrdp module (the sink and source that carry an xrdp session's sound and microphone), release v$version of neutrinolabs/pipewire-module-xrdp ($sha), unpatched, built by rdp-release-kit $GITHUB_SHA for Fedora $fedora, which does not package it. Debian 12 (backports), 13 and Ubuntu 24.04 and newer package it themselves (apt install pipewire-module-xrdp). Published once, never replaced; a new one only when its inputs change." xrdp)$'\n\n'"<!-- kit-key: $key -->"
           build/publish-prerelease.sh "$tag" "$title" "$notes" upload/*
 
   # The web client builds at once; only its login test waits for xrdp
@@ -436,8 +439,10 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           page=$(awk '$1 == "freerdp_web" { print $4 }' sources.lock)
-          title="Web client for freerdp-web ${page:0:12} (kit ${GITHUB_SHA:0:12})"
-          tag=$(build/prerelease-tag.sh web "$title")
+          # freerdp-web's kit-release.sh reads the page commit from the key
+          key="Web client for freerdp-web ${page:0:12} (kit ${GITHUB_SHA:0:12})"
+          tag=$(build/prerelease-tag.sh web "$key")
+          title="Web client $tag"
           mkdir -p dist/handoff
           cp dist/wasm/freerdp-web-*.zip dist/handoff/freerdp-web-page.zip
           echo "$GITHUB_SHA" > dist/handoff/KIT_COMMIT
@@ -447,7 +452,7 @@ jobs:
           done
           (cd dist/handoff && sha256sum freerdp-web-page.zip > freerdp-web-page.zip.sha256 &&
             sha256sum -- * > ../SHA256SUMS && mv ../SHA256SUMS .)
-          notes=$(build/release-notes.sh "The web client for freerdp-web $page, built and tested (a browser login to xrdp over SSH) by rdp-release-kit $GITHUB_SHA. freerdp-web's workflow publishes it. Not a kit release. Published once, never replaced." web)
+          notes=$(build/release-notes.sh "The web client for freerdp-web $page, built and tested (a browser login to xrdp over SSH) by rdp-release-kit $GITHUB_SHA. freerdp-web's workflow publishes it. Not a kit release. Published once, never replaced." web)$'\n\n'"<!-- kit-key: $key -->"
           build/publish-prerelease.sh "$tag" "$title" "$notes" dist/handoff/*
 
       - uses: actions/upload-artifact@v7
@@ -647,11 +652,12 @@ jobs:
           freerdp=$(awk '$1 == "freerdp" { print $2 }' sources.lock)
           freerdp_commit=$(awk '$1 == "freerdp" { print $4 }' sources.lock)
           xrdp=$(awk '$1 == "xrdp" { print $2 }' sources.lock)
-          title="FreeRDP preview $freerdp clients, xrdp $xrdp packages (kit ${GITHUB_SHA:0:12})"
-          tag=$(build/prerelease-tag.sh release "$title")
+          key="FreeRDP $freerdp clients, xrdp $xrdp packages (kit ${GITHUB_SHA:0:12})"
+          tag=$(build/prerelease-tag.sh release "$key")
+          title="RDP All in One (browser, clients, server) $tag"
           # a row per distribution: sessions, direct links, the command
           install=$(build/xrdp-install-notes.sh upload "https://github.com/$GITHUB_REPOSITORY/releases/download/$tag")
-          summary="Rolling release $tag of rdp-release-kit, built and tested from $GITHUB_SHA: FreeRDP's SDL3 client for Linux, Windows and macOS, built from our preview of FreeRDP master (preview $freerdp, commit ${freerdp_commit:0:12}, with the fixes upstream has merged since its last release, such as the Opus microphone), each with freerdp-tk (a window to save and open connections) and the Python that runs it, and our xrdp for Debian, Ubuntu and Fedora (Xorg and Wayland sessions: GNOME, KDE, sway), on x86_64 and ARM64. Published once, never replaced.
+          summary="Rolling release $tag of rdp-release-kit, built and tested from $GITHUB_SHA: FreeRDP's SDL3 client for Linux, Windows and macOS, built from our release of FreeRDP master ($freerdp, commit ${freerdp_commit:0:12}, with the fixes upstream has merged since its last release, such as the Opus microphone), each with freerdp-tk (a window to save and open connections) and the Python that runs it, and our xrdp for Debian, Ubuntu and Fedora (Xorg and Wayland sessions: GNOME, KDE, sway), on x86_64 and ARM64. Published once, never replaced.
 
           ## Download and run
 
@@ -670,5 +676,5 @@ jobs:
           $install
 
           The demo videos (\`xrdp-original-*.mp4\` with xrdp's upstream release as Debian 13 ships it, \`xrdp-gnome*.mp4\`, \`xrdp-kde.mp4\` with this release's xrdp, \`grd-gnome.mp4\`, \`demo.json\`) are this build's web client and xrdp, recorded on throwaway servers: everything shown is synthetic. Big Buck Bunny © Blender Foundation, CC BY 3.0; WebGL Aquarium © Google, BSD."
-          notes=$(build/release-notes.sh "$summary" linux windows macos web xrdp)
+          notes=$(build/release-notes.sh "$summary" linux windows macos web xrdp)$'\n\n'"<!-- kit-key: $key -->"
           LATEST=1 build/publish-prerelease.sh "$tag" "$title" "$notes" upload/*

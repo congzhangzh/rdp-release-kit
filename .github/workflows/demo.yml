@@ -159,9 +159,10 @@ jobs:
           EOF
           (cd dist/demo && sha256sum -- * > ../SHA256SUMS && mv ../SHA256SUMS .)
           web=$(python3 -c 'import json; print(json.load(open("dist/demo/demo.json"))["recorded"]["web"])')
-          title="Demo videos with $web (kit ${KIT_SHA:0:12})"
-          tag=$(build/prerelease-tag.sh demo "$title")
-          notes="The demo videos of freerdp-web's splash, recorded by rdp-release-kit's test/record-demos.sh with the pre-releases demo.json names, on throwaway servers: everything shown is synthetic. Big Buck Bunny © Blender Foundation, CC BY 3.0; WebGL Aquarium © Google, BSD. Published once, never replaced."
+          key="Demo videos with $web (kit ${KIT_SHA:0:12})"
+          tag=$(build/prerelease-tag.sh demo "$key")
+          title="Demo videos $tag"
+          notes="The demo videos of freerdp-web's splash, recorded by rdp-release-kit's test/record-demos.sh with the pre-releases demo.json names, on throwaway servers: everything shown is synthetic. Big Buck Bunny © Blender Foundation, CC BY 3.0; WebGL Aquarium © Google, BSD. Published once, never replaced."$'\n\n'"<!-- kit-key: $key -->"
           build/publish-prerelease.sh "$tag" "$title" "$notes" dist/demo/*
 
       # the same files for the kit's release
