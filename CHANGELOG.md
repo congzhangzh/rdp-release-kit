@@ -13,9 +13,10 @@ toolchain) gets an entry here in the same commit.
 
 ## 2026-10-28
 
-- **freerdp-web `20261028.7`** (`58f184f`; `20261028.6` before it): the slogan "You here, you in
+- **freerdp-web `20261028.8`** (`20261028.6` and `.7` before it): the slogan "You here, you in
   the cloud: one desktop.", 蛮蛮 and the twins take turns beside the tagline, like a marquee,
-  without caption or buttons; the mascot videos play for everyone.
+  without caption or buttons; each plays to its end and holds 3 s; the mascot videos play for
+  everyone.
 - **Demo titles in one pattern** (聪哥): `<server> + <desktop> <Wayland|Xorg>[, <tag>]...`, the
   tags comma-separated (the codec first, only where the server's log names it: xrdp's AV1
   encoder, the two-screen demo's too; then Two monitors; new tags at the end): "xrdp + GNOME
