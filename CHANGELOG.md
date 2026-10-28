@@ -15,9 +15,10 @@ toolchain) gets an entry here in the same commit.
 
 - **freerdp-web `20261028.6`** (`2de5f94`): the slogan "You here, you in the cloud: one
   desktop." and the mascot take turns beside the tagline; the mascot video plays for everyone.
-- **Demo titles in one pattern** (聪哥): `<server> + <desktop> <Wayland|Xorg>[, <codec>][ / Two
-  monitors]`, a codec only where the server's log names it (xrdp's AV1 encoder, the two-screen
-  demo's too): "xrdp + GNOME Wayland, AV1 / Two monitors" (was "…, two screens") and
+- **Demo titles in one pattern** (聪哥): `<server> + <desktop> <Wayland|Xorg>[, <tag>]...`, the
+  tags comma-separated (the codec first, only where the server's log names it: xrdp's AV1
+  encoder, the two-screen demo's too; then Two monitors; new tags at the end): "xrdp + GNOME
+  Wayland, AV1, Two monitors" (was "…, two screens") and
   "upstream xrdp + Xfce Xorg" (was "upstream xrdp + Xfce"); the others already fit.
 - **The browser login test reloads a page that is not cross-origin isolated after 15 s**
   (`test/wasm-session.mjs`): served without COOP/COEP, the page is isolated only after
