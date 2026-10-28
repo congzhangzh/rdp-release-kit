@@ -26,7 +26,8 @@
 # packages dir then holds the kit's Fedora 45 packages (default
 # dist/xrdp/fedora-45). MUTTER_DEBUG=<topics> (Mutter's, e.g.
 # geometry,window-state) turns them on in the session; the session's whole
-# journal is then kept as session.journal.
+# journal is then kept as session.journal. EXTRA_RPMS=<dir> installs all
+# the packages in <dir> too (Fedora 45), e.g. a patched Mutter.
 #
 # SERVER=xrdp-kde: KDE Plasma on Wayland through the kit's xrdp, with AV1
 # (test/xrdp-kde/: Arch with KWin 6.8, xrdp compiled there from the pinned
@@ -171,11 +172,14 @@ if [ "$SERVER" = xrdp-gnome ]; then
     IMAGE=kit-xrdp-gnome:f45 HOST=rdp-gnome
     ls "$PKGS"/xrdp-*.fc45.x86_64.rpm > /dev/null 2>&1 || { echo "no Fedora 45 xrdp packages in $PKGS" \
         "(./build-xrdp.sh fedora:45, or the *fc45* files of an xrdp-* pre-release)" >&2; exit 1; }
+    # a fresh copy each run: an earlier run's packages must not stay in the image
+    rm -rf "${ctx:?}/pkgs"
     mkdir -p "$ctx/pkgs"
     cp "$PKGS"/xrdp-*.fc45.x86_64.rpm "$ctx/pkgs/"
     # PipeWire's xrdp module, the session's sound (the kit's package; Fedora has none)
     cp "$PKGS"/pipewire-module-xrdp-*.fc45.x86_64.rpm "$ctx/pkgs/" 2> /dev/null ||
         { echo "no pipewire-module-xrdp *fc45* package in $PKGS (a pipewire-module-xrdp-* pre-release)" >&2; exit 1; }
+    [ -z "${EXTRA_RPMS:-}" ] || cp "$EXTRA_RPMS"/*.rpm "$ctx/pkgs/"
     # the user's systemd hands environment.d to the session, gnome-shell too
     [ -z "${MUTTER_DEBUG:-}" ] || printf 'RUN mkdir -p /etc/environment.d && echo MUTTER_DEBUG=%s > /etc/environment.d/90-mutter-debug.conf\n' \
         "$MUTTER_DEBUG" >> "$ctx/Dockerfile"
