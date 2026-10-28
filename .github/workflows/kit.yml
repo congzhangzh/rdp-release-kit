@@ -639,8 +639,10 @@ jobs:
   # The demo videos of this commit's web client and xrdp
   # (.github/workflows/demo.yml), published as the pre-release demo-* for
   # freerdp-web's splash and carried by the release below
+  # a push to main, or a run started by hand from main (a release a push alone does not make:
+  # a push that only moves the freerdp_web pin builds the web client, not a release)
   demo:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     needs: [wasm, xrdp-release, pipewire-xrdp-release]
     permissions:
       contents: write
@@ -654,7 +656,7 @@ jobs:
   # as GitHub's latest release, so releases/latest always leads to a tested
   # download (docs/RELEASE.md, "Products and channels")
   release:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     needs: [build, windows, macos, xrdp, mutter, wasm, demo]
     runs-on: ubuntu-24.04
     # one at a time across commits: each counts N from the releases before it,

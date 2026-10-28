@@ -13,6 +13,11 @@ toolchain) gets an entry here in the same commit.
 
 ## 2026-10-28
 
+- **A run started by hand from main releases like a push** (`kit.yml`, the demo and release
+  jobs): a push that only moves the freerdp_web pin builds only the web client (`changes.sh`:
+  "web"), so freerdp-web `20261028.10` got no rolling release and the site had nothing new to
+  publish; a run by hand builds everything ("all") but skipped the demos and the release. Now
+  `gh workflow run kit.yml --ref main` makes the release that publishes a page-only change.
 - **freerdp-web `20261028.10`** (`9f3ede1`): English and Simplified Chinese, following the
   browser's language (English the default; the 🌐 Language switch overrides it), and About with
   a row per decoder.

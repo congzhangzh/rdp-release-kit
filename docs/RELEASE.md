@@ -184,7 +184,10 @@ the site, and the page is fixed and released after it.
   xrdp packages from the newest `web-*` pre-release, and the push publishes
   that one pre-release, with no rolling release and no demos (nothing they
   hold changed). Anything else, a pull request and a run by hand build
-  everything.
+  everything. To put a page-only change on the site, start a run by hand
+  from main (`gh workflow run kit.yml --ref main`): it builds everything and,
+  like a push, records the demos and publishes a rolling release, which the
+  site workflow then publishes.
   What reaches people is still gated: the release holds only what every
   test passed, and freerdp-web's site changes only when it publishes.
 
