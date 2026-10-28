@@ -31,14 +31,17 @@ IN=$OUT/in
 rm -rf "$OUT"
 mkdir -p "$IN"
 
-# the pre-release of a family this commit published, by its title's
-# "(kit <commit, 12>)"; the newest of a family when the title names no commit
+# the pre-release of a family this commit published: its tag ends with
+# "-<commit, 12>" (<kind>-<YYYYMMDD>.<N>-<commit>), or before those names its
+# title with "(kit <commit, 12>)"; the newest of a family when the title names
+# no commit
 releases=$(gh api --paginate "repos/$REPO/releases?per_page=100" \
     -q '.[] | select(.draft | not) | [.published_at, .tag_name, .name] | @tsv' | sort -r)
 of_commit() {
     [ "$COMMIT" != newest ] || { newest "$1"; return; }
-    awk -F'\t' -v k="$1-" -v c="(kit ${COMMIT:0:12})" \
-        'index($2, k) == 1 && substr($3, length($3) - length(c) + 1) == c { print $2; exit }' <<< "$releases"
+    awk -F'\t' -v k="$1-" -v t="-${COMMIT:0:12}" -v c="(kit ${COMMIT:0:12})" \
+        'index($2, k) == 1 && (substr($2, length($2) - length(t) + 1) == t ||
+            substr($3, length($3) - length(c) + 1) == c) { print $2; exit }' <<< "$releases"
 }
 newest() { awk -F'\t' -v k="$1-" 'index($2, k) == 1 { print $2; exit }' <<< "$releases"; }
 # download <tag> <dir> <pattern>...: the files and SHA256SUMS, checked

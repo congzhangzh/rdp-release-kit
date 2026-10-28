@@ -13,6 +13,11 @@ toolchain) gets an entry here in the same commit.
 
 ## 2026-10-28
 
+- **The demo recordings find this commit's pre-releases by their tag**: `test/record-demos.sh`
+  looked for "(kit <commit>)" at the end of a title, which the new titles (`e68c530`) no
+  longer have, so run 40717903650 recorded nothing and published no rolling release. The tag
+  ends with the commit (`<kind>-<YYYYMMDD>.<N>-<commit>`); older releases are still found by
+  their title.
 - **GNOME's Mutter for Fedora 45, an opt-in** (聪哥's go): Fedora's own `mutter-51.0-1.fc45`
   source package (from Koji, pinned by SHA-256; the same files as the signed one on the
   mirrors) with our fix for a Wayland window that lands on the wrong monitor when the monitor
