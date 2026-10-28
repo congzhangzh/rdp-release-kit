@@ -39,9 +39,36 @@ XRDP_RPMS=$(abs "${XRDP_RPMS:-$KIT/dist/xrdp/fedora-45}")
 OUT=$KIT/dist/test/screens
 rm -rf "$OUT"; mkdir -p "$OUT"
 
+# Known failures: "<server>|<check, as the log names it>|<why>". A rung
+# above 1 whose failed checks are all known for its server is KNOWN, not
+# FAIL: the summary says so and the job stays green. Every other check of
+# that rung still counts, and a known check that passes is a plain pass.
+KNOWN=(
+    "xrdp-gnome|the session's windows stay on this window's screen|a race in Mutter: when the layout moves the window's monitor, a pending Wayland move takes the monitor under the window's old position, about half the time"
+)
+# known <server> <log>: the reasons, one per line, when every failed check
+# of the log is known for that server; nothing (and status 1) otherwise
+known() {
+    local server=$1 log=$2 check entry why found reasons=
+    local -a fails
+    mapfile -t fails < <(sed -n 's/^FAIL \([^ ].*\)/\1/p' "$log")
+    [ ${#fails[@]} -gt 0 ] || return 1
+    for check in "${fails[@]}"; do
+        found=
+        for entry in "${KNOWN[@]}"; do
+            [ "${entry%%|*}" = "$server" ] || continue
+            why=${entry#*|}
+            case $check in "${why%%|*}"*) found=${why#*|} ;; esac
+        done
+        [ -n "$found" ] || return 1
+        reasons+="$found"$'\n'
+    done
+    printf '%s' "$reasons" | sort -u
+}
+
 # rung <name> <n> <wasm-session.sh's output dir> <env>...: one rung on a
 # fresh server; its log and output kept as <name>-rung<n>, and one line of
-# results, "PASS|FAIL <what>", printed for the summary
+# results, "PASS|FAIL|SKIP|KNOWN <what>", printed for the summary
 rung() {
     local name=$1 n=$2 dir=$3 log=$OUT/$1-rung$2.log
     shift 3
@@ -59,8 +86,13 @@ rung() {
     else
         # one entry per test: "screens-separate: 20 checks", "...: 2 of 20 checks failed"
         local tests
+        local tests why
         tests=$(sed -n 's/^\(PASS\|FAIL\)  \(screens-[a-z]*: .*\)/\2/p' "$log" | sed 's/^screens-//' | paste -sd ';' - | sed 's/;/; /g')
-        echo "$([ $status = 0 ] && echo PASS || echo FAIL) ${tests:-did not run, see $name-rung$n.log}"
+        if [ $status != 0 ] && [ -n "$tests" ] && why=$(known "$name" "$log"); then
+            echo "KNOWN $tests (known failure: $(paste -sd ';' <<< "$why"))"
+        else
+            echo "$([ $status = 0 ] && echo PASS || echo FAIL) ${tests:-did not run, see $name-rung$n.log}"
+        fi
     fi
 }
 
@@ -83,6 +115,7 @@ for name in "${LADDER[@]}"; do
     case ${one%% *}/${many%% *} in
     PASS/PASS) verdict="passed" ;;
     PASS/SKIP) verdict="one monitor passed; this page has no All screens test for it" ;;
+    PASS/KNOWN) verdict="known failure only, see the All screens column" ;;
     PASS/FAIL) verdict="**several monitors only**: one monitor passes"; status=1 ;;
     FAIL/*) verdict="**basic**: one monitor fails already"; status=1 ;;
     esac

@@ -247,6 +247,12 @@ once whether a failure is basic (rung 1 fails already) or one of several
 monitors (rung 1 passes, the rung above fails). The CI's `screens` job runs
 it for each server on a runner of its own; nothing waits for it, so a red
 rung shows without holding a release back.
+A rung whose only failures are known ones (`KNOWN` in `test/screens.sh`:
+server, check, why) is marked KNOWN in the summary and stays green; any
+other failed check still fails it. Known today: `xrdp-gnome`'s "the
+session's windows stay on this window's screen", a race in Mutter (when
+the layout moves the window's monitor, a pending Wayland move takes the
+monitor under the window's old position, about half the time).
 
 `DEMO_VIDEO=demo.mp4 test/wasm-session.sh …` (with any `SERVER=`)
 records a demo instead, at 1920 × 1080 with sound: `test/wasm-demo.mjs`
