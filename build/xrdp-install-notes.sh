@@ -8,7 +8,8 @@
 #
 # --json prints the same as data for the site's "Get a server" page (the
 # release's install.json): {"server": [{"name", "sessions", "command",
-# "more": [{"what", "command"}]}], "start"}.
+# "more": [{"what", "command"}]}], "start"}. Where <dir> has the kit's Mutter
+# for a Fedora release (build/build-mutter.sh), its command is offered too.
 #
 # <dir> holds the release's assets (the xrdp, xorgxrdp and, for Fedora,
 # pipewire-module-xrdp packages, named as uploaded: '~' and '+' are '.'),
@@ -28,15 +29,18 @@ ENGINE=${ENGINE:-$(command -v docker || command -v podman)}
 asset() { (cd "$DIR" && find . -maxdepth 1 -name "$1" -printf '%f\n' | head -1); }
 # Fedora's xorgxrdp commands, printed after the table
 XORG=$(mktemp)
-trap 'rm -f "$XORG" "$XORG.rows"' EXIT
+trap 'rm -f "$XORG" "$XORG.rows" "$XORG.mutter"' EXIT
+: > "$XORG.mutter"
 
 START='sudo systemctl enable --now xrdp'
-# one release's row: name, sessions, command, and Fedora's xorgxrdp command
+# one release's row: name, sessions, command, and Fedora's xorgxrdp and
+# Mutter commands
 row() {
     if [ -n "$JSON" ]; then
-        jq -cn --arg n "$1" --arg s "$2" --arg c "$3" --arg x "${4:-}" \
+        jq -cn --arg n "$1" --arg s "$2" --arg c "$3" --arg x "${4:-}" --arg m "${5:-}" \
             '{name: $n, sessions: $s, command: $c,
-              more: (if $x == "" then [] else [{what: "Xorg session (xorgxrdp)", command: $x}] end)}'
+              more: ([if $x == "" then empty else {what: "Xorg session (xorgxrdp)", command: $x} end,
+                      if $m == "" then empty else {what: "Optional: GNOME'"'"'s Mutter with our fix for windows on the wrong monitor (GNOME/mutter!5438)", command: $m} end])}'
     else
         printf '| %s | %s | `%s` |\n' "$1" "$2" "$3"
     fi
@@ -57,7 +61,7 @@ Debian and Ubuntu keep Xorg as the default.
 |---|---|---|
 EOF
 grep -v -E '^\s*(#|$)' "$KIT/distros.list" | while read -r image rest; do
-    xorg=
+    xorg= mutter=
     # shellcheck disable=SC2016 # expanded by the container shell
     distro=$("$ENGINE" run --rm "$image" sh -c '. /etc/os-release; echo "$ID-${VERSION_ID:-$VERSION_CODENAME}"')
     wayland=GNOME
@@ -82,7 +86,15 @@ grep -v -E '^\s*(#|$)' "$KIT/distros.list" | while read -r image rest; do
             else
                 cmd+=" $f"
             fi
-        done ;;
+        done
+        # the kit's Mutter, where it has one for this release
+        f=$(asset "mutter-[0-9]*.$fc.x86_64.rpm")
+        c=$(asset "mutter-common-[0-9]*.$fc.noarch.rpm")
+        if [ -n "$f" ] && [ -n "$c" ]; then
+            mutter="sudo dnf install $URL/${f%.x86_64.rpm}.\$(uname -m).rpm $URL/$c"
+            # shellcheck disable=SC2016 # Markdown's backquotes
+            printf -- '- %s: `%s`\n' "$name" "$mutter" >> "$XORG.mutter"
+        fi ;;
     *)
         case $distro in
         debian-[0-9]*) name="Debian ${distro#debian-}" ;;
@@ -99,7 +111,7 @@ grep -v -E '^\s*(#|$)' "$KIT/distros.list" | while read -r image rest; do
         # Debian and Ubuntu package PipeWire's xrdp module themselves
         cmd+=" && sudo apt install ./xrdp_*.deb ./xorgxrdp_*.deb pipewire-module-xrdp" ;;
     esac
-    row "$name" "$sessions" "$cmd" "$xorg"
+    row "$name" "$sessions" "$cmd" "$xorg" "$mutter"
 done > "$XORG.rows"
 if [ -n "$JSON" ]; then
     jq -s --arg start "$START" '{server: ., start: $start}' "$XORG.rows"
@@ -113,6 +125,17 @@ Fedora's own, which is built for xrdp 0.10):
 
 EOF
 cat "$XORG"
+if [ -s "$XORG.mutter" ]; then
+    cat << 'EOF'
+
+Optional, on Fedora 45: GNOME's Mutter with our fix for a window that lands on
+the wrong monitor when the client's screens are set (GNOME/mutter!5438, not
+merged yet). It is Fedora's own package with the fix; Fedora's next mutter
+update replaces it, and the fix with it.
+
+EOF
+    cat "$XORG.mutter"
+fi
 cat << 'EOF'
 
 Then start it: `sudo systemctl enable --now xrdp`. Whether a package has the

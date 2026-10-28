@@ -335,6 +335,66 @@ jobs:
           notes=$(build/release-notes.sh "PipeWire's xrdp module (the sink and source that carry an xrdp session's sound and microphone), release v$version of neutrinolabs/pipewire-module-xrdp ($sha), unpatched, built by rdp-release-kit $GITHUB_SHA for Fedora $fedora, which does not package it. Debian 12 (backports), 13 and Ubuntu 24.04 and newer package it themselves (apt install pipewire-module-xrdp). Published once, never replaced; a new one only when its inputs change." xrdp)$'\n\n'"<!-- kit-key: $key -->"
           build/publish-prerelease.sh "$tag" "$title" "$notes" upload/*
 
+  # GNOME's Mutter for Fedora 45 with our fix (build/build-mutter.sh), an
+  # opt-in of the rolling release: built only when its inputs change, else
+  # the packages of the pre-release that has them
+  mutter:
+    needs: [scripts]
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-24.04, ubuntu-24.04-arm]
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: The packages, from the pre-release with these inputs, or built
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          key=$(build/build-mutter.sh --key)
+          tag=$(build/prerelease-tag.sh mutter "$key")
+          arch=$(uname -m)
+          mkdir -p dist/mutter
+          if gh release download "$tag" -D dist/mutter -p "mutter-[0-9]*.$arch.rpm" -p 'mutter-common-*.rpm' -p SHA256SUMS 2> /dev/null &&
+              ls dist/mutter/mutter-[0-9]*."$arch".rpm > /dev/null 2>&1; then
+            (cd dist/mutter && sha256sum -c --ignore-missing --quiet SHA256SUMS && rm SHA256SUMS)
+            echo "the packages of $tag"
+          else
+            rm -rf dist/mutter
+            build/build-mutter.sh dist/mutter
+          fi
+          ls dist/mutter
+      - uses: actions/upload-artifact@v7
+        with:
+          name: xrdp-mutter-${{ matrix.runner }}
+          path: dist/mutter/
+          if-no-files-found: error
+
+  mutter-release:
+    if: github.event_name != 'pull_request'
+    needs: [mutter]
+    runs-on: ubuntu-24.04
+    concurrency: publish-mutter-${{ github.sha }}
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: xrdp-mutter-*
+          path: upload
+          merge-multiple: true
+      - name: Publish the pre-release, if its inputs changed
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          key=$(build/build-mutter.sh --key)
+          tag=$(build/prerelease-tag.sh mutter "$key")
+          title="Mutter for Fedora 45 $tag"
+          (cd upload && sha256sum -- *.rpm > SHA256SUMS)
+          notes=$(build/release-notes.sh "GNOME's Mutter for Fedora 45, Fedora's own package with our fix for a Wayland window that lands on the wrong monitor when the monitor layout moves its monitor (GNOME/mutter#5162, merge request !5438), built and checked (installed with Fedora's gnome-shell) by rdp-release-kit $GITHUB_SHA, x86_64 and ARM64. An opt-in: Fedora's next mutter update replaces it, and the fix with it. Published once, never replaced; a new one only when its inputs change." xrdp)$'\n\n'"<!-- kit-key: $key -->"
+          build/publish-prerelease.sh "$tag" "$title" "$notes" upload/*
+
   # The web client builds at once; only its login test waits for xrdp
   wasm-build:
     runs-on: ubuntu-24.04
@@ -595,7 +655,7 @@ jobs:
   # download (docs/RELEASE.md, "Products and channels")
   release:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    needs: [build, windows, macos, xrdp, wasm, demo]
+    needs: [build, windows, macos, xrdp, mutter, wasm, demo]
     runs-on: ubuntu-24.04
     # one at a time across commits: each counts N from the releases before it,
     # so two pushes close together get .1 and .2, not both .1 (the second

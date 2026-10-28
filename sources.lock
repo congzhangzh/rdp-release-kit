@@ -39,6 +39,12 @@ x264        b35605a  git+https://code.videolan.org/videolan/x264.git            
 # sound of an xrdp session through PipeWire, built for Fedora (Debian and
 # Ubuntu package it): the release v0.2, by its tag's commit
 pipewire_xrdp 0.2    git+https://github.com/neutrinolabs/pipewire-module-xrdp.git                             748f562d616590c678d5b06722f3fe5ae9707465
+# GNOME's Mutter for Fedora 45, an opt-in: Fedora's own source package (from
+# Koji, unsigned; its files are those of the signed one on the mirrors), with
+# our fix for a Wayland window that lands on the wrong monitor when the
+# monitor layout moves its monitor (patches/mutter/, GNOME/mutter#5162, merge
+# request !5438), built by build/build-mutter.sh
+mutter      51.0-1.fc45 https://kojipkgs.fedoraproject.org/packages/mutter/51.0/1.fc45/src/mutter-51.0-1.fc45.src.rpm 731dc261e2aa0b79fc2236f1fd03731e84048a09edcb6dda22e2aad89294f6e5
 # Windows and web clients: LibreSSL by OpenBSD's published SHA256 (FreeRDP's
 # own scripts/mingw.sh still pins 4.3.3; 4.4.0 removes a weak CA root and
 # fixes the build with llvm-mingw's own endian.h); the llvm-mingw toolchain publishes no checksums, so its hash is

@@ -1,0 +1,128 @@
+From b017b2666642dffee4ef9fe0d52d72278a07f657 Mon Sep 17 00:00:00 2001
+From: Cong Zhang <13283869+congzhangzh@users.noreply.github.com>
+Date: Wed, 28 Oct 2026 01:15:37 -0400
+Subject: [PATCH 2/2] wayland/window: Also keep the pending relocation when an
+ older configure is acked
+
+The client may ack a configuration sent for the previous monitor layout
+after the window was moved for the new one. Finishing it updates the
+main monitor from the old position, which may now lie on another monitor,
+and the window follows that one.
+
+Use the newest pending move whenever a pending configuration was sent for
+a change of the monitor layout, not only on the forced update.
+---
+ src/wayland/meta-window-wayland.c | 82 ++++++++++++++++++++-----------
+ 1 file changed, 52 insertions(+), 30 deletions(-)
+
+diff --git a/src/wayland/meta-window-wayland.c b/src/wayland/meta-window-wayland.c
+index d20a05558..00a7ee5b9 100644
+--- a/src/wayland/meta-window-wayland.c
++++ b/src/wayland/meta-window-wayland.c
+@@ -700,6 +700,31 @@ scale_rect_size (MtkRectangle  *rect,
+   scale_size (&rect->width, &rect->height, scale);
+ }
+ 
++/* The newest configuration not acked yet that moves the window, if the window
++ * is being moved after a change of the monitor layout: a forced update
++ * follows one, and a configuration sent for one carries its flag. */
++static MetaWaylandWindowConfiguration *
++get_pending_relocation (MetaWindowWayland            *wl_window,
++                        MetaWindowUpdateMonitorFlags  flags)
++{
++  MetaWaylandWindowConfiguration *newest_move = NULL;
++  gboolean relocating = !!(flags & META_WINDOW_UPDATE_MONITOR_FLAGS_FORCE);
++  GList *l;
++
++  /* the newest first */
++  for (l = wl_window->pending_configurations; l; l = l->next)
++    {
++      MetaWaylandWindowConfiguration *configuration = l->data;
++
++      if (!newest_move && configuration->has_position)
++        newest_move = configuration;
++      if (configuration->flags & META_MOVE_RESIZE_FORCE_UPDATE_MONITOR)
++        relocating = TRUE;
++    }
++
++  return relocating ? newest_move : NULL;
++}
++
+ static void
+ meta_window_wayland_update_main_monitor (MetaWindow                   *window,
+                                          MetaWindowUpdateMonitorFlags  flags)
+@@ -714,6 +739,7 @@ meta_window_wayland_update_main_monitor (MetaWindow                   *window,
+   MetaLogicalMonitor *from;
+   MetaLogicalMonitor *to;
+   MetaLogicalMonitor *scaled_new;
++  MetaWaylandWindowConfiguration *configuration;
+   float from_scale, to_scale;
+   float scale;
+   MtkRectangle frame_rect;
+@@ -737,40 +763,36 @@ meta_window_wayland_update_main_monitor (MetaWindow                   *window,
+       return;
+     }
+ 
+-  /* A forced update follows a change of the monitor layout. If the window was
+-   * just configured to move, the frame rect still has the position from the
+-   * previous layout until the client acks it, and that position may now lie
+-   * on another monitor: use where the window is going instead. */
+-  if (flags & META_WINDOW_UPDATE_MONITOR_FLAGS_FORCE &&
+-      wl_window->pending_configurations)
++  /* After a change of the monitor layout, the window is moved to its new
++   * place, but the frame rect keeps the position from the previous layout
++   * until the client acks that move, and that position may now lie on
++   * another monitor. The client may also first ack a configuration it was
++   * sent before the change. Until the move is acked, use where the window is
++   * going instead. */
++  configuration = get_pending_relocation (wl_window, flags);
++  if (configuration)
+     {
+-      MetaWaylandWindowConfiguration *configuration =
+-        wl_window->pending_configurations->data;
++      MtkRectangle pending_rect = frame_rect;
++      MetaLogicalMonitor *pending_monitor;
+ 
+-      if (configuration->has_position)
++      pending_rect.x = configuration->x;
++      pending_rect.y = configuration->y;
++      if (configuration->has_size)
+         {
+-          MtkRectangle pending_rect = frame_rect;
+-          MetaLogicalMonitor *pending_monitor;
+-
+-          pending_rect.x = configuration->x;
+-          pending_rect.y = configuration->y;
+-          if (configuration->has_size)
+-            {
+-              pending_rect.width = configuration->width;
+-              pending_rect.height = configuration->height;
+-            }
++          pending_rect.width = configuration->width;
++          pending_rect.height = configuration->height;
++        }
+ 
+-          pending_monitor =
+-            meta_monitor_manager_get_logical_monitor_from_rect (monitor_manager,
+-                                                                &pending_rect);
+-          if (pending_monitor)
+-            {
+-              meta_topic (META_DEBUG_GEOMETRY,
+-                          "Updating main monitor of %s from its pending move to %d,%d",
+-                          window->desc, pending_rect.x, pending_rect.y);
+-              g_set_object (&window->monitor, pending_monitor);
+-              return;
+-            }
++      pending_monitor =
++        meta_monitor_manager_get_logical_monitor_from_rect (monitor_manager,
++                                                            &pending_rect);
++      if (pending_monitor)
++        {
++          meta_topic (META_DEBUG_GEOMETRY,
++                      "Updating main monitor of %s from its pending move to %d,%d",
++                      window->desc, pending_rect.x, pending_rect.y);
++          g_set_object (&window->monitor, pending_monitor);
++          return;
+         }
+     }
+ 

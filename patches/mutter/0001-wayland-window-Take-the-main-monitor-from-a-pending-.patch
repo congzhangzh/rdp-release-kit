@@ -1,0 +1,67 @@
+From a371cc1da9beda6224627417c716a993a02c6447 Mon Sep 17 00:00:00 2001
+From: Cong Zhang <13283869+congzhangzh@users.noreply.github.com>
+Date: Wed, 28 Oct 2026 01:05:31 -0400
+Subject: [PATCH 1/2] wayland/window: Take the main monitor from a pending move
+ after a layout change
+
+When the monitor layout changes, meta_window_update_for_monitors_changed()
+moves the window to its id-matched monitor. For a Wayland window that move
+waits for the client's ack, so the forced monitor update that follows still
+sees the frame rect of the previous layout, which may now lie on another
+monitor; the window's monitor and target monitor then follow that one, and
+the next constrain with an invalid rect places the window there.
+
+Use the position of the newest pending configuration instead, when it has
+one.
+---
+ src/wayland/meta-window-wayland.c | 37 +++++++++++++++++++++++++++++++
+ 1 file changed, 37 insertions(+)
+
+diff --git a/src/wayland/meta-window-wayland.c b/src/wayland/meta-window-wayland.c
+index daa7162f7..d20a05558 100644
+--- a/src/wayland/meta-window-wayland.c
++++ b/src/wayland/meta-window-wayland.c
+@@ -737,6 +737,43 @@ meta_window_wayland_update_main_monitor (MetaWindow                   *window,
+       return;
+     }
+ 
++  /* A forced update follows a change of the monitor layout. If the window was
++   * just configured to move, the frame rect still has the position from the
++   * previous layout until the client acks it, and that position may now lie
++   * on another monitor: use where the window is going instead. */
++  if (flags & META_WINDOW_UPDATE_MONITOR_FLAGS_FORCE &&
++      wl_window->pending_configurations)
++    {
++      MetaWaylandWindowConfiguration *configuration =
++        wl_window->pending_configurations->data;
++
++      if (configuration->has_position)
++        {
++          MtkRectangle pending_rect = frame_rect;
++          MetaLogicalMonitor *pending_monitor;
++
++          pending_rect.x = configuration->x;
++          pending_rect.y = configuration->y;
++          if (configuration->has_size)
++            {
++              pending_rect.width = configuration->width;
++              pending_rect.height = configuration->height;
++            }
++
++          pending_monitor =
++            meta_monitor_manager_get_logical_monitor_from_rect (monitor_manager,
++                                                                &pending_rect);
++          if (pending_monitor)
++            {
++              meta_topic (META_DEBUG_GEOMETRY,
++                          "Updating main monitor of %s from its pending move to %d,%d",
++                          window->desc, pending_rect.x, pending_rect.y);
++              g_set_object (&window->monitor, pending_monitor);
++              return;
++            }
++        }
++    }
++
+   /* Require both the current and the new monitor would be the new main monitor,
+    * even given the resulting scale the window would end up having. This is
+    * needed to avoid jumping back and forth between the new and the old, since

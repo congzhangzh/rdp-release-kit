@@ -13,6 +13,16 @@ toolchain) gets an entry here in the same commit.
 
 ## 2026-10-28
 
+- **GNOME's Mutter for Fedora 45, an opt-in** (聪哥's go): Fedora's own `mutter-51.0-1.fc45`
+  source package (from Koji, pinned by SHA-256; the same files as the signed one on the
+  mirrors) with our fix for a Wayland window that lands on the wrong monitor when the monitor
+  layout moves its monitor (`patches/mutter/`, GNOME/mutter#5162, merge request !5438),
+  rebuilt as `51.0-1.0kit1.fc45` by `build/build-mutter.sh`, which then installs it with
+  Fedora's gnome-shell in a fresh container (gnome-shell keeps it and starts). The release
+  sorts after Fedora's own and before its next update, which replaces it. CI job `mutter`
+  (x86_64 and ARM64) builds it only when its inputs change (about 40 minutes), otherwise takes
+  the packages of the `mutter-…` pre-release that has them; the rolling release carries
+  them, and its Install xrdp notes and `install.json` offer the command for Fedora 45.
 - **`install.json` for the site's "Get a server" page**: the rolling release carries the
   install table as data (`build/xrdp-install-notes.sh --json`: one entry per distribution
   release with its sessions, its command and Fedora's xorgxrdp command, plus the start

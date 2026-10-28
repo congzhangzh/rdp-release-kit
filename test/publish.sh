@@ -195,6 +195,8 @@ name xrdp "xrdp x1 (kit k2)" fedcba9876543210
 check "each kind counts on its own" '[ "$out" = xrdp-20261021.1-fedcba987654 ]'
 name pipewire-module-xrdp "pipewire-module-xrdp 0.2 (748f562d6165) for Fedora 43,44,45 (inputs i1)" fedcba9876543210
 check "PipeWire's xrdp module is a kind of its own" '[ "$out" = pipewire-module-xrdp-20261021.1-fedcba987654 ]'
+name mutter "mutter 51.0-1.0kit1.fc45 (inputs i1)" fedcba9876543210
+check "Mutter for Fedora 45 is a kind of its own" '[ "$out" = mutter-20261021.1-fedcba987654 ]'
 echo '[{"id": 9, "tag_name": "web-20261021.4-aaaaaaaaaaaa", "name": "Web client for freerdp-web p0 (kit k0)", "draft": true}]' \
     > "$TMP/state/releases.json"
 echo web-20261021.6-bbbbbbbbbbbb >> "$TMP/state/tags"

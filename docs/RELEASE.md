@@ -255,6 +255,7 @@ move while builds don't, and versions that only go up.
    | Web client | `web-<YYYYMMDD>.<N>-<kit commit, 12>` | "Web client <name>" | "Web client for freerdp-web <page commit, 12> (kit <kit commit, 12>)" |
    | xrdp | `xrdp-<YYYYMMDD>.<N>-<kit commit, 12>`; until 2026-10-27 `xrdp-preview-…`, which keep their names | "xrdp packages <name>" | "xrdp <version> <xrdp commit, 12> (kit <kit commit, 12>)" |
    | PipeWire's xrdp module | `pipewire-module-xrdp-<YYYYMMDD>.<N>-<kit commit, 12>` | "pipewire-module-xrdp for Fedora <releases> <name>" | "pipewire-module-xrdp <version> (<commit, 12>) for Fedora <releases> (inputs <hash, 12>)" |
+   | Mutter for Fedora 45 | `mutter-<YYYYMMDD>.<N>-<kit commit, 12>`, built only when its inputs change | "Mutter for Fedora 45 <name>" | "mutter <version>-<release>.0kit<N>.fc45 (inputs <hash, 12>)" (`build/build-mutter.sh --key`) |
    | Demo videos | `demo-<YYYYMMDD>.<N>-<kit commit, 12>` | "Demo videos <name>" | "Demo videos with <web pre-release> (kit <kit commit, 12>)" |
    | Release | `<YYYYMMDD>.<N>`; made latest | "RDP All in One (browser, clients, server) <name>" | "FreeRDP <version> clients, xrdp <version> packages (kit <kit commit, 12>)" |
 
