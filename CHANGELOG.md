@@ -13,6 +13,9 @@ toolchain) gets an entry here in the same commit.
 
 ## 2026-10-28
 
+- **freerdp-web `20261028.3`** (`fb688e9`): a mascot beside the tagline, entangled twins (you
+  here, you in the cloud), a muted 10 s loop (66 KB) made with Google Gemini (Veo); still for
+  reduced motion, gone during a session.
 - **freerdp-web `20261028.2`** (`cda3ab24`): a "Get a server" page, which shows this
   release's `install.json`, and the toolbar's Info is the session only, with the build's facts
   in a panel of their own, About. Its `kit-release.sh` reads the page commit from the new key
