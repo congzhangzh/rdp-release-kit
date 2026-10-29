@@ -13,6 +13,8 @@ toolchain) gets an entry here in the same commit.
 
 ## 2026-10-28
 
+- **freerdp-web `20261028.11`** (`3576fe9`): Get a server shows freerdp-tk under the native
+  clients, `uvx --managed-python freerdp-tk`, and its two demo videos (demo.json's `clients`).
 - **Demo videos of freerdp-tk, the native clients' connection window** (聪哥: one OS is
   enough; one for the release, one for uvx): `client-release` and `client-uvx` in
   `test/record-demos.sh`, recorded by `wasm-session.sh`'s new `CLIENT_DEMO` against the
