@@ -6,13 +6,19 @@
 # naming those pre-releases) and SHA256SUMS:
 #
 #   test/record-demos.sh [server ...]   default: xrdp gnome xrdp-gnome xrdp-kde xrdp-gnome-screens
+#                                       client-release client-uvx
 #
 # xrdp-gnome-screens is xrdp-gnome on two screens (test/wasm-demo-screens.mjs:
 # All screens, Separate screens). Each video is named for the server it
 # shows, the xrdp ones by which xrdp: xrdp-original-* (xrdp's upstream
 # release, Debian 13's own packages), xrdp-gnome*, xrdp-kde (the kit's
 # xrdp; xrdp-preview-* until 2026-10-27, which freerdp-web's media.json
-# still knows); grd-gnome is gnome-remote-desktop.
+# still knows); grd-gnome is gnome-remote-desktop. client-release and
+# client-uvx record the native connection window, freerdp-tk, against
+# xrdp-gnome (wasm-session.sh's CLIENT_DEMO): from the kit's Linux client
+# archive (CLIENT_ARCHIVE=<sdl3-freerdp-*-linux-x86_64.tar.xz>, else the
+# one of the kit's newest release), and from PyPI with uvx; demo.json lists
+# them under "clients", apart from the splash's "videos".
 #
 # Out: dist/demo/ (OUT=<dir> for another). KIT_COMMIT=<sha> records another
 # commit than HEAD; KIT_COMMIT=newest takes the newest pre-release of each
@@ -26,7 +32,7 @@ OUT=${OUT:-$KIT/dist/demo}
 REPO=congzhangzh/rdp-release-kit
 COMMIT=${KIT_COMMIT:-$(git -C "$KIT" rev-parse HEAD)}
 SERVERS=("$@")
-[ ${#SERVERS[@]} -gt 0 ] || SERVERS=(xrdp gnome xrdp-gnome xrdp-kde xrdp-gnome-screens)
+[ ${#SERVERS[@]} -gt 0 ] || SERVERS=(xrdp gnome xrdp-gnome xrdp-kde xrdp-gnome-screens client-release client-uvx)
 IN=$OUT/in
 rm -rf "$OUT"
 mkdir -p "$IN"
@@ -70,6 +76,14 @@ download "$XRDP" "$IN/xrdp" '*fc45*'
 page=$(sed -n 's/^page: freerdp-web //p' "$IN/client/MANIFEST")
 curl -fsSL -o "$IN/rdp-gateway.sh" "https://raw.githubusercontent.com/congzhangzh/freerdp-web/$page/rdp-gateway.sh"
 chmod +x "$IN/rdp-gateway.sh"
+# the Linux client archive freerdp-tk's release video unpacks: the kit run's
+# own (CLIENT_ARCHIVE), else the newest release's, checked
+CLIENT=${CLIENT_ARCHIVE:-}
+if [ -z "$CLIENT" ] && [[ " ${SERVERS[*]} " == *" client-release "* ]]; then
+    latest=$(gh release view -R "$REPO" --json tagName -q .tagName)
+    download "$latest" "$IN/native" "sdl3-freerdp-*-linux-x86_64.tar.xz"
+    CLIENT=$(find "$IN/native" -name 'sdl3-freerdp-*-linux-x86_64.tar.xz' | head -1)
+fi
 
 # the video's name: <name>.mp4, <name>.jpg (freerdp-web's media.json gives
 # each its lasting address)
@@ -80,6 +94,8 @@ name() {
         xrdp-gnome) echo xrdp-gnome ;;
         xrdp-kde) echo xrdp-kde ;;
         xrdp-gnome-screens) echo xrdp-gnome-screens ;;
+        client-release) echo freerdp-tk-release ;;
+        client-uvx) echo freerdp-tk-uvx ;;
     esac
 }
 # one pattern: <server> + <desktop> <Wayland|Xorg>[, <tag>]...: the tags, comma-separated,
@@ -92,6 +108,8 @@ title() {
         xrdp-gnome) echo "xrdp + GNOME Wayland, AV1" ;;
         xrdp-kde) echo "xrdp + KDE Plasma Wayland, AV1" ;;
         xrdp-gnome-screens) echo "xrdp + GNOME Wayland, AV1, Two monitors" ;;
+        client-release) echo "xrdp + GNOME Wayland, AV1, freerdp-tk release" ;;
+        client-uvx) echo "xrdp + GNOME Wayland, H.264, freerdp-tk uvx" ;;
     esac
 }
 caption() {
@@ -101,6 +119,8 @@ caption() {
         gnome) echo "gnome-remote-desktop with GNOME Shell on Wayland, headless, on Debian 13: the same visit, with GNOME Console started from the search. $credits" ;;
         xrdp-gnome) echo "rdp-release-kit's xrdp with GNOME on Wayland, Fedora 45: sesman starts a GNOME session and xrdp sends it in AV1, decoded by the browser. The same visit, the terminal started from the search, then Firefox on the server with web video and WebGL, with sound. $credits" ;;
         xrdp-kde) echo "rdp-release-kit's xrdp with KDE Plasma on Wayland (KWin 6.8, Arch): sesman starts Plasma, KWin renders in software (no GPU) and xrdp sends it in AV1, decoded by the browser. The same visit, Konsole started from the launcher, then Firefox on the server with web video and WebGL, with sound. $credits" ;;
+        client-release) echo "freerdp-tk, the connection window that comes with the kit's native clients, on a Linux desktop (Debian 13): the Linux client unpacked from the kit's release, freerdp-tk started from it, a connection filled in and saved, the password kept in the system keyring. The kit's FreeRDP connects in AV1 to rdp-release-kit's xrdp with GNOME on Wayland (Fedora 45); then freerdp-tk is started again and a double-click on the saved connection logs in, the password from the keyring." ;;
+        client-uvx) echo "freerdp-tk from PyPI with uvx --managed-python, which brings uv's own Python with Tk, on a Linux desktop (Debian 13) with Debian's FreeRDP 3 client: the same connection, saved with its password in the system keyring, to rdp-release-kit's xrdp with GNOME on Wayland (Fedora 45). Debian's client has no AV1, so xrdp sends H.264." ;;
         xrdp-gnome-screens) echo "The page's All screens on a computer with two screens, side by side: rdp-release-kit's xrdp with GNOME on Wayland, Fedora 45. Separate screens gives GNOME a monitor for each screen, the page's screen the primary, where the terminal stays; Super+Shift+Right moves it to the other screen, and closing the second screen's window brings one screen back." ;;
     esac
 }
@@ -108,8 +128,8 @@ caption() {
 # the test's logs (the server's, the gateway's, the page's), with the demo
 keep_logs() {
     local f
-    for f in server gateway page; do
-        [ ! -f "$KIT/dist/test/wasm/$f.log" ] || cp "$KIT/dist/test/wasm/$f.log" "$OUT/$1-$f.log"
+    for f in server gateway page client client/driver; do
+        [ ! -f "$KIT/dist/test/wasm/$f.log" ] || cp "$KIT/dist/test/wasm/$f.log" "$OUT/$1-${f//\//-}.log"
     done
 }
 
@@ -119,6 +139,12 @@ keep_logs() {
 # demo has no sound
 record() {
     local peak
+    # freerdp-tk: no sound to check (the client container plays none)
+    if [[ $1 == client-* ]]; then
+        SERVER=xrdp-gnome CLIENT_DEMO=${1#client-} CLIENT_ARCHIVE=$CLIENT DEMO_VIDEO=$2 \
+            "$KIT/test/wasm-session.sh" "$IN/client" "$IN/rdp-gateway.sh" "$3" > "$OUT/$1.log" 2>&1
+        return
+    fi
     if [ "$1" = xrdp-gnome-screens ]; then
         SERVER=xrdp-gnome DEMO_SCREENS=1 DEMO_VIDEO=$2 "$KIT/test/wasm-session.sh" "$IN/client" "$IN/rdp-gateway.sh" \
             "$3" > "$OUT/$1.log" 2>&1
@@ -171,21 +197,31 @@ for server in xrdp-gnome xrdp-gnome-screens xrdp-kde xrdp gnome; do
         printf '%s\t%s\t%s\n' "$(name "$server")" "$(title "$server")" "$(caption "$server")"
     fi
 done > "$OUT/videos.tsv"
+for server in client-release client-uvx; do
+    if [ -f "$OUT/$(name "$server").mp4" ]; then
+        printf '%s\t%s\t%s\n' "$(name "$server")" "$(title "$server")" "$(caption "$server")"
+    fi
+done > "$OUT/clients.tsv"
 python3 - "$OUT" "$COMMIT" "$WEB" "$XRDP" "${PIPEWIRE:-}" << 'EOF'
 import json, sys
 out, commit, web, xrdp, pw = sys.argv[1:6]
-videos = []
-for line in open(f"{out}/videos.tsv", encoding="utf-8"):
-    name, title, caption = line.rstrip("\n").split("\t")
-    videos.append({"title": title, "src": f"demo/{name}.mp4",
-                   "poster": f"demo/{name}.jpg", "caption": caption})
+def read(tsv):
+    videos = []
+    for line in open(f"{out}/{tsv}", encoding="utf-8"):
+        name, title, caption = line.rstrip("\n").split("\t")
+        videos.append({"title": title, "src": f"demo/{name}.mp4",
+                       "poster": f"demo/{name}.jpg", "caption": caption})
+    return videos
+videos, clients = read("videos.tsv"), read("clients.tsv")
 recorded = {"kit": commit, "web": web, "xrdp": xrdp}
 if pw:
     recorded["pipewire-module-xrdp"] = pw
 with open(f"{out}/demo.json", "w", encoding="utf-8") as f:
-    json.dump({"recorded": recorded, "videos": videos}, f, indent=2, ensure_ascii=False)
+    # "clients": freerdp-tk's videos, for the page's Get a server, never the splash
+    json.dump({"recorded": recorded, "videos": videos, **({"clients": clients} if clients else {})},
+              f, indent=2, ensure_ascii=False)
 EOF
-rm -f "$OUT/videos.tsv"
+rm -f "$OUT/videos.tsv" "$OUT/clients.tsv"
 rm -rf "$IN"
 (cd "$OUT" && sha256sum -- demo.json ./*.mp4 ./*.jpg | sed 's| \./| |' > SHA256SUMS && cat SHA256SUMS)
 exit $status

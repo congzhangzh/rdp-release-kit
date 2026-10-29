@@ -27,11 +27,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        server: [xrdp, gnome, xrdp-gnome, xrdp-kde, xrdp-gnome-screens]
+        server: [xrdp, gnome, xrdp-gnome, xrdp-kde, xrdp-gnome-screens, client-release, client-uvx]
     runs-on: ubuntu-24.04
-    # KDE and the two screens' demo are new here: their videos join once they
-    # record, the others publish without them
-    continue-on-error: ${{ matrix.server == 'xrdp-kde' || matrix.server == 'xrdp-gnome-screens' }}
+    # KDE, the two screens' demo and freerdp-tk's are new here: their videos
+    # join once they record, the others publish without them
+    continue-on-error: ${{ matrix.server == 'xrdp-kde' || matrix.server == 'xrdp-gnome-screens' || startsWith(matrix.server, 'client-') }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -91,6 +91,14 @@ jobs:
           sudo podman info --format 'podman: cgroup v{{.Host.CgroupsVersion}}, manager {{.Host.CgroupManager}}, {{.Host.OCIRuntime.Name}} {{.Host.OCIRuntime.Version}}' |
             head -2
 
+      # freerdp-tk's release video unpacks the Linux client this kit run built
+      # (without a kit run, record-demos.sh takes the newest release's)
+      - uses: actions/download-artifact@v8
+        if: inputs.kit_sha != '' && matrix.server == 'client-release'
+        with:
+          name: sdl3-freerdp-ubuntu-24.04
+          path: dist/native
+
       - name: Record
         env:
           GH_TOKEN: ${{ github.token }}
@@ -101,7 +109,10 @@ jobs:
           # directory as MS_SLAVE: Permission denied", then "Failed to start
           # up manager"); this runner is thrown away after the job
           SERVER_RUN_OPTS: --security-opt apparmor=unconfined
-        run: test/record-demos.sh "${{ matrix.server }}"
+        run: |
+          archive=$(find dist/native -name 'sdl3-freerdp-*-linux-x86_64.tar.xz' 2> /dev/null | head -1)
+          [ -z "$archive" ] || export CLIENT_ARCHIVE=$PWD/$archive
+          test/record-demos.sh "${{ matrix.server }}"
 
       - uses: actions/upload-artifact@v7
         if: always()
@@ -142,20 +153,26 @@ jobs:
           src, out = sys.argv[1], sys.argv[2]
           # by the videos' names (test/record-demos.sh)
           order = ["xrdp-gnome", "xrdp-gnome-screens", "xrdp-kde", "xrdp-original-xfce", "grd-gnome"]
-          recorded, videos = {}, {}
+          # freerdp-tk's, for the page's Get a server (never the splash)
+          client_order = ["freerdp-tk-release", "freerdp-tk-uvx"]
+          recorded, videos, clients = {}, {}, {}
           for f in glob.glob(f"{src}/demo-*/demo.json"):
               d = json.load(open(f, encoding="utf-8"))
               recorded = recorded or d["recorded"]
-              for v in d["videos"]:
-                  video = os.path.basename(v["src"])[:-len(".mp4")]
-                  for name in (os.path.basename(v["src"]), os.path.basename(v["poster"])):
-                      shutil.copy(f"{os.path.dirname(f)}/{name}", f"{out}/{name}")
-                  videos[video] = v
+              for key, into in (("videos", videos), ("clients", clients)):
+                  for v in d.get(key, []):
+                      video = os.path.basename(v["src"])[:-len(".mp4")]
+                      for name in (os.path.basename(v["src"]), os.path.basename(v["poster"])):
+                          shutil.copy(f"{os.path.dirname(f)}/{name}", f"{out}/{name}")
+                      into[video] = v
           if not videos:
               sys.exit("no demo was recorded")
-          json.dump({"recorded": recorded, "videos": [videos[s] for s in order if s in videos]},
-                    open(f"{out}/demo.json", "w", encoding="utf-8"), indent=2, ensure_ascii=False)
+          demo = {"recorded": recorded, "videos": [videos[s] for s in order if s in videos]}
+          if clients:
+              demo["clients"] = [clients[s] for s in client_order if s in clients]
+          json.dump(demo, open(f"{out}/demo.json", "w", encoding="utf-8"), indent=2, ensure_ascii=False)
           print("videos:", ", ".join(s for s in order if s in videos))
+          print("clients:", ", ".join(s for s in client_order if s in clients) or "none")
           EOF
           (cd dist/demo && sha256sum -- * > ../SHA256SUMS && mv ../SHA256SUMS .)
           web=$(python3 -c 'import json; print(json.load(open("dist/demo/demo.json"))["recorded"]["web"])')

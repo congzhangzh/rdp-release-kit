@@ -643,7 +643,8 @@ jobs:
   # a push that only moves the freerdp_web pin builds the web client, not a release)
   demo:
     if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
-    needs: [wasm, xrdp-release, pipewire-xrdp-release]
+    # build: the Linux client freerdp-tk's release video unpacks
+    needs: [build, wasm, xrdp-release, pipewire-xrdp-release]
     permissions:
       contents: write
     uses: ./.github/workflows/demo.yml

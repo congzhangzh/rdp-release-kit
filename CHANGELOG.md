@@ -13,6 +13,33 @@ toolchain) gets an entry here in the same commit.
 
 ## 2026-10-28
 
+- **Demo videos of freerdp-tk, the native clients' connection window** (聪哥: one OS is
+  enough; one for the release, one for uvx): `client-release` and `client-uvx` in
+  `test/record-demos.sh`, recorded by `wasm-session.sh`'s new `CLIENT_DEMO` against the
+  xrdp-gnome server. Linux only: a computer of its own in a container (`test/client-demo/`:
+  Debian 13, Xvfb, Openbox, GNOME Keyring, recorded by ffmpeg) on the server's network, so
+  no runner of Windows or macOS has to reach a Linux server or record its screen. The user
+  unpacks the kit's Linux client (the kit run's own build) or runs
+  `uvx --managed-python freerdp-tk` (with Debian's FreeRDP 3 client, which has no AV1:
+  xrdp sends H.264), fills in a connection,
+  saves it with its password in the keyring, works in GNOME, disconnects, starts freerdp-tk
+  again and double-clicks the saved connection, which logs in with the password from the
+  keyring. The pointer and the keys are real X input (xdotool); `hook/drive.py` runs inside
+  freerdp-tk's process only to find where Tk drew each field. demo.json lists them under
+  `clients`, apart from the splash's `videos`; `build/site.sh` copies them; the page's Get a
+  server shows them under the native clients. New in the matrix, so `continue-on-error` like
+  KDE's until they have recorded on CI.
+- Found while recording: freerdp-tk's "(auto)" client takes the first name of its list found
+  anywhere on `PATH` (`sdl-freerdp3` before `sdl-freerdp`), not the first directory on
+  `PATH`: on a computer with Debian's `freerdp3-sdl`, the release's freerdp-tk starts Debian's
+  client, not the one beside it. The demo takes Debian's away for the release video; the fix
+  belongs to freerdp-tk.
+- Found too: plain `uvx freerdp-tk` takes the system's Python when there is one, and
+  Debian's has no Tk unless `python3-tk` is installed (Openbox alone brings `python3`):
+  "No module named 'tkinter'". `--managed-python` makes uv use its own Python, which has Tk;
+  the page and the demo say so. And the Tk of python-build-standalone (the clients' bundled
+  Python and uv's) is built without Xft: it draws with X's core fonts, where "…" (List…)
+  comes out as other glyphs.
 - **A run started by hand from main releases like a push** (`kit.yml`, the demo and release
   jobs): a push that only moves the freerdp_web pin builds only the web client (`changes.sh`:
   "web"), so freerdp-web `20261028.10` got no rolling release and the site had nothing new to

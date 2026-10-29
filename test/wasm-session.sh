@@ -59,6 +59,14 @@
 # with a pointer, captions and the sound. Everything in it is synthetic: the
 # user "tester", the throwaway server, the password. With DEMO_SCREENS=1 it
 # records All screens instead (test/wasm-demo-screens.mjs; SERVER=xrdp-gnome).
+#
+# CLIENT_DEMO=release|uvx records freerdp-tk instead of the page (with
+# DEMO_VIDEO, SERVER=xrdp-gnome): a computer of its own in a container
+# (test/client-demo/) on the server's network, where the user starts
+# freerdp-tk, the release's from CLIENT_ARCHIVE=<sdl3-freerdp-*-linux-x86_64.tar.xz>
+# or uvx's from PyPI with Debian's client, fills in a connection, saves it,
+# works in GNOME, and opens it again from the list with the password from
+# the keyring. No gateway and no page then.
 # check() evaluates its second argument later, so it is single-quoted on purpose
 # shellcheck disable=SC2016
 set -uo pipefail
@@ -108,8 +116,9 @@ export WS_PORT=$LOCAL_WS_PORT SERVER_WS_PORT=3390   # rdp-gateway.sh: the page's
 # page would reach that instead and the checks would fail for no visible
 # reason. Stop first, saying which port.
 "$ENGINE" rm -f "$NAME" > /dev/null 2>&1   # this test's own server from a kept run
-ports=(2223 "$LOCAL_RDP_PORT" "$LOCAL_WS_PORT")
-[ -n "${PAGE_URL:-}" ] || ports+=(8199)
+ports=(2223)
+[ -n "${CLIENT_DEMO:-}" ] || ports+=("$LOCAL_RDP_PORT" "$LOCAL_WS_PORT")
+[ -n "${PAGE_URL:-}" ] || [ -n "${CLIENT_DEMO:-}" ] || ports+=(8199)
 for port in "${ports[@]}"; do
     if ss -Hltn "sport = :$port" | grep -q .; then
         echo "port 127.0.0.1:$port is already in use (by: $("$ENGINE" ps --filter "publish=$port" \
@@ -120,6 +129,7 @@ done
 
 cleanup() {
     [ -n "${GW:-}" ] && kill "$GW" 2> /dev/null
+    [ -z "${CLIENT_DEMO:-}" ] || "$ENGINE" rm -f kit-client-demo > /dev/null 2>&1
     [ -n "${HTTP:-}" ] && kill "$HTTP" 2> /dev/null
     if [ -n "${KEEP:-}" ]; then   # KEEP=1: leave the server running, to look inside
         echo "server kept: $ENGINE exec -it $NAME bash; $ENGINE rm -f $NAME when done"
@@ -279,6 +289,53 @@ fi
     mkdir -p /run/sshd && /usr/sbin/sshd
     (xrdp-sesman --nodaemon > /tmp/sesman.out 2>&1 &); (xrdp --nodaemon > /tmp/xrdp.out 2>&1 &)
     sleep 3' || { echo "the test server could not be set up" >&2; exit 1; }
+fi
+
+# CLIENT_DEMO: freerdp-tk on a computer of its own, in a container that
+# joins the server's network (the server is its 127.0.0.1), instead of the page
+if [ -n "${CLIENT_DEMO:-}" ]; then
+    [ "$SERVER" = xrdp-gnome ] && [ -n "${DEMO_VIDEO:-}" ] ||
+        { echo "CLIENT_DEMO needs SERVER=xrdp-gnome and DEMO_VIDEO" >&2; exit 1; }
+    CLIENT_MOUNT=() CLIENT_IN=()
+    if [ "$CLIENT_DEMO" = release ]; then
+        [ -f "${CLIENT_ARCHIVE:-}" ] || { echo "CLIENT_DEMO=release needs CLIENT_ARCHIVE" >&2; exit 1; }
+        CLIENT_IN=(/in/"$(basename "$CLIENT_ARCHIVE")")
+        CLIENT_MOUNT=(-v "$(cd "$(dirname "$CLIENT_ARCHIVE")" && pwd)/$(basename "$CLIENT_ARCHIVE")":"${CLIENT_IN[0]}":ro)
+    fi
+    echo "== client: freerdp-tk ($CLIENT_DEMO) on Debian 13, Xvfb + Openbox, recorded"
+    "$ENGINE" build -q -t kit-client-demo:debian-13 "$KIT/test/client-demo" > "$OUT/client-build.log" 2>&1 ||
+        { tail -20 "$OUT/client-build.log" >&2; echo "the client image did not build" >&2; exit 1; }
+    mkdir -p "$OUT/client"
+    "$ENGINE" rm -f kit-client-demo > /dev/null 2>&1
+    "$ENGINE" run --rm --name kit-client-demo --network container:"$NAME" --hostname laptop --shm-size=512m \
+        -v "$KIT/test/client-demo":/demo-client:ro "${CLIENT_MOUNT[@]}" -v "$OUT/client":/out \
+        kit-client-demo:debian-13 /demo-client/run.sh "$CLIENT_DEMO" "${CLIENT_IN[@]}" > "$OUT/client.log" 2>&1
+    # shellcheck disable=SC2034 # read by a check below
+    recorded=$?
+    tail -5 "$OUT/client.log"
+    [ ! -f "$OUT/client/raw.mp4" ] || cp "$OUT/client/raw.mp4" "$DEMO_VIDEO"
+    pass=0; fail=0
+    check() { if eval "$2"; then echo "PASS  $1"; pass=$((pass + 1)); else echo "FAIL  $1"; fail=$((fail + 1)); fi; }
+    check "the demo ran to its end" '[ "$recorded" = 0 ]'
+    check "freerdp-tk saved the password in the keyring" 'grep -q "keyring: usable" "$OUT/client/driver.log"'
+    check "the second visit logged in from the saved connection, with no password asked" \
+        'grep -q "phase 2" "$OUT/client/driver.log" && [ "$(grep -c "session window" "$OUT/client/driver.log")" = 2 ]'
+    check "sesman started GNOME for tester (GNOME Shell)" \
+        '"$ENGINE" exec "$NAME" pgrep -u tester -x gnome-shell > /dev/null'
+    # the kit's client offers AV1; Debian's does not, and xrdp falls back to H.264
+    # (the videos' titles name the codec)
+    if [ "$CLIENT_DEMO" = release ]; then
+        check "xrdp encodes the session in AV1" \
+            '"$ENGINE" exec "$NAME" grep -q "starting AV1 codec session" /var/log/xrdp.log'
+    else
+        check "xrdp encodes the session in H.264 (Debian's client has no AV1)" \
+            '"$ENGINE" exec "$NAME" grep -q "starting h264 codec session" /var/log/xrdp.log'
+    fi
+    check "the video is there" '[ -s "$DEMO_VIDEO" ]'
+    "$ENGINE" exec "$NAME" sh -c 'tail -n 200 /var/log/xrdp.log /var/log/xrdp-sesman.log' > "$OUT/server.log" 2>&1
+    echo "passed $pass, failed $fail (driver log, video: $OUT/client)"
+    [ "$fail" = 0 ]
+    exit
 fi
 
 echo "== gateway: rdp-gateway.sh tester@127.0.0.1 (one step)"
