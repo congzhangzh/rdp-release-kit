@@ -55,7 +55,10 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
-  # phase 0: the server started by hand, Desktop Sharing API capture
+  # phase 0: the server started by hand, as the user. DXGI capture: with the
+  # Desktop Sharing API (the default) the server's loopback client cannot log
+  # in to Windows' own sharing session on Windows Server 2025 (runs
+  # 41087993846, 41089706404: ERRCONNECT_LOGON_FAILURE, no frame ever sent)
   test:
     needs: build
     runs-on: windows-2025
@@ -63,7 +66,7 @@ jobs:
       - uses: actions/checkout@v7
       - uses: actions/download-artifact@v8
         with:
-          name: win-shadow-x86_64-wds
+          name: win-shadow-x86_64-dxgi
           path: dl
       - name: Unpack
         shell: pwsh
