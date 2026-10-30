@@ -24,6 +24,7 @@ WATCH=(
 	"openssl     https://github.com/openssl/openssl.git           ^openssl-3\.5\.[0-9]+$               openssl-"
 	"opus        https://github.com/xiph/opus.git                 ^v[0-9]+\.[0-9]+(\.[0-9]+)?$          v"
 	"dav1d       https://code.videolan.org/videolan/dav1d.git     ^[0-9]+\.[0-9]+\.[0-9]+$             ''"
+	"aom         https://aomedia.googlesource.com/aom              ^v[0-9]+\.[0-9]+\.[0-9]+$             v"
 	"zlib        https://github.com/madler/zlib.git               ^v[0-9]+\.[0-9]+(\.[0-9]+)*$          v"
 	"jansson     https://github.com/akheron/jansson.git           ^v[0-9]+\.[0-9]+(\.[0-9]+)?$          v"
 	"libressl    https://github.com/libressl/portable.git         ^v[0-9]+\.[0-9]+\.[0-9]+$             v"

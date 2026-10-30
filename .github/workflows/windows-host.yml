@@ -1,0 +1,109 @@
+# The Windows host: FreeRDP's shadow server and freerdp-shadow-service
+# (build-windows.sh with HOST=1), tested on a Windows Server 2025 runner with
+# the kit's Windows client and its web client (test/windows-host.ps1). kit.yml
+# calls it with this run's client and web client (from_run); pushed alone,
+# on the branch windows-host, it takes them from the kit's latest release and
+# publishes nothing.
+name: windows-host
+
+on:
+  workflow_call:
+    inputs:
+      from_run:
+        type: boolean
+        default: false
+  push:
+    branches: [windows-host]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Cache sources
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/rdp-release-kit/sources
+          key: sources-${{ hashFiles('sources.lock') }}
+
+      - name: Cache compiled objects
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/rdp-release-kit/ccache
+          key: ccache-windows-host-${{ github.sha }}
+          restore-keys: |
+            ccache-windows-host-
+            ccache-windows-x86_64-
+
+      - name: Build
+        env:
+          CCACHE_MAXSIZE: 1G
+          HOST: "1"
+        run: ./build-windows.sh x86_64
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: freerdp-host-windows-x86_64
+          path: dist/freerdp-host-*.zip
+          if-no-files-found: error
+          retention-days: 3
+
+  test:
+    needs: build
+    runs-on: windows-2025
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: freerdp-host-windows-x86_64
+          path: dl/host
+      # this run's Windows client and web client, or the latest release's
+      - if: inputs.from_run
+        uses: actions/download-artifact@v8
+        with:
+          name: sdl3-freerdp-windows-x86_64
+          path: dl/client
+      - if: inputs.from_run
+        uses: actions/download-artifact@v8
+        with:
+          name: wasm-build
+          path: dl/wasm
+      - if: ${{ !inputs.from_run }}
+        name: The latest release's client and web client
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: pwsh
+        run: |
+          gh release download -R $env:GITHUB_REPOSITORY -D dl/client -p 'sdl3-freerdp-*-windows-x86_64.zip'
+          gh release download -R $env:GITHUB_REPOSITORY -D dl/webzip -p 'freerdp-web-*.zip'
+          Expand-Archive (Get-ChildItem dl/webzip/*.zip | Select-Object -First 1).FullName -DestinationPath dl/wasm/web
+
+      - name: Unpack
+        shell: pwsh
+        run: |
+          Expand-Archive (Get-ChildItem dl/host/*.zip | Select-Object -First 1).FullName -DestinationPath host
+          Expand-Archive (Get-ChildItem dl/client/*.zip | Select-Object -First 1).FullName -DestinationPath client
+          Get-ChildItem host/*/*.exe, client/*/*.exe | ForEach-Object { "$($_.Name)  $($_.Length)" }
+          Get-ChildItem dl/wasm/web/index.html
+
+      - name: The Windows host, with the native and the web client
+        timeout-minutes: 20
+        shell: pwsh
+        run: >
+          ./test/windows-host.ps1 (Get-ChildItem host -Directory | Select-Object -First 1).FullName
+          (Get-ChildItem client -Directory | Select-Object -First 1).FullName dl/wasm/web out
+
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: windows-host-test
+          path: out
+          retention-days: 7

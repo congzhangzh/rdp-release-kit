@@ -7,6 +7,8 @@
 # Writes dist/sdl3-freerdp-<version>-windows-<arch>.zip. Each architecture
 # keeps its own work tree in ~/.cache/rdp-release-kit/win-<arch> (under
 # KIT_CACHE=<dir> instead), compiled objects in its ccache directory.
+# HOST=1 builds the Windows host instead (dist/freerdp-host-<version>-windows-<arch>.zip:
+# FreeRDP's shadow server and freerdp-shadow-service, build/build-windows-client.sh).
 # SRC_freerdp=<dir> builds FreeRDP from a local checkout, LTO=off then
 # without link-time optimisation (see build/overrides.sh; not for releases).
 set -euo pipefail
@@ -42,7 +44,7 @@ fi
 
 status=0
 for arch in "${ARCHES[@]}"; do
-    work=$KIT_CACHE/win-$arch
+    work=$KIT_CACHE/win-$arch${HOST:+-host}
     mkdir -p "$work"
     # SRC_<name> or sources.local: a local source (development only)
     overrides "$work"
@@ -59,6 +61,7 @@ for arch in "${ARCHES[@]}"; do
     # shellcheck disable=SC2016
     if ! "$ENGINE" run --rm -v "$KIT":/kit:ro -v "$SOURCES":/sources -v "$OUT":/out \
             -v "$work":/work "${CACHE[@]}" "${OVERRIDE[@]}" -e OWNER="$(owner)" -e ARCH="$arch" \
+            -e HOST="${HOST:-}" \
             "$IMAGE" \
             bash -c '/kit/build/build-windows-client.sh /kit /sources /out "$ARCH"; rc=$?;
                      [ -z "$OWNER" ] || chown -R "$OWNER" /out /work /sources ${CCACHE_DIR:-}

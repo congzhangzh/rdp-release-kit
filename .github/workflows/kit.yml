@@ -651,6 +651,16 @@ jobs:
     with:
       kit_sha: ${{ github.sha }}
 
+  # The Windows host (FreeRDP's shadow server and freerdp-shadow-service),
+  # built and tested on a Windows runner with this run's Windows client and
+  # web client (windows-host.yml)
+  windows-host:
+    needs: [releases, windows, wasm-build]
+    if: needs.releases.outputs.scope == 'all'
+    uses: ./.github/workflows/windows-host.yml
+    with:
+      from_run: true
+
   # The kit's rolling release <YYYYMMDD>.<N>: every push to main whose
   # products all pass publishes FreeRDP's clients (with their connection
   # window), the xrdp packages and the web client, once and never replaced,
@@ -658,7 +668,7 @@ jobs:
   # download (docs/RELEASE.md, "Products and channels")
   release:
     if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
-    needs: [build, windows, macos, xrdp, mutter, wasm, demo]
+    needs: [build, windows, macos, xrdp, mutter, wasm, demo, windows-host]
     runs-on: ubuntu-24.04
     # one at a time across commits: each counts N from the releases before it,
     # so two pushes close together get .1 and .2, not both .1 (the second
@@ -684,6 +694,10 @@ jobs:
       - uses: actions/download-artifact@v8
         with:
           name: wasm-build
+          path: dist
+      - uses: actions/download-artifact@v8
+        with:
+          name: freerdp-host-windows-x86_64
           path: dist
       - uses: actions/download-artifact@v8
         with:
@@ -714,6 +728,7 @@ jobs:
         run: |
           freerdp=$(awk '$1 == "freerdp" { print $2 }' sources.lock)
           freerdp_commit=$(awk '$1 == "freerdp" { print $4 }' sources.lock)
+          host=$(cd upload && ls freerdp-host-*-windows-x86_64.zip)
           xrdp=$(awk '$1 == "xrdp" { print $2 }' sources.lock)
           key="FreeRDP $freerdp clients, xrdp $xrdp packages (kit ${GITHUB_SHA:0:12})"
           tag=$(build/prerelease-tag.sh release "$key")
@@ -727,13 +742,17 @@ jobs:
           base="https://github.com/$GITHUB_REPOSITORY/releases/download/$tag"
           # shellcheck disable=SC2046 # one argument per client archive
           build/xrdp-install-notes.sh --json upload "$base" |
-            jq --arg r "$tag" --arg u "https://github.com/$GITHUB_REPOSITORY/releases/tag/$tag" --arg b "$base" '
+            jq --arg r "$tag" --arg u "https://github.com/$GITHUB_REPOSITORY/releases/tag/$tag" --arg b "$base" --arg h "$host" '
               def platform: capture("-(?<os>linux|windows|macos)-(?<arch>[a-z0-9_]+)\\.") |
                 ({linux: "Linux", windows: "Windows", macos: "macOS"}[.os]) + " " +
                 (if .os == "macos" then {arm64: "Apple Silicon", x86_64: "Intel"}[.arch]
                  else {x86_64: "x86_64", aarch64: "ARM64"}[.arch] end);
               {release: $r, url: $u} + . +
-              {clients: [$ARGS.positional[] | {platform: platform, file: ., url: ($b + "/" + .)}]}' \
+              {clients: [$ARGS.positional[] | {platform: platform, file: ., url: ($b + "/" + .)}]} +
+              # the Windows host: share a Windows PC'"'"'s own screen (the page shows it with the servers)
+              {windows: {file: $h, url: ($b + "/" + $h),
+                command: ("Invoke-WebRequest " + $b + "/" + $h + " -OutFile freerdp-host.zip; Expand-Archive freerdp-host.zip; Set-Location freerdp-host\\freerdp-host-*; .\\freerdp-shadow-service.exe install --allow-sas -- /bind-address:127.0.0.1 /gfx-av1"),
+                remove: ".\\freerdp-shadow-service.exe uninstall"}}' \
               --args $(cd upload && ls sdl3-freerdp-*-linux-*.tar.xz sdl3-freerdp-*-windows-*.zip sdl3-freerdp-*-macos-*.tar.xz) \
             > upload/install.json
           (cd upload && sha256sum install.json >> SHA256SUMS)
@@ -750,11 +769,12 @@ jobs:
           | macOS Apple Silicon | \`sdl3-freerdp-$freerdp-macos-arm64.tar.xz\` | unpack, then double-click \`freerdp-tk.command\` (or \`bin/sdl-freerdp /v:server /u:user\`); downloaded with a browser, clear macOS's quarantine first: \`xattr -dr com.apple.quarantine sdl3-freerdp-*\` (not notarized) |
           | macOS Intel | \`sdl3-freerdp-$freerdp-macos-x86_64.tar.xz\` | the same |
           | xrdp server | see Install xrdp below | |
+          | Windows host x86_64 | \`$host\` | share a Windows PC's own screen (logon and lock screens included, AV1): unzip, then in an administrator's PowerShell \`.\\freerdp-shadow-service.exe install --allow-sas -- /bind-address:127.0.0.1 /gfx-av1\` (README.txt) |
 
           The Linux client runs on glibc 2.34 and newer (RHEL 9, Debian 12, Ubuntu 22.04, Fedora 35 and newer) with PulseAudio's or PipeWire's libpulse; nothing else to install. The macOS client runs on macOS 12 and newer. Check a download: \`sha256sum -c --ignore-missing SHA256SUMS\`; its origin: \`gh attestation verify <file> -R $GITHUB_REPOSITORY\`. Each archive's MANIFEST lists what it was built from.
 
           $install
 
           The demo videos (\`xrdp-original-*.mp4\` with xrdp's upstream release as Debian 13 ships it, \`xrdp-gnome*.mp4\`, \`xrdp-kde.mp4\` with this release's xrdp, \`grd-gnome.mp4\`, \`demo.json\`) are this build's web client and xrdp, recorded on throwaway servers: everything shown is synthetic. Big Buck Bunny © Blender Foundation, CC BY 3.0; WebGL Aquarium © Google, BSD."
-          notes=$(build/release-notes.sh "$summary" linux windows macos web xrdp)$'\n\n'"<!-- kit-key: $key -->"
+          notes=$(build/release-notes.sh "$summary" linux windows macos web xrdp windows_host)$'\n\n'"<!-- kit-key: $key -->"
           LATEST=1 build/publish-prerelease.sh "$tag" "$title" "$notes" upload/*
