@@ -41,8 +41,11 @@ function ServerLog { (Get-ChildItem "$logs\shadow-*.log" -ErrorAction SilentlyCo
 $console = (Get-Process -Id $PID).SessionId
 "session of this job: $console" | Tee-Object "$Out\where.txt"
 (qwinsta 2>&1) | Out-File -Append "$Out\where.txt"
-& net user $user $pass /add | Out-Null
-Check "a local Windows user for the test" ($LASTEXITCODE -eq 0) "net user: $LASTEXITCODE"
+# New-LocalUser: net user asks Y/N on stdin for a password over 14 characters
+try {
+    New-LocalUser -Name $user -Password (ConvertTo-SecureString $pass -AsPlainText -Force) -PasswordNeverExpires | Out-Null
+    Check "a local Windows user for the test" $true
+} catch { Check "a local Windows user for the test" $false $_.Exception.Message }
 
 & "$Dir\freerdp-shadow-service.exe" install --log $logs --allow-sas -- `
     /bind-address:127.0.0.1 /port:$port /gfx-av1 /log-level:DEBUG 2>&1 | Tee-Object "$Out\install.txt"
@@ -73,7 +76,8 @@ function Client([string[]]$More, [string]$Log, [int]$Seconds) {
 }
 if ($up) {
     $good = Client @("/p:$pass", "/auth-only") "auth-good" 30
-    Check "the right password logs in (/auth-only)" ($good.HasExited -and $good.ExitCode -eq 0) "exit $($good.ExitCode)"
+    $said = Select-String -Path "$Out\auth-good.wlog" -Pattern "Authentication only, exit status (\w+)" | Select-Object -Last 1
+    Check "the right password logs in (/auth-only)" ($said -and $said.Matches[0].Groups[1].Value -eq "SUCCESS") "client: $(if ($said) { $said.Matches[0].Groups[1].Value } else { 'no word' }), exit $($good.ExitCode)"
     $bad = Client @("/p:wrong-$pass", "/auth-only") "auth-bad" 30
     Check "a wrong password does not" ($bad.HasExited -and $bad.ExitCode -ne 0) "exit $($bad.ExitCode)"
 
@@ -127,7 +131,7 @@ if ($up) {
 }
 
 & "$Dir\freerdp-shadow-service.exe" uninstall 2>&1 | Tee-Object -Append "$Out\install.txt"
-& net user $user /delete | Out-Null
+Remove-LocalUser -Name $user -ErrorAction SilentlyContinue
 Copy-Item "$logs\*" $Out -ErrorAction SilentlyContinue
 "== service.log"; Get-Content "$logs\service.log" -ErrorAction SilentlyContinue
 "== the server: desktop, DXGI, codec lines (first 60)"

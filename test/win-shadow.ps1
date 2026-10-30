@@ -37,8 +37,11 @@ Get-CimInstance Win32_OperatingSystem | Select-Object Caption, Version | Format-
 Get-Content "$Out\where.txt"
 
 # a Windows account for the test (this machine is thrown away afterwards)
-& net user $user $pass /add | Out-Null
-Check "a local Windows user for the test" ($LASTEXITCODE -eq 0) "net user: $LASTEXITCODE"
+# New-LocalUser: net user asks Y/N on stdin for a password over 14 characters
+try {
+    New-LocalUser -Name $user -Password (ConvertTo-SecureString $pass -AsPlainText -Force) -PasswordNeverExpires | Out-Null
+    Check "a local Windows user for the test" $true
+} catch { Check "a local Windows user for the test" $false $_.Exception.Message }
 # the SAM file: user, domain (none), the NT hash
 $sam = "$Out\SAM"
 $line = & "$Dir\winpr-hash.exe" -u $user -p $pass -f sam
@@ -78,7 +81,9 @@ function Client([string[]]$More, [string]$Log, [int]$Seconds) {
 }
 function Logins([string]$Way) {
     $good = Client @("/p:$pass", "/auth-only") "$Way-auth-good" 30
-    Check "${Way}: the right password logs in (/auth-only)" ($good.HasExited -and $good.ExitCode -eq 0) "exit $($good.ExitCode)"
+    # the client's own word: PowerShell has reported 1 for a client that logged SUCCESS [0]
+    $said = Select-String -Path "$Out\$Way-auth-good.wlog" -Pattern "Authentication only, exit status (\w+)" | Select-Object -Last 1
+    Check "${Way}: the right password logs in (/auth-only)" ($said -and $said.Matches[0].Groups[1].Value -eq "SUCCESS") "client: $(if ($said) { $said.Matches[0].Groups[1].Value } else { 'no word' }), exit $($good.ExitCode)"
     $bad = Client @("/p:wrong-$pass", "/auth-only") "$Way-auth-bad" 30
     Check "${Way}: a wrong password does not" ($bad.HasExited -and $bad.ExitCode -ne 0) "exit $($bad.ExitCode)"
 }
@@ -109,7 +114,7 @@ if (-not $server.HasExited) {
     Stop $session
 }
 Stop $server
-& net user $user /delete | Out-Null
+Remove-LocalUser -Name $user -ErrorAction SilentlyContinue
 
 # what the logs say about the codec and the capture (a report, not a check)
 $pattern = "AV1|av1|aom|codec|CapsConfirm|CapsAdvertise|WDS|DXGI|RDPSRAPI|desktop|ERROR|fail"
