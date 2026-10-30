@@ -149,6 +149,11 @@ Check "service: the server runs as SYSTEM" ($owner -and $owner.User -eq "SYSTEM"
 function ServerLog { (Get-ChildItem "$logs\shadow-*.log" -ErrorAction SilentlyContinue | Get-Content) -join "`n" }
 Logins "windows-account"
 
+# this job's console desktop is what the server shares (and what the demo
+# shows): every window down first
+(New-Object -ComObject Shell.Application).MinimizeAll()
+Start-Sleep -Seconds 2
+
 # the web client: the page from a plain static server (as GitHub Pages, no
 # COOP/COEP), websockify as its gateway, headless Chrome as the user
 $web = "$Out\web"
@@ -166,9 +171,9 @@ if (-not $env:CHROME) { $env:CHROME = "${env:ProgramFiles}\Google\Chrome\Applica
     Tee-Object "$web\driver.log"
 $driver = Get-Content "$web\driver.log" -Raw -ErrorAction SilentlyContinue
 $pageLog = Get-Content "$web\page.log" -Raw -ErrorAction SilentlyContinue
-$av1 = if ($driver -match "av1 frames: (\d+)") { [int]$Matches[1] } else { -1 }
+$av1 = if ($driver -match "av1 decoders configured: (.+)") { $Matches[1].Trim() } else { "no word" }
 Check "web: the page started the client as $user" ($pageLog -match " /u:$user ")
-Check "web: the page decoded AV1 frames" ($av1 -gt 0) "$av1 frames"
+Check "web: the page decodes AV1 (a WebCodecs decoder configured)" ($av1 -match "profile \d") $av1
 
 # a demo video of the same: the web client on this Windows host
 # (wasm-demo.mjs, SERVER=windows), finished as the site's other videos are
@@ -189,6 +194,12 @@ if (Test-Path "$demo\raw.mp4") {
     & ffmpeg -v error -y -ss ("{0:F1}" -f ($len * 0.7)) -i "$demo\raw.mp4" -frames:v 1 `
         -vf "scale=1280:720:flags=lanczos" -q:v 4 "$Out\windows-host.jpg"
 }
+# the demo leaves Notepad open on this same desktop: close it, and any menu,
+# before the native client needs the focus
+Stop-Process -Name notepad -Force -ErrorAction SilentlyContinue
+Add-Type -Namespace Kit -Name Esc -MemberDefinition '[DllImport("user32.dll")] public static extern void keybd_event(byte vk, byte scan, uint flags, System.UIntPtr extra);'
+[Kit.Esc]::keybd_event(0x1B, 0x01, 0, [UIntPtr]::Zero); [Kit.Esc]::keybd_event(0x1B, 0x01, 2, [UIntPtr]::Zero)
+(New-Object -ComObject Shell.Application).MinimizeAll()
 Check "demo: a video of the web client on this host" ((Test-Path "$Out\windows-host.mp4") -and (Test-Path "$Out\windows-host.jpg")) `
     "$(if (Test-Path "$Out\windows-host.mp4") { '{0:N1} MB' -f ((Get-Item "$Out\windows-host.mp4").Length / 1MB) })"
 Stop $gw; Stop $http

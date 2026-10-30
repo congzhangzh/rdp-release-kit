@@ -291,7 +291,7 @@ if (GNOME) {   // GNOME starts in the overview: typing searches, Enter starts th
 await caption("Keyboard and mouse go to the remote desktop");
 await sleep(600);
 if (WINDOWS) {
-  await typeRemote("Hello from the browser, through FreeRDP Web\n");
+  await typeRemote("hello from the browser through freerdp web\n");   // key(): lower case only
   await sleep(2400);
 } else {
   await typeRemote("echo hello from the browser\n");

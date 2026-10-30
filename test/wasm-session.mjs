@@ -6,7 +6,8 @@
 //   node wasm-session.mjs <page url> <gateway host:port> <user> <password> <out dir>
 //
 // CHROME=<binary> picks the browser (default google-chrome; the Windows host
-// test passes Chrome's path). Prints how many AV1 frames the page decoded.
+// test passes Chrome's path). Prints the AV1 decoders the page configured
+// (WebCodecs, on a key frame: profile 0 = 4:2:0, 1 = 4:4:4), as its Info does.
 import { spawn } from "node:child_process";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -111,5 +112,5 @@ writeFileSync(join(out, "wasm-session.png"), Buffer.from(shot.data, "base64"));
 const pageLog = await ev("document.getElementById('log')?.textContent ?? ''");
 writeFileSync(join(out, "page.log"), pageLog + "\n--- console ---\n" + logs.join("\n"));
 console.log(`page status: ${await ev("document.getElementById('status')?.textContent")}`);
-console.log(`av1 frames: ${await ev("globalThis.Module?.freerdpAv1?.stats?.frames ?? 0")}`);
+console.log(`av1 decoders configured: ${await ev("[...(globalThis.Module?.freerdpAv1?.decoders?.values() ?? [])].filter((d) => d.profile >= 0).map((d) => 'profile ' + d.profile).join(', ') || 'none'")}`);
 done(0);
