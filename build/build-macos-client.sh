@@ -108,6 +108,12 @@ fi
 cmake_dep opus "${MAC[@]}" -DOPUS_BUILD_PROGRAMS=OFF -DOPUS_BUILD_TESTING=OFF
 cmake_dep jansson "${MAC[@]}" -DJANSSON_BUILD_DOCS=OFF -DJANSSON_WITHOUT_TESTS=ON \
     -DJANSSON_EXAMPLES=OFF
+# libavm, AV2's reference (FreeRDP#13925 decodes with it), with the AVM
+# release kit's options: its two ML encoder experiments off, which also keeps
+# TensorFlow Lite and what it would download out of the build
+cmake_dep avm "${MAC[@]}" -DAVM_TARGET_CPU="$ARCH" -DENABLE_TESTS=0 -DENABLE_EXAMPLES=0 \
+    -DENABLE_DOCS=0 -DENABLE_TOOLS=0 \
+    -DCONFIG_ML_PART_SPLIT=0 -DCONFIG_DIP_EXT_PRUNING=0
 
 # x86_64 on Apple Silicon: a meson cross file names the target (meson has
 # no -arch of its own); nasm assembles the x86 code natively or crossed
@@ -160,6 +166,7 @@ configure "$WORK/build/freerdp" \
     -DWITH_MACAUDIO=ON -DWITH_PULSE=OFF -DWITH_ALSA=OFF -DWITH_OSS=OFF -DWITH_CUPS=OFF \
     -DWITH_PCSC=OFF -DWITH_KRB5=OFF -DWITH_FUSE=OFF -DWITH_FFMPEG=OFF -DWITH_SWSCALE=OFF \
     -DWITH_OPENH264=OFF -DWITH_GFX_AV1=ON -DWITH_DAV1D=ON -DWITH_OPUS=ON \
+    -DWITH_GFX_AV2=ON -DWITH_AVM=ON \
     -DWITH_JANSSON_REQUIRED=ON \
     -DWITH_SYSTEMD=OFF -DWITH_UNICODE_BUILTIN=ON -DWITH_INTERNAL_MD4=ON \
     -DWITH_INTERNAL_RC4=ON -DWITH_SSO_MIB=OFF -DCHANNEL_URBDRC=OFF \
@@ -185,7 +192,7 @@ cp "$STAGE/opt/freerdp/bin/sdl-freerdp" "$PKG/bin/"
 # Silicon does not start the binary: sign it again (ad hoc, no identity)
 strip -S "$PKG/bin/sdl-freerdp"
 codesign --force --sign - "$PKG/bin/sdl-freerdp"
-licenses "$PKG/licenses" freerdp sdl3 sdl3_ttf freetype openssl opus dav1d zlib jansson
+licenses "$PKG/licenses" freerdp sdl3 sdl3_ttf freetype openssl opus dav1d avm zlib jansson
 # the connection window: freerdp-tk and its Python (build/launcher.sh)
 # shellcheck source=build/launcher.sh
 . "$KIT/build/launcher.sh"
@@ -204,7 +211,7 @@ fi
     echo "minimum macOS: $MACOS_MIN"
     echo
     echo "sources (sources.lock):"
-    for name in freerdp sdl3 sdl3_ttf freetype openssl opus dav1d zlib jansson; do
+    for name in freerdp sdl3 sdl3_ttf freetype openssl opus dav1d avm zlib jansson; do
         printf '  %-9s %-8s %s\n' "$name" "${VERSION[$name]}" "${SHA[$name]}"
     done
     echo "$LAUNCHER_MANIFEST"

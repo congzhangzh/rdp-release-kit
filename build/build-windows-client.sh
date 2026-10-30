@@ -85,18 +85,24 @@ cmake_dep sdl3 "${CROSS[@]}" -DSDL_SHARED=OFF -DSDL_STATIC=ON -DSDL_TESTS=OFF -D
 cmake_dep sdl3_ttf "${CROSS[@]}" -DSDLTTF_VENDORED=OFF -DSDLTTF_HARFBUZZ=OFF \
     -DSDLTTF_PLUTOSVG=OFF -DSDLTTF_SAMPLES=OFF
 
+# libavm, AV2's reference (FreeRDP#13925 decodes with it), with the AVM
+# release kit's options: its two ML encoder experiments off, which also keeps
+# TensorFlow Lite and what it would download out of the build
+cmake_dep avm "${CROSS[@]}" -DENABLE_TESTS=0 -DENABLE_EXAMPLES=0 -DENABLE_DOCS=0 -DENABLE_TOOLS=0 \
+    -DCONFIG_ML_PART_SPLIT=0 -DCONFIG_DIP_EXT_PRUNING=0
+
 # The host's FreeRDP and its AV1 encoder (libaom keeps its decoder: FreeRDP's
 # av1.c includes aom_decoder.h whenever libaom is there; dav1d still decodes)
 FREERDP=freerdp
 WHAT=(-DWITH_CLIENT=ON -DWITH_CLIENT_SDL=ON -DWITH_CLIENT_SDL3=ON -DWITH_CLIENT_SDL2=OFF
-      -DWITH_SERVER=OFF)
+      -DWITH_SERVER=OFF -DWITH_GFX_AV2=ON -DWITH_AVM=ON)
 if [ -n "${HOST:-}" ]; then
     FREERDP=freerdp_host
     cmake_dep aom "${CROSS[@]}" -DENABLE_TESTS=OFF -DENABLE_EXAMPLES=OFF -DENABLE_DOCS=OFF \
         -DENABLE_TOOLS=OFF
     WHAT=(-DWITH_CLIENT=OFF -DWITH_SERVER=ON -DWITH_SHADOW=ON -DWITH_PROXY=OFF
           -DWITH_PLATFORM_SERVER=OFF -DWITH_SHADOW_WIN_DXGI=ON -DWITH_SHADOW_WIN_SERVICE=ON
-          -DWITH_AOM=ON -DWITH_WINPR_TOOLS=ON)
+          -DWITH_AOM=ON -DWITH_WINPR_TOOLS=ON -DWITH_GFX_AV2=ON -DWITH_AVM=ON)
 fi
 
 # FreeRDP: the SDL3 client only, static. Its fonts and icons are compiled
@@ -156,14 +162,14 @@ if [ -n "${HOST:-}" ]; then
         /llvm-mingw/bin/llvm-strip --strip-debug "$PKG/$tool.exe"
         "$KIT/build/check-windows.sh" "$PKG/$tool.exe"
     done
-    licenses "$PKG/licenses" freerdp_host libressl opus dav1d aom zlib jansson llvm_mingw
+    licenses "$PKG/licenses" freerdp_host libressl opus dav1d aom avm zlib jansson llvm_mingw
     cp "$KIT/build/windows/host-README.txt" "$PKG/README.txt"
     {
         echo "FreeRDP's shadow server for Windows ${VERSION[freerdp_host]}, $ARCH, built $(date -u +%F)"
         echo "toolchain: llvm-mingw ${VERSION[llvm_mingw]} (clang, libc++, UCRT)"
         echo
         echo "sources (sources.lock):"
-        for name in freerdp_host libressl opus dav1d aom zlib jansson llvm_mingw; do
+        for name in freerdp_host libressl opus dav1d aom avm zlib jansson llvm_mingw; do
             printf '  %-12s %-10s %s\n' "$name" "${VERSION[$name]}" "${SHA[$name]}"
         done
         override_manifest
@@ -184,7 +190,7 @@ mkdir -p "$PKG/licenses"
 EXE=$(find "$STAGE" -name 'sdl*-freerdp.exe' | head -1)
 cp "$EXE" "$PKG/"
 /llvm-mingw/bin/llvm-strip --strip-debug "$PKG/$(basename "$EXE")"
-licenses "$PKG/licenses" freerdp sdl3 sdl3_ttf freetype libressl opus dav1d zlib jansson \
+licenses "$PKG/licenses" freerdp sdl3 sdl3_ttf freetype libressl opus dav1d avm zlib jansson \
     llvm_mingw
 # shellcheck source=build/launcher.sh
 . "$KIT/build/launcher.sh"
@@ -194,7 +200,7 @@ add_launcher "$PKG" windows "$ARCH"
     echo "toolchain: llvm-mingw ${VERSION[llvm_mingw]} (clang, libc++, UCRT)"
     echo
     echo "sources (sources.lock):"
-    for name in freerdp sdl3 sdl3_ttf freetype libressl opus dav1d zlib jansson llvm_mingw; do
+    for name in freerdp sdl3 sdl3_ttf freetype libressl opus dav1d avm zlib jansson llvm_mingw; do
         printf '  %-10s %-8s %s\n' "$name" "${VERSION[$name]}" "${SHA[$name]}"
     done
     echo "$LAUNCHER_MANIFEST"

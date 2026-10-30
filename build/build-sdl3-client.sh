@@ -41,6 +41,11 @@ fi
 
 cmake_dep opus -DOPUS_BUILD_PROGRAMS=OFF -DOPUS_BUILD_TESTING=OFF
 cmake_dep jansson -DJANSSON_BUILD_DOCS=OFF -DJANSSON_WITHOUT_TESTS=ON -DJANSSON_EXAMPLES=OFF
+# libavm, AV2's reference (FreeRDP#13925 decodes with it), with the AVM
+# release kit's options: its two ML encoder experiments off, which also keeps
+# TensorFlow Lite and what it would download out of the build
+cmake_dep avm -DENABLE_TESTS=0 -DENABLE_EXAMPLES=0 -DENABLE_DOCS=0 -DENABLE_TOOLS=0 \
+    -DCONFIG_ML_PART_SPLIT=0 -DCONFIG_DIP_EXT_PRUNING=0
 
 if ! built dav1d; then
     src=$(unpack dav1d)
@@ -100,6 +105,7 @@ configure "$WORK/build/freerdp" env PKG_CONFIG_LIBDIR="$DEPS/lib/pkgconfig" \
     -DWITH_PULSE=ON -DWITH_ALSA=OFF -DWITH_OSS=OFF -DWITH_CUPS=OFF -DWITH_PCSC=OFF \
     -DWITH_KRB5=OFF -DWITH_FUSE=OFF -DWITH_FFMPEG=OFF -DWITH_SWSCALE=OFF \
     -DWITH_OPENH264=OFF -DWITH_GFX_AV1=ON -DWITH_DAV1D=ON -DWITH_OPUS=ON \
+    -DWITH_GFX_AV2=ON -DWITH_AVM=ON \
     -DWITH_SYSTEMD=OFF -DWITH_UNICODE_BUILTIN=ON -DWITH_INTERNAL_MD4=ON \
     -DWITH_INTERNAL_RC4=ON -DWITH_SSO_MIB=OFF -DCHANNEL_URBDRC=OFF \
     -DWITH_MANPAGES=OFF "${DEV[@]}" > "$WORK/log/freerdp.log" 2>&1
@@ -116,7 +122,7 @@ rm -rf "$WORK/pkg"
 mkdir -p "$PKG/bin" "$PKG/licenses"
 cp "$STAGE/opt/freerdp/bin/sdl-freerdp" "$PKG/bin/"
 strip --strip-debug "$PKG/bin/sdl-freerdp"
-licenses "$PKG/licenses" freerdp sdl3 sdl3_ttf freetype openssl opus dav1d zlib jansson
+licenses "$PKG/licenses" freerdp sdl3 sdl3_ttf freetype openssl opus dav1d avm zlib jansson
 # shellcheck source=build/launcher.sh
 . "$KIT/build/launcher.sh"
 add_launcher "$PKG" linux "$ARCH"
@@ -129,7 +135,7 @@ check_launcher "$PKG"
     [ "${DEV[0]:-}" != -DCMAKE_INTERPROCEDURAL_OPTIMIZATION=OFF ] || echo "LTO off (local build)"
     echo
     echo "sources (sources.lock):"
-    for name in freerdp sdl3 sdl3_ttf freetype openssl opus dav1d zlib jansson; do
+    for name in freerdp sdl3 sdl3_ttf freetype openssl opus dav1d avm zlib jansson; do
         printf '  %-9s %-8s %s\n' "$name" "${VERSION[$name]}" "${SHA[$name]}"
     done
     echo "$LAUNCHER_MANIFEST"

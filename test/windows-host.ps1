@@ -6,8 +6,9 @@
 #                    <web client folder> <out dir>
 #
 # 1. The server started by hand, as the user: a SAM-file login (WinPR's NTLM,
-#    WINPR_NATIVE_SSPI=0), and a Unix socket (/ipc-socket) reached through a
-#    small TCP relay here, as the client cannot dial one.
+#    WINPR_NATIVE_SSPI=0), a Unix socket (/ipc-socket) reached through a
+#    small TCP relay here, as the client cannot dial one, and an AV2 session
+#    (/gfx-av2, the client's /gfx:AV2).
 # 2. freerdp-shadow-service: it runs the server as SYSTEM on the console
 #    session; Windows-account logins (Windows' own SSPI); the web client logs
 #    in through websockify and decodes AV1; the native client's frames are
@@ -131,6 +132,24 @@ if (Test-Path $sock) {
     Remove-Job $relay -Force -ErrorAction SilentlyContinue
 }
 Stop $server
+
+# AV2 (FreeRDP#13925, libavm): the server started by hand with /gfx-av2, the
+# kit's client asking for it; AV1 stays what the service offers
+$env:WLOG_FILEAPPENDER_OUTPUT_FILE_NAME = "server-av2.wlog"
+$server = Start-Process -FilePath "$HostDir\freerdp-shadow-cli.exe" -PassThru -NoNewWindow `
+    -ArgumentList "/bind-address:127.0.0.1", "/port:4492", "/gfx-av2"
+for ($i = 0; $i -lt 30 -and -not (Listening 4492) -and -not $server.HasExited; $i++) { Start-Sleep -Seconds 1 }
+Check "av2: the server listens on 127.0.0.1:4492" (Listening 4492)
+$port = 4492
+$s = Client @("/p:$pass", "/gfx:AV2:on", "/size:1280x720") "av2-session" 0 -Window
+Start-Sleep -Seconds 20
+Shot "av2"
+Check "av2: a session holds 20 s" (-not $s.HasExited)
+$codecs = Codecs "av2-session"
+Check "av2: the frames came in AV2" (($codecs -join " ") -match "RDPGFX_CODECID_AV2") ($codecs -join ", ")
+Stop $s
+Stop $server
+$port = 4489
 
 # ---- 2. the service
 $port = 4490
