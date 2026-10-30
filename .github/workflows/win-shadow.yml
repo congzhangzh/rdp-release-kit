@@ -1,9 +1,12 @@
-# Phase 0 of a Windows host (branch win-shadow only, 2026-10-30): FreeRDP's
-# shadow server for Windows, built like the kit's Windows client with
-# SHADOW=1 (libaom for AV1, upstream master for the Windows shadow fixes),
-# then started on a Windows runner and reached by the client from the same
-# build on 127.0.0.1 (test/win-shadow.ps1). It reports what works; nothing
-# here is released.
+# A Windows host (branch win-shadow only, 2026-10-30): FreeRDP's shadow
+# server for Windows, built like the kit's Windows client with SHADOW=1
+# (Desktop Sharing API capture) and SHADOW=dxgi (DXGI capture and
+# freerdp-shadow-service), from our fork's feature-shadow-win-service, with
+# libaom for AV1. Phase 0 (test/win-shadow.ps1): the server started by hand
+# on 127.0.0.1 of a windows-2025 runner, NLA both ways, an AV1 session; and
+# whether Windows' own sshd forwards to a Unix socket. Phase 2
+# (test/win-shadow-service.ps1): the service runs it as SYSTEM on the
+# console session, Ctrl+Alt+Del and the lock screen. Nothing here is released.
 name: win-shadow
 
 on:
@@ -15,6 +18,10 @@ permissions:
 
 jobs:
   build:
+    strategy:
+      fail-fast: false
+      matrix:
+        shadow: ["1", dxgi]
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
@@ -29,24 +36,26 @@ jobs:
         uses: actions/cache@v6
         with:
           path: ~/.cache/rdp-release-kit/ccache
-          key: ccache-windows-shadow-${{ github.sha }}
+          key: ccache-windows-shadow-${{ matrix.shadow }}-${{ github.sha }}
           restore-keys: |
+            ccache-windows-shadow-${{ matrix.shadow }}-
             ccache-windows-shadow-
             ccache-windows-x86_64-
 
       - name: Build
         env:
           CCACHE_MAXSIZE: 1G
-          SHADOW: "1"
+          SHADOW: ${{ matrix.shadow }}
         run: ./build-windows.sh x86_64
 
       - uses: actions/upload-artifact@v7
         with:
-          name: win-shadow-x86_64
+          name: win-shadow-x86_64-${{ matrix.shadow == 'dxgi' && 'dxgi' || 'wds' }}
           path: dist/*.zip
           if-no-files-found: error
           retention-days: 7
 
+  # phase 0: the server started by hand, Desktop Sharing API capture
   test:
     needs: build
     runs-on: windows-2025
@@ -54,7 +63,7 @@ jobs:
       - uses: actions/checkout@v7
       - uses: actions/download-artifact@v8
         with:
-          name: win-shadow-x86_64
+          name: win-shadow-x86_64-wds
           path: dl
       - name: Unpack
         shell: pwsh
@@ -76,5 +85,31 @@ jobs:
         if: always()
         with:
           name: win-shadow-test
+          path: out
+          retention-days: 7
+
+  # phase 2: freerdp-shadow-service, DXGI capture, the secure desktop
+  service:
+    needs: build
+    runs-on: windows-2025
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        with:
+          name: win-shadow-x86_64-dxgi
+          path: dl
+      - name: Unpack
+        shell: pwsh
+        run: |
+          Expand-Archive -Path (Get-ChildItem dl\*.zip | Select-Object -First 1).FullName -DestinationPath unpacked
+          Get-ChildItem unpacked\*\*.exe | ForEach-Object { "$($_.Name)  $($_.Length)" }
+      - name: The service on the console session
+        timeout-minutes: 15
+        shell: pwsh
+        run: ./test/win-shadow-service.ps1 (Get-ChildItem unpacked -Directory | Select-Object -First 1).FullName out
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: win-shadow-service-test
           path: out
           retention-days: 7

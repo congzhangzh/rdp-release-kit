@@ -97,7 +97,13 @@ if [ -n "${SHADOW:-}" ]; then
     DEPRECATED_3X=OFF
     # SHADOW=dxgi: DXGI desktop duplication, which the service mode needs (it
     # follows the secure desktop); otherwise the Desktop Sharing API
-    [ "$SHADOW" != dxgi ] || SERVER+=(-DWITH_SHADOW_WIN_DXGI=ON)
+    SHADOW_TOOLS=(freerdp-shadow-cli winpr-hash)
+    # with freerdp-shadow-service, which runs it as SYSTEM on the console
+    # session (logon and lock screens, UAC prompts, Ctrl+Alt+Del)
+    if [ "$SHADOW" = dxgi ]; then
+        SERVER+=(-DWITH_SHADOW_WIN_DXGI=ON -DWITH_SHADOW_WIN_SERVICE=ON)
+        SHADOW_TOOLS+=(freerdp-shadow-service)
+    fi
 fi
 
 # FreeRDP: the SDL3 client only, static. Its fonts and icons are compiled
@@ -157,7 +163,7 @@ cp "$EXE" "$PKG/"
 licenses "$PKG/licenses" freerdp sdl3 sdl3_ttf freetype libressl opus dav1d zlib jansson \
     llvm_mingw ${SHADOW:+aom}
 if [ -n "${SHADOW:-}" ]; then
-    for tool in freerdp-shadow-cli winpr-hash; do
+    for tool in "${SHADOW_TOOLS[@]}"; do
         f=$(find "$STAGE" -name "$tool.exe" | head -1)
         [ -n "$f" ] || { echo "SHADOW=1: no $tool.exe in the build" >&2; exit 1; }
         cp "$f" "$PKG/"
@@ -180,7 +186,7 @@ add_launcher "$PKG" windows "$ARCH"
     [ "${DEV[0]:-}" != -DCMAKE_INTERPROCEDURAL_OPTIMIZATION=OFF ] || echo "LTO off (local build)"
 } > "$PKG/MANIFEST"
 "$KIT/build/check-windows.sh" "$PKG/$(basename "$EXE")"
-[ -z "${SHADOW:-}" ] || for tool in freerdp-shadow-cli winpr-hash; do
+[ -z "${SHADOW:-}" ] || for tool in "${SHADOW_TOOLS[@]}"; do
     "$KIT/build/check-windows.sh" "$PKG/$tool.exe"
 done
 # zip adds to an existing archive: start a new one
