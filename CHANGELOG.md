@@ -13,6 +13,31 @@ toolchain) gets an entry here in the same commit.
 
 ## 2026-10-30
 
+- **A new product: the Windows host** (聪哥: a Windows backend, "go ahead to do them all").
+  `freerdp-host-<version>-windows-x86_64.zip`: FreeRDP's shadow server
+  (`freerdp-shadow-cli`), `freerdp-shadow-service`, which runs it as SYSTEM on the
+  console session, and `winpr-hash`, with a README. It shares a Windows PC's own screen,
+  the logon and lock screens, UAC prompts and Ctrl+Alt+Del included, in AV1 (libaom
+  3.15.2, a new pin), with Windows-account logins (WinPR on Windows uses Windows' own
+  SSPI). Built by `build-windows.sh` with `HOST=1` from a pin of its own,
+  **`freerdp_host` `20261030.1`** (`aaa5b04c6`): our release picked from the fork's
+  integration-shadow-win, FreeRDP master 472f1901f plus our pull requests #13931 and
+  #13932 (build fixes), #13933 (DXGI capture that follows the secure desktop), #13934
+  (the service, Ctrl+Alt+Del) and #13935 (a Unix-socket listener on Windows); the
+  clients keep `freerdp` `20261028.1`. `windows-host.yml` builds it and tests it on a
+  Windows Server 2025 runner with `test/windows-host.ps1`: a SAM-file login and a Unix
+  socket by hand; through the service, SYSTEM on the console session, Windows-account
+  logins, the web client through websockify decoding AV1, the native client's AV1
+  frames, Ctrl+Alt+Del and the lock screen followed. It also records FreeRDP Web on the
+  host (`wasm-demo.mjs`, `SERVER=windows`), which the release adds to `demo.json` as
+  `windows`. kit.yml calls it with the run's own clients; the release lists the archive
+  and gives `install.json` a `windows` entry (the PowerShell line that installs it).
+  Found on the way and filed with the PRs: upstream's default Desktop Sharing capture
+  sends no frame on Server 2025; Windows' own sshd (OpenSSH 9.5p2) cannot forward to a
+  Unix socket. The experiment's history: branch `win-shadow`.
+- **freerdp-web `20261030.4`** (`24892e5`): Get a server shows the Windows host
+  (`install.json`'s `windows`, 20261030.3) and its video (`demo.json`'s `windows`).
+
 - **freerdp-web `20261030.2`** (`e78f230`): a new page, **Get a client** (聪哥: Get a server
   also held the client and its demo, and Install as app confused): the three ways to connect
   side by side (this browser, the Chrome app, a native client with freerdp-tk and its demo
