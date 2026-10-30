@@ -88,8 +88,12 @@ cmake_dep sdl3_ttf "${CROSS[@]}" -DSDLTTF_VENDORED=OFF -DSDLTTF_HARFBUZZ=OFF \
 # libavm, AV2's reference (FreeRDP#13925 decodes with it), with the AVM
 # release kit's options: its two ML encoder experiments off, which also keeps
 # TensorFlow Lite and what it would download out of the build
+# On ARM64 Windows libavm has no way to ask the CPU (avm_ports/arm_cpudetect.c
+# knows MSVC's, not mingw's): NEON is in every ARM64 CPU, so no run-time check
+AVM_ARCH=()
+[ "$ARCH" != aarch64 ] || AVM_ARCH=(-DCONFIG_RUNTIME_CPU_DETECT=0)
 cmake_dep avm "${CROSS[@]}" -DENABLE_TESTS=0 -DENABLE_EXAMPLES=0 -DENABLE_DOCS=0 -DENABLE_TOOLS=0 \
-    -DCONFIG_ML_PART_SPLIT=0 -DCONFIG_DIP_EXT_PRUNING=0
+    -DCONFIG_ML_PART_SPLIT=0 -DCONFIG_DIP_EXT_PRUNING=0 "${AVM_ARCH[@]}"
 
 # The host's FreeRDP and its AV1 encoder (libaom keeps its decoder: FreeRDP's
 # av1.c includes aom_decoder.h whenever libaom is there; dav1d still decodes)

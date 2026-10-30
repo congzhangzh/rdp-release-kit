@@ -27,7 +27,10 @@ toolchain) gets an entry here in the same commit.
   WebAssembly grows 10.6 -> 12.6 MB (+19 %; the whole library, encoder included, made it
   15.9 MB, so 20261030.4's kit left AV2 out of the page). **freerdp-web `20261030.5`**:
   About names the AV2 decoder (libavm, in the page). `test/windows-host.ps1` also logs
-  the web client in to the AV2 server: the server must confirm AV2 (FRDP_2) for it. **`freerdp_host` `20261030.4`** (`7ee083d79`): the Windows host's FreeRDP plus the
+  the web client in to the AV2 server: the server must confirm AV2 (FRDP_2) for it.
+  On ARM64 Windows libavm is built with `CONFIG_RUNTIME_CPU_DETECT=0`: its
+  `arm_cpudetect.c` knows MSVC's way to ask the CPU, not mingw clang's, and NEON is in
+  every ARM64 CPU (run 41116070345's windows (aarch64) job failed there). **`freerdp_host` `20261030.4`** (`7ee083d79`): the Windows host's FreeRDP plus the
   same extension, so its shadow server encodes AV2 when started with `/gfx-av2` (the
   service's install line keeps AV1). `test/windows-host.ps1` adds an AV2 session with the
   run's own client: the frames must come in as `RDPGFX_CODECID_AV2` (a scratch run of the
