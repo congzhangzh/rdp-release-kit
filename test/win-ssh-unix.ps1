@@ -108,6 +108,9 @@ Forward 5701 "127.0.0.1:5700"
 $noDrive = $sock.Substring(2).Replace("\", "/")
 Forward 5702 $noDrive
 Forward 5703 $noDrive.ToLower()
+# run 41095283347: sshd answered both "open failed: connect failed"; the
+# full path with its drive letter, in brackets so ssh keeps "C:" in one field
+Forward 5704 ("[" + $sock.Replace("\", "/") + "]")
 # if ssh never reached it, the echo server is still waiting: try it directly
 if ($echo.State -eq "Running") {
     Say "direct AF_UNIX connect -> $(Ping ([System.Net.Sockets.UnixDomainSocketEndPoint]::new($sock)) ([System.Net.Sockets.AddressFamily]::Unix))"
