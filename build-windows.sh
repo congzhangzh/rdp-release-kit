@@ -7,6 +7,7 @@
 # Writes dist/sdl3-freerdp-<version>-windows-<arch>.zip. Each architecture
 # keeps its own work tree in ~/.cache/rdp-release-kit/win-<arch> (under
 # KIT_CACHE=<dir> instead), compiled objects in its ccache directory.
+# SHADOW=1 also builds FreeRDP's shadow server (branch win-shadow).
 # SRC_freerdp=<dir> builds FreeRDP from a local checkout, LTO=off then
 # without link-time optimisation (see build/overrides.sh; not for releases).
 set -euo pipefail
@@ -59,6 +60,7 @@ for arch in "${ARCHES[@]}"; do
     # shellcheck disable=SC2016
     if ! "$ENGINE" run --rm -v "$KIT":/kit:ro -v "$SOURCES":/sources -v "$OUT":/out \
             -v "$work":/work "${CACHE[@]}" "${OVERRIDE[@]}" -e OWNER="$(owner)" -e ARCH="$arch" \
+            -e SHADOW="${SHADOW:-}" \
             "$IMAGE" \
             bash -c '/kit/build/build-windows-client.sh /kit /sources /out "$ARCH"; rc=$?;
                      [ -z "$OWNER" ] || chown -R "$OWNER" /out /work /sources ${CCACHE_DIR:-}

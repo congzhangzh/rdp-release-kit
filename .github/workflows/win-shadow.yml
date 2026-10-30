@@ -1,0 +1,80 @@
+# Phase 0 of a Windows host (branch win-shadow only, 2026-10-30): FreeRDP's
+# shadow server for Windows, built like the kit's Windows client with
+# SHADOW=1 (libaom for AV1, upstream master for the Windows shadow fixes),
+# then started on a Windows runner and reached by the client from the same
+# build on 127.0.0.1 (test/win-shadow.ps1). It reports what works; nothing
+# here is released.
+name: win-shadow
+
+on:
+  push:
+    branches: [win-shadow]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Cache sources
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/rdp-release-kit/sources
+          key: sources-${{ hashFiles('sources.lock') }}
+
+      - name: Cache compiled objects
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/rdp-release-kit/ccache
+          key: ccache-windows-shadow-${{ github.sha }}
+          restore-keys: |
+            ccache-windows-shadow-
+            ccache-windows-x86_64-
+
+      - name: Build
+        env:
+          CCACHE_MAXSIZE: 1G
+          SHADOW: "1"
+        run: ./build-windows.sh x86_64
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: win-shadow-x86_64
+          path: dist/*.zip
+          if-no-files-found: error
+          retention-days: 7
+
+  test:
+    needs: build
+    runs-on: windows-2025
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        with:
+          name: win-shadow-x86_64
+          path: dl
+      - name: Unpack
+        shell: pwsh
+        run: |
+          Expand-Archive -Path (Get-ChildItem dl\*.zip | Select-Object -First 1).FullName -DestinationPath unpacked
+          Get-ChildItem unpacked\*\*.exe | ForEach-Object { "$($_.Name)  $($_.Length)" }
+      - name: Shadow server and client
+        shell: pwsh
+        run: ./test/win-shadow.ps1 (Get-ChildItem unpacked -Directory | Select-Object -First 1).FullName out
+      # 聪哥's question: can Windows' own sshd forward to a socket file? (a
+      # later listener for the shadow server); a report, never a failure
+      - name: OpenSSH and Unix sockets
+        if: always()
+        continue-on-error: true
+        timeout-minutes: 10
+        shell: pwsh
+        run: ./test/win-ssh-unix.ps1 out/ssh-unix
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: win-shadow-test
+          path: out
+          retention-days: 7
