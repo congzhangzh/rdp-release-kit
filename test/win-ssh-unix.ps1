@@ -23,8 +23,9 @@ Say "sshd: $((Get-Item "$env:WINDIR\System32\OpenSSH\sshd.exe" -ErrorAction Sile
 
 # a key for this user; an administrator's keys live in administrators_authorized_keys
 $key = "$Out\id_ed25519"
-& ssh-keygen -q -t ed25519 -N '""' -f $key | Out-Null
-if (-not (Test-Path $key)) { & ssh-keygen -q -t ed25519 -N "" -f $key | Out-Null }
+# an empty passphrase: PowerShell 7.3+ passes "" as an empty argument ('""'
+# gave the key a passphrase of two quotes, and ssh then could not use it)
+& ssh-keygen -q -t ed25519 -N "" -f $key | Out-Null
 & icacls $key /inheritance:r /grant:r "${env:USERNAME}:F" | Out-Null
 $auth = "$env:ProgramData\ssh\administrators_authorized_keys"
 New-Item -ItemType Directory -Force -Path "$env:ProgramData\ssh" | Out-Null
