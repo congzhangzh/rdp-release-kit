@@ -318,6 +318,14 @@ if [ -n "${CLIENT_DEMO:-}" ]; then
     check() { if eval "$2"; then echo "PASS  $1"; pass=$((pass + 1)); else echo "FAIL  $1"; fail=$((fail + 1)); fi; }
     check "the demo ran to its end" '[ "$recorded" = 0 ]'
     check "freerdp-tk saved the password in the keyring" 'grep -q "keyring: usable" "$OUT/client/driver.log"'
+    # what drive.py logged: freerdp-tk's glyphs, the clients "(auto)" chose
+    # from, the Python that ran the window (Python reprs, hence the quotes)
+    # shellcheck disable=SC2034 # both read by checks below
+    ascii="glyphs: .*'dots': '\.\.\.'"
+    # shellcheck disable=SC2034
+    own_first="clients: \['/home/demo/[^']*/bin/[^']*', '/usr/bin/sdl-freerdp3'"
+    # Tk without Xft (uv's Python, the release's): ASCII instead of … and •
+    check "freerdp-tk shows ASCII glyphs, its Tk has no Xft" 'grep -q "$ascii" "$OUT/client/driver.log"'
     check "the second visit logged in from the saved connection, with no password asked" \
         'grep -q "phase 2" "$OUT/client/driver.log" && [ "$(grep -c "session window" "$OUT/client/driver.log")" = 2 ]'
     check "sesman started GNOME for tester (GNOME Shell)" \
@@ -325,9 +333,14 @@ if [ -n "${CLIENT_DEMO:-}" ]; then
     # the kit's client offers AV1; Debian's does not, and xrdp falls back to H.264
     # (the videos' titles name the codec)
     if [ "$CLIENT_DEMO" = release ]; then
+        # Debian's sdl-freerdp3 is installed too, and comes first by name
+        check "(auto) takes the release's own client first, Debian's after it" \
+            'grep -q "$own_first" "$OUT/client/driver.log"'
         check "xrdp encodes the session in AV1" \
             '"$ENGINE" exec "$NAME" grep -q "starting AV1 codec session" /var/log/xrdp.log'
     else
+        check "plain uvx: freerdp-tk started again with uv's own Python" \
+            '[ "$(grep -c "python: .*/uv/python/" "$OUT/client/driver.log")" = 2 ]'
         check "xrdp encodes the session in H.264 (Debian's client has no AV1)" \
             '"$ENGINE" exec "$NAME" grep -q "starting h264 codec session" /var/log/xrdp.log'
     fi

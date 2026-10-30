@@ -4,10 +4,10 @@
 # password), PulseAudio for the client's sound, xdotool for the pointer and
 # the keys, ffmpeg to record the display. For the uvx video: uv, and
 # Debian's own FreeRDP 3 SDL client, since uvx brings only the window; the
-# release video unpacks the kit's client archive instead. Its Python is
-# Debian's (Openbox needs one) without Tk, as on many desktops: plain uvx
-# would take it and fail, so the demo runs uvx --managed-python, uv's own
-# Python, which has Tk. Everything in it is synthetic:
+# release video unpacks the kit's client archive instead, beside Debian's
+# client. Its Python is Debian's (Openbox needs one) without Tk, as on many
+# desktops: uvx takes it, and freerdp-tk starts again with uv's own Python,
+# which has Tk. Everything in it is synthetic:
 # the user demo, the host name laptop, the keyring's password.
 FROM docker.io/library/debian:13
 RUN apt-get update -qq \

@@ -11,6 +11,31 @@ from right now, and what our own changes to a source fix:
 Every change that alters what is built (a pin, a build option, a patch, a
 toolchain) gets an entry here in the same commit.
 
+## 2026-10-30
+
+- **freerdp-web `20261030.1`** (`f2df14f`): Get a server shows plain `uvx freerdp-tk`.
+- **freerdp-tk `0.3.2`** (`2f90588`, on PyPI; 0.3.1 + one fix), the three findings of 10-28
+  fixed there (聪哥: "fix the three freerdp-tk issues and release"), shipped with the native
+  clients:
+  - "(auto)" follows `PATH` order: each folder in turn, the names only order the clients
+    within one. The release's launcher puts its own `bin/` first, so it takes its own
+    `sdl-freerdp`, not Debian's `sdl-freerdp3`. Each program is listed once (0.3.2): on
+    merged-/usr systems `/bin` and `/usr/bin` are one folder, and 0.3.1 listed it twice,
+    as the release demo's log showed.
+  - Started by uvx on a Python without Tk (`$UV` set), freerdp-tk starts again with uv's
+    own Python (`uv tool run --from freerdp-tk==<version>`, `UV_PYTHON_PREFERENCE=only-managed`),
+    once; elsewhere it says what to install. Plain `uvx freerdp-tk` works on a Debian desktop.
+  - Where Tk draws with X core fonts (`::tk::pkgconfig get fontsystem` is `x11`: the Tk of
+    python-build-standalone, in uv's Pythons and the kit's releases), `...`, `*` and `->`
+    instead of `…`, `•` and `→`, which came out as other characters.
+- **The freerdp-tk demos prove the fixes instead of working around them**: Debian's client
+  stays installed for the release video, and a check reads that "(auto)" lists the release's
+  own client first; the uvx video runs plain `uvx freerdp-tk`, and a check reads that both
+  visits ran on uv's own Python (`sys.base_prefix`: under uvx `sys.executable` is the tool
+  environment's); both check the ASCII glyphs (`hook/drive.py` logs the Python, the clients
+  and the glyphs). The hook loads only where `tkinter` exists, so the first, Tk-less Python
+  prints no error into the video's terminal, only freerdp-tk's own line.
+
 ## 2026-10-28
 
 - **freerdp-web `20261028.11`** (`3576fe9`): Get a server shows freerdp-tk under the native

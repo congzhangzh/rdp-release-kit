@@ -56,7 +56,7 @@ llvm_mingw  20261020 https://github.com/mstorsjo/llvm-mingw/releases/download/20
 # freerdp-tk (Tkinter) by its release tag's commit, and the standalone
 # CPython with Tk that runs it (python-build-standalone, as uv installs it;
 # the hash is the digest GitHub shows for the release asset)
-freerdp_tk  0.3.0    git+https://github.com/congzhangzh/freerdp-tk.git                                        5483caf9617afaf01345eb1f7a68d7b5ef428ab5
+freerdp_tk  0.3.2    git+https://github.com/congzhangzh/freerdp-tk.git                                        2f9058845517f3a761575fa01635f56e5013dc0e
 python_linux_x86_64   3.13.17+20261021 https://github.com/astral-sh/python-build-standalone/releases/download/20261021/cpython-3.13.17+20261021-x86_64-unknown-linux-gnu-install_only_stripped.tar.gz f829adc9d888e76c8801b4799ed444188d35239fcae3a9808a99ec5cb0d8d92c
 python_linux_aarch64  3.13.17+20261021 https://github.com/astral-sh/python-build-standalone/releases/download/20261021/cpython-3.13.17+20261021-aarch64-unknown-linux-gnu-install_only_stripped.tar.gz c6857c65b996701a5da104cbb49b35249c0c026dc0664239b04f7156aa88326a
 python_windows_x86_64 3.13.17+20261021 https://github.com/astral-sh/python-build-standalone/releases/download/20261021/cpython-3.13.17+20261021-x86_64-pc-windows-msvc-install_only_stripped.tar.gz 56cde3b1a1dcc36576753cb408ee0c3568d211baafa0eee40423adc147c480f2
@@ -70,4 +70,4 @@ python_macos_x86_64   3.13.17+20261021 https://github.com/astral-sh/python-build
 # in SDL_Emscripten_TimerHelper); 3.4.18 already ignores FS.mkdir errors for
 # /tmp/filedrop, which 3.2.30 needed backported
 sdl3_wasm   3.4.18+timer git+https://github.com/congzhangzh/SDL.git                                      1d615c14f95a3389bf0026e719144ad51378e40c
-freerdp_web 20261028.11 git+https://github.com/congzhangzh/freerdp-web.git                                     3576fe9b15931c8d296301eddb5d901e5b2aef62
+freerdp_web 20261030.1  git+https://github.com/congzhangzh/freerdp-web.git                                     f2df14f6c8e6e1de6a1561150ce3ab059708d25f

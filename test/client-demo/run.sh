@@ -3,11 +3,11 @@
 # shares the server's network: rdp-gnome is the server's own 127.0.0.1.
 #
 #   run.sh release <client archive>    unpack the kit's client, ./freerdp-tk
-#   run.sh uvx                         uvx --managed-python freerdp-tk, with Debian's client
+#   run.sh uvx                         uvx freerdp-tk, with Debian's client
 #
-# As root it names the server and, for release, takes Debian's client away
-# (freerdp-tk's "(auto)" would take sdl-freerdp3 before sdl-freerdp); then,
-# as the user demo, a display of 1920x1080 with Openbox, the keyring, sound
+# Debian's FreeRDP client stays installed for both: the release's freerdp-tk
+# must still take its own (PATH order, since freerdp-tk 0.3.1). As root it
+# names the server; then, as the user demo, a display of 1920x1080 with Openbox, the keyring, sound
 # and a terminal, recorded to /out/raw.mp4. The terminal's commands are
 # typed here; freerdp-tk's window is worked by hook/drive.py from inside its
 # process. Out: /out/raw.mp4 and /out/driver.log.
@@ -17,7 +17,6 @@ HERE=$(cd "$(dirname "$0")" && pwd)
 
 if [ "$(id -u)" = 0 ]; then
     echo "127.0.0.1 rdp-gnome" >> /etc/hosts
-    [ "$MODE" != release ] || rm -f /usr/bin/sdl-freerdp3
     [ -z "$ARCHIVE" ] || install -o demo -g demo -m 644 "$ARCHIVE" /home/demo/
     chown demo: /out
     exec runuser -u demo -- dbus-run-session -- "$0" "$MODE" "${ARCHIVE:+/home/demo/$(basename "$ARCHIVE")}"
@@ -76,9 +75,9 @@ if [ "$MODE" = release ]; then
     sleep 1
     start="./$name/freerdp-tk"
 else
-    # uv's own Python, which has Tk: the system's here (Openbox needs it) has
-    # none, and plain uvx would take it (No module named 'tkinter')
-    start="uvx --managed-python freerdp-tk"
+    # plain uvx takes the system's Python, which has no Tk here (Openbox
+    # needs a Python, not Tk): freerdp-tk (0.3.1) starts again with uv's own
+    start="uvx freerdp-tk"
 fi
 typed "$start"
 until_mark phase1-done 240

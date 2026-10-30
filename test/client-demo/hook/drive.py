@@ -16,6 +16,7 @@ CLIENT_DEMO_MODE: release (the kit's client, AV1) or uvx (Debian's client).
 import math
 import os
 import subprocess
+import sys
 import time
 import tkinter as tk
 import traceback
@@ -52,6 +53,14 @@ class Driver:
         self.x, self.y = int(x.split("=")[1]), int(y.split("=")[1])
         self.steps = self.phase1() if self.phase == "1" else self.phase2()
         say(f"phase {self.phase}, mode {MODE}")
+        # what the checks in wasm-session.sh read: the Python that runs the
+        # window (uvx: uv's own, after freerdp-tk started again), the clients
+        # "(auto)" chose from (release: its own first, Debian's after it),
+        # and the glyphs (ASCII where Tk has no Xft)
+        from freerdp_tk import app as tkapp
+        say("python:", sys.base_prefix)  # the install behind uvx's environment
+        say("clients:", self.app.clients)
+        say("glyphs:", getattr(tkapp, "GLYPHS", None))
         root.after(1500, self.tick)
 
     # each step yields how long to wait (seconds) or a process to wait for
