@@ -11,9 +11,9 @@
 # (freerdp-web-<version>.zip), the videos in demo/ with demo.json, each video
 # given its lasting address from build/site-anchors.json ("id", "aliases"),
 # RELEASE, the release's tag, which the published site's check reads, and
-# install.json, what the page's "Get a server" shows (releases from
-# 2026-10-28 on; without it the page links to the kit's releases), with
-# freerdp-tk's videos (demo.json's "clients").
+# install.json, what the page's "Get a server" and "Get a client" show
+# (releases from 2026-10-28 on; without it the page links to the kit's
+# releases), with freerdp-tk's videos (demo.json's "clients", on Get a client).
 # Every file is checked against the release's SHA256SUMS. Prints the page's
 # freerdp-web commit (its MANIFEST), whose test-page.mjs checks the files.
 #

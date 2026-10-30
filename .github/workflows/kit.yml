@@ -721,7 +721,8 @@ jobs:
           # a row per distribution: sessions, direct links, the command
           install=$(build/xrdp-install-notes.sh upload "https://github.com/$GITHUB_REPOSITORY/releases/download/$tag")
           # the same as data, with the clients, for the site's "Get a server"
-          # page (build/site.sh copies it next to the page); not attested
+          # and "Get a client" pages (build/site.sh copies it next to the
+          # page); not attested
           # like the files above, its checksum joins SHA256SUMS
           base="https://github.com/$GITHUB_REPOSITORY/releases/download/$tag"
           # shellcheck disable=SC2046 # one argument per client archive

@@ -13,6 +13,13 @@ toolchain) gets an entry here in the same commit.
 
 ## 2026-10-30
 
+- **freerdp-web `20261030.2`** (`e78f230`): a new page, **Get a client** (聪哥: Get a server
+  also held the client and its demo, and Install as app confused): the three ways to connect
+  side by side (this browser, the Chrome app, a native client with freerdp-tk and its demo
+  videos, moved from Get a server). Get a server keeps the servers; the header's Install as
+  app becomes Get a client, and the install page starts with "You probably don't need
+  this." `install.json` and `demo.json` are unchanged; comments in `build/site.sh`,
+  `test/record-demos.sh`, `demo.yml` and `kit.yml` now name the page that shows them.
 - **freerdp-web `20261030.1`** (`f2df14f`): Get a server shows plain `uvx freerdp-tk`.
 - **freerdp-tk `0.3.2`** (`2f90588`, on PyPI; 0.3.1 + one fix), the three findings of 10-28
   fixed there (聪哥: "fix the three freerdp-tk issues and release"), shipped with the native

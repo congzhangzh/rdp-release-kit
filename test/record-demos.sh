@@ -217,7 +217,7 @@ recorded = {"kit": commit, "web": web, "xrdp": xrdp}
 if pw:
     recorded["pipewire-module-xrdp"] = pw
 with open(f"{out}/demo.json", "w", encoding="utf-8") as f:
-    # "clients": freerdp-tk's videos, for the page's Get a server, never the splash
+    # "clients": freerdp-tk's videos, for the page's Get a client, never the splash
     json.dump({"recorded": recorded, "videos": videos, **({"clients": clients} if clients else {})},
               f, indent=2, ensure_ascii=False)
 EOF

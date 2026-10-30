@@ -153,7 +153,7 @@ jobs:
           src, out = sys.argv[1], sys.argv[2]
           # by the videos' names (test/record-demos.sh)
           order = ["xrdp-gnome", "xrdp-gnome-screens", "xrdp-kde", "xrdp-original-xfce", "grd-gnome"]
-          # freerdp-tk's, for the page's Get a server (never the splash)
+          # freerdp-tk's, for the page's Get a client (never the splash)
           client_order = ["freerdp-tk-release", "freerdp-tk-uvx"]
           recorded, videos, clients = {}, {}, {}
           for f in glob.glob(f"{src}/demo-*/demo.json"):

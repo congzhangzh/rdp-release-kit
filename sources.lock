@@ -70,4 +70,4 @@ python_macos_x86_64   3.13.17+20261021 https://github.com/astral-sh/python-build
 # in SDL_Emscripten_TimerHelper); 3.4.18 already ignores FS.mkdir errors for
 # /tmp/filedrop, which 3.2.30 needed backported
 sdl3_wasm   3.4.18+timer git+https://github.com/congzhangzh/SDL.git                                      1d615c14f95a3389bf0026e719144ad51378e40c
-freerdp_web 20261030.1  git+https://github.com/congzhangzh/freerdp-web.git                                     f2df14f6c8e6e1de6a1561150ce3ab059708d25f
+freerdp_web 20261030.2  git+https://github.com/congzhangzh/freerdp-web.git                                     e78f230869c1bf2539d23d76fd4f8c06fd8786c2
