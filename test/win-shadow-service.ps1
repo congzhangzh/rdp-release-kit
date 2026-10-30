@@ -81,7 +81,7 @@ if ($up) {
     $bad = Client @("/p:wrong-$pass", "/auth-only") "auth-bad" 30
     Check "a wrong password does not" ($bad.HasExited -and $bad.ExitCode -ne 0) "exit $($bad.ExitCode)"
 
-    $session = Client @("/p:$pass", "/gfx:AV1", "/size:1280x720") "session" 0
+    $session = Client @("/p:$pass", "/gfx:AV1:on", "/size:1280x720") "session" 0
     Start-Sleep -Seconds 15
     Shot "desktop"
     Check "an AV1 session holds 15 s" (-not $session.HasExited) "$(if ($session.HasExited) { "exit $($session.ExitCode)" } else { 'running' })"
@@ -137,5 +137,9 @@ Copy-Item "$logs\*" $Out -ErrorAction SilentlyContinue
 "== the server: desktop, DXGI, codec lines (first 60)"
 (ServerLog) -split "`n" | Select-String -Pattern "desktop|DXGI|Dxgi|AV1|codec|CapsConfirm|ERROR" |
     Where-Object { $_.Line -notmatch "SurfaceCopy" } | Select-Object -First 60 | ForEach-Object { $_.Line }
+# the frames by codec, from the client's log: AV1 asked for, AV1 sent?
+$codecs = Select-String -Path "$Out\session.wlog" -Pattern "Got GFX (RDPGFX_CODECID_\w+)" -ErrorAction SilentlyContinue |
+    ForEach-Object { $_.Matches[0].Groups[1].Value } | Group-Object | ForEach-Object { "$($_.Name) x$($_.Count)" }
+Check "the frames came in AV1" (($codecs -join " ") -match "RDPGFX_CODECID_AV1") ($codecs -join ", ")
 Get-Content "$Out\checks.txt"
 if ($fails) { exit 1 }

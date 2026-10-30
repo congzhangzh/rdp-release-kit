@@ -104,7 +104,7 @@ Remove-Item Env:\WINPR_NATIVE_SSPI
 # the shadowed desktop, so a screenshot of the desktop shows both
 $server = Server "server" @()
 if (-not $server.HasExited) {
-    $session = Client @("/p:$pass", "/gfx:AV1", "/size:1280x720") "session" 25
+    $session = Client @("/p:$pass", "/gfx:AV1:on", "/size:1280x720") "session" 25
     Add-Type -AssemblyName System.Windows.Forms, System.Drawing
     $b = [System.Windows.Forms.SystemInformation]::VirtualScreen
     $bmp = New-Object System.Drawing.Bitmap $b.Width, $b.Height
@@ -125,5 +125,9 @@ foreach ($f in "server.wlog", "session.wlog") {
             Select-Object -First 60 | ForEach-Object { $_.Line }
     }
 }
+# the frames by codec, from the client's log: AV1 asked for, AV1 sent?
+$codecs = Select-String -Path "$Out\session.wlog" -Pattern "Got GFX (RDPGFX_CODECID_\w+)" -ErrorAction SilentlyContinue |
+    ForEach-Object { $_.Matches[0].Groups[1].Value } | Group-Object | ForEach-Object { "$($_.Name) x$($_.Count)" }
+Check "the frames came in AV1" (($codecs -join " ") -match "RDPGFX_CODECID_AV1") ($codecs -join ", ")
 Get-Content "$Out\checks.txt"
 if ($fails) { exit 1 }
