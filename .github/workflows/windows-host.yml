@@ -107,3 +107,12 @@ jobs:
           name: windows-host-test
           path: out
           retention-days: 7
+      # the demo video of the web client on the Windows host, for the release
+      - uses: actions/upload-artifact@v7
+        with:
+          name: windows-host-demo
+          path: |
+            out/windows-host.mp4
+            out/windows-host.jpg
+          if-no-files-found: error
+          retention-days: 3

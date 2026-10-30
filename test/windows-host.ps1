@@ -169,6 +169,28 @@ $pageLog = Get-Content "$web\page.log" -Raw -ErrorAction SilentlyContinue
 $av1 = if ($driver -match "av1 frames: (\d+)") { [int]$Matches[1] } else { -1 }
 Check "web: the page started the client as $user" ($pageLog -match " /u:$user ")
 Check "web: the page decoded AV1 frames" ($av1 -gt 0) "$av1 frames"
+
+# a demo video of the same: the web client on this Windows host
+# (wasm-demo.mjs, SERVER=windows), finished as the site's other videos are
+# (test/record-demos.sh: 720p, H.264 CRF 28, AAC 96 kbit/s, a poster from 70 %)
+$demo = "$Out\demo"
+New-Item -ItemType Directory -Force -Path $demo | Out-Null
+if (-not (Get-Command ffmpeg -ErrorAction SilentlyContinue)) {
+    & choco install ffmpeg -y --no-progress 2>&1 | Out-File "$demo\choco.log"
+}
+$env:SERVER = "windows"
+& node "$KitTest\wasm-demo.mjs" "http://127.0.0.1:8080/index.html" "127.0.0.1:3390" $user $pass $demo "$demo\raw.mp4" 2>&1 |
+    Tee-Object "$demo\driver.log"
+Remove-Item Env:\SERVER
+if (Test-Path "$demo\raw.mp4") {
+    $len = [double](& ffprobe -v error -show_entries format=duration -of csv=p=0 "$demo\raw.mp4")
+    & ffmpeg -v error -y -i "$demo\raw.mp4" -vf "scale=1280:720:flags=lanczos,format=yuv420p" -c:v libx264 -crf 28 `
+        -preset slow -c:a aac -b:a 96k -movflags +faststart "$Out\windows-host.mp4"
+    & ffmpeg -v error -y -ss ("{0:F1}" -f ($len * 0.7)) -i "$demo\raw.mp4" -frames:v 1 `
+        -vf "scale=1280:720:flags=lanczos" -q:v 4 "$Out\windows-host.jpg"
+}
+Check "demo: a video of the web client on this host" ((Test-Path "$Out\windows-host.mp4") -and (Test-Path "$Out\windows-host.jpg")) `
+    "$(if (Test-Path "$Out\windows-host.mp4") { '{0:N1} MB' -f ((Get-Item "$Out\windows-host.mp4").Length / 1MB) })"
 Stop $gw; Stop $http
 
 # the native client: an AV1 session, Ctrl+Alt+Del, the lock screen

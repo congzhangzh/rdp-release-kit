@@ -13,7 +13,8 @@
 # RELEASE, the release's tag, which the published site's check reads, and
 # install.json, what the page's "Get a server" and "Get a client" show
 # (releases from 2026-10-28 on; without it the page links to the kit's
-# releases), with freerdp-tk's videos (demo.json's "clients", on Get a client).
+# releases), with freerdp-tk's videos (demo.json's "clients", on Get a client)
+# and the Windows host's ("windows", on Get a server).
 # Every file is checked against the release's SHA256SUMS. Prints the page's
 # freerdp-web commit (its MANIFEST), whose test-page.mjs checks the files.
 #
@@ -62,11 +63,13 @@ for v in demo["videos"]:
         shutil.copy(f"{dl}/{os.path.basename(v[k])}", out)
 # freerdp-tk's videos (releases from 2026-10-29 on), which the page's Get a
 # server shows: no lasting address, the splash never plays them
-for v in demo.get("clients", []):
+# and the Windows host's (releases from 2026-10-30 on), shown with it there
+for v in demo.get("clients", []) + demo.get("windows", []):
     for k in ("src", "poster"):
         shutil.copy(f"{dl}/{os.path.basename(v[k])}", out)
 json.dump(demo, open(f"{out}/demo.json", "w", encoding="utf-8"), indent=2, ensure_ascii=False)
-print(f"site.sh: {len(demo['videos'])} demo videos, {len(demo.get('clients', []))} of freerdp-tk", file=sys.stderr)
+print(f"site.sh: {len(demo['videos'])} demo videos, {len(demo.get('clients', []))} of freerdp-tk, "
+      f"{len(demo.get('windows', []))} of the Windows host", file=sys.stderr)
 EOF
 echo "site.sh: $TAG, page freerdp-web ${page:0:12}, in $SITE" >&2
 echo "$page"

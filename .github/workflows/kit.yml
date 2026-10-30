@@ -699,6 +699,12 @@ jobs:
         with:
           name: freerdp-host-windows-x86_64
           path: dist
+      # the web client on the Windows host, recorded by windows-host.yml: it
+      # joins demo.json as "windows", which the page's Get a server shows
+      - uses: actions/download-artifact@v8
+        with:
+          name: windows-host-demo
+          path: dist/demo
       - uses: actions/download-artifact@v8
         with:
           name: demo-release
@@ -706,6 +712,10 @@ jobs:
 
       - name: The files
         run: |
+          jq '.windows = [{title: "FreeRDP Web on a Windows host, AV1",
+                            src: "demo/windows-host.mp4", poster: "demo/windows-host.jpg",
+                            caption: "FreeRDP Web in a browser on a Windows Server 2025 machine of the CI, through websockify, to FreeRDP'"'"'s shadow server run by freerdp-shadow-service as SYSTEM on the console session: the Start menu, Notepad, typing; the picture in AV1."}]' \
+              dist/demo/demo.json > dist/demo/demo.json.new && mv dist/demo/demo.json.new dist/demo/demo.json
           # assets are flat and GitHub turns '~' and '+' into '.': name the
           # files so first, so SHA256SUMS matches what is downloaded
           mkdir -p upload

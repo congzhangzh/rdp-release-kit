@@ -29,8 +29,12 @@ const W = 1920, H = 1080;
 const XRDP_GNOME = process.env.SERVER === "xrdp-gnome";
 const XRDP_KDE = process.env.SERVER === "xrdp-kde";   // KDE Plasma through the xrdp preview, in AV1
 const GNOME = process.env.SERVER === "gnome" || XRDP_GNOME;
+// windows: the Windows host (FreeRDP's shadow server) on a Windows runner, the
+// gateway websockify on the same PC (test/windows-host.ps1); CHROME=<binary>
+const WINDOWS = process.env.SERVER === "windows";
 const LABEL = process.env.DEMO_LABEL ||
-  (XRDP_GNOME ? "xrdp preview + GNOME 51 Wayland, AV1"
+  (WINDOWS ? "FreeRDP shadow server on Windows, AV1"
+    : XRDP_GNOME ? "xrdp preview + GNOME 51 Wayland, AV1"
     : XRDP_KDE ? "xrdp preview + KDE Plasma 6 Wayland, AV1"
     : GNOME ? "gnome-remote-desktop + GNOME Wayland" : "xrdp + Xfce");
 const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -46,7 +50,7 @@ const serverCodec = () => {
 const profile = mkdtempSync(join(tmpdir(), "wasm-demo-"));
 const frames = join(out, "demo-frames");
 rmSync(frames, { recursive: true, force: true }); mkdirSync(frames, { recursive: true });
-const chrome = spawn("google-chrome", ["--headless=new", "--remote-debugging-port=9348",
+const chrome = spawn(process.env.CHROME || "google-chrome", ["--headless=new", "--remote-debugging-port=9348",
   `--user-data-dir=${profile}`, "--no-first-run", `--window-size=${W},${H}`, "--hide-scrollbars",
   "--mute-audio",   // the session's sound stays in the recording, off this computer's speakers
   "--enable-unsafe-swiftshader", "about:blank"], { stdio: "ignore" });
@@ -204,7 +208,8 @@ await sleep(600);
 await caption("FreeRDP Web: an RDP client that runs in the browser");
 await sleep(2600);
 await moveTo(...Object.values(await center("#route .hops")), 900);
-await caption("Your RDP server stays on 127.0.0.1. The page reaches it through SSH.");
+await caption(WINDOWS ? "Your RDP server stays on 127.0.0.1. The page reaches it through a gateway."
+  : "Your RDP server stays on 127.0.0.1. The page reaches it through SSH.");
 await sleep(3200);
 await moveTo(...Object.values(await center("#copyCmd")), 800);
 await caption("One SSH line starts the tunnel and the gateway. Here it already runs.");
@@ -233,7 +238,8 @@ await clickOn("#go");
 const audioStart = await ev("window.__demoRecord ? window.__demoRecord() : 0");   // epoch ms, 0: no sound
 let rx = 0;
 for (let i = 0; i < 80 && rx < 300000; i++) { await sleep(500); rx = await ev("window.freerdpNet?.rx ?? 0"); }
-await caption("The remote Linux desktop, over WebSocket and SSH");
+await caption(WINDOWS ? "This Windows PC's own screen, shared by FreeRDP's shadow server, in AV1"
+  : "The remote Linux desktop, over WebSocket and SSH");
 await sleep(7000);   // the desktop starts, then its terminal
 // newer pages offer, a few seconds after the login, to keep the password in
 // the passkey vault: answered as a user would, so it does not cover the desktop
@@ -262,6 +268,14 @@ if (GNOME) {   // GNOME starts in the overview: typing searches, Enter starts th
   // typing goes to the overview's search; Fedora's terminal is Ptyxis, Debian's Console
   await typeRemote(XRDP_GNOME ? "terminal\n" : "console\n");
   await sleep(4000);
+} else if (WINDOWS) {   // the Windows key opens Start, typing searches it, Enter starts
+  await ev("document.getElementById('canvas').focus(), true");
+  await caption("Windows: the Start menu searches as you type, Enter starts");
+  await sleep(1200);
+  await typeRemote("\u2318");
+  await sleep(1800);
+  await typeRemote("notepad\n");
+  await sleep(4000);
 } else if (XRDP_KDE) {   // Plasma starts on its desktop: Meta opens the launcher, typing searches it
   await ev("document.getElementById('canvas').focus(), true");
   await caption(`KDE Plasma on Wayland through xrdp, in AV1${serverCodec()}`);
@@ -276,12 +290,17 @@ if (GNOME) {   // GNOME starts in the overview: typing searches, Enter starts th
 }
 await caption("Keyboard and mouse go to the remote desktop");
 await sleep(600);
-await typeRemote("echo hello from the browser\n");
-await sleep(900);
-// only what belongs to the throwaway server: a container shares the host's kernel, so
-// nothing like uname (it would show the machine running the demo)
-await typeRemote("hostname\n");
-await sleep(2400);
+if (WINDOWS) {
+  await typeRemote("Hello from the browser, through FreeRDP Web\n");
+  await sleep(2400);
+} else {
+  await typeRemote("echo hello from the browser\n");
+  await sleep(900);
+  // only what belongs to the throwaway server: a container shares the host's kernel, so
+  // nothing like uname (it would show the machine running the demo)
+  await typeRemote("hostname\n");
+  await sleep(2400);
+}
 const shot = await send("Page.captureScreenshot", { format: "png" });   // for wasm-session.sh's check
 writeFileSync(join(out, "wasm-session.png"), Buffer.from(shot.data, "base64"));
 // where the remote desktop is in that screenshot, in its pixels: wasm-session.sh checks it shows detail
@@ -295,13 +314,18 @@ writeFileSync(join(out, "page.log"),
   (await ev("document.getElementById('log')?.textContent ?? ''")) + "\n--- console ---\n" + logs.join("\n"));
 
 // 6. web video with sound and WebGL, in Firefox on the server, started by typing "webdemo"
-await caption("Web video with sound, and WebGL: Firefox on the server");
-await typeRemote("webdemo\n");
-await sleep(14000);
-await caption("Big Buck Bunny, © Blender Foundation, CC BY 3.0 · WebGL Aquarium, © Google, BSD");
-await sleep(8000);
-await caption("Drawn on the server, streamed to this browser, sound included");
-await sleep(6000);
+if (WINDOWS) {
+  await caption("Drawn on the Windows PC, streamed to this browser in AV1");
+  await sleep(4000);
+} else {
+  await caption("Web video with sound, and WebGL: Firefox on the server");
+  await typeRemote("webdemo\n");
+  await sleep(14000);
+  await caption("Big Buck Bunny, © Blender Foundation, CC BY 3.0 · WebGL Aquarium, © Google, BSD");
+  await sleep(8000);
+  await caption("Drawn on the server, streamed to this browser, sound included");
+  await sleep(6000);
+}
 
 // 7. info, then disconnect
 await clickOn("#tbInfo");
