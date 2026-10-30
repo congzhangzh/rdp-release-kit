@@ -46,6 +46,8 @@ jobs:
         env:
           CCACHE_MAXSIZE: 1G
           SHADOW: ${{ matrix.shadow }}
+          # the two build fixes are in integration-shadow-win: no allowances
+          SHADOW_STRICT: "1"
         run: ./build-windows.sh x86_64
 
       - uses: actions/upload-artifact@v7

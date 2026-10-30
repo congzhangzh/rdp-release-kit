@@ -114,6 +114,45 @@ if (-not $server.HasExited) {
     Stop $session
 }
 Stop $server
+
+# 4. a Unix socket instead of TCP (/ipc-socket; Windows 10 1803+ AF_UNIX): the
+# client cannot dial one, so a relay here takes TCP 127.0.0.1:4491 to it
+$sockPath = "$env:TEMP\shadow-kit.sock"
+$env:WLOG_FILEAPPENDER_OUTPUT_FILE_NAME = "server-ipc.wlog"
+$ipc = Start-Process -FilePath "$Dir\freerdp-shadow-cli.exe" -PassThru -NoNewWindow `
+    -ArgumentList "/ipc-socket:$sockPath", "/gfx-av1" `
+    -RedirectStandardOutput "$Out\server-ipc.log" -RedirectStandardError "$Out\server-ipc.err"
+for ($i = 0; $i -lt 20 -and -not (Test-Path $sockPath) -and -not $ipc.HasExited; $i++) { Start-Sleep -Seconds 1 }
+Check "ipc: the shadow server made its socket file" (Test-Path $sockPath) "exit code $(if ($ipc.HasExited) { $ipc.ExitCode } else { 'running' })"
+if (Test-Path $sockPath) {
+    $relay = Start-ThreadJob -ArgumentList $sockPath -ScriptBlock {
+        param($path)
+        $l = [System.Net.Sockets.TcpListener]::new([System.Net.IPAddress]::Loopback, 4491)
+        $l.Start()
+        for ($i = 0; $i -lt 3; $i++) {
+            $tcp = $l.AcceptTcpClient()
+            $u = [System.Net.Sockets.Socket]::new([System.Net.Sockets.AddressFamily]::Unix,
+                [System.Net.Sockets.SocketType]::Stream, [System.Net.Sockets.ProtocolType]::Unspecified)
+            $u.Connect([System.Net.Sockets.UnixDomainSocketEndPoint]::new($path))
+            $us = [System.Net.Sockets.NetworkStream]::new($u, $true)
+            $ts = $tcp.GetStream()
+            [void][System.Threading.Tasks.Task]::WaitAny(@($ts.CopyToAsync($us), $us.CopyToAsync($ts)))
+            $tcp.Close(); $u.Close()
+        }
+        $l.Stop()
+    }
+    Start-Sleep -Seconds 2
+    $tcpPort = $port
+    $port = 4491
+    Logins "ipc"
+    $s2 = Client @("/p:$pass", "/gfx:AV1:on", "/size:1280x720") "ipc-session" 10
+    Check "ipc: a session through the socket holds 10 s" (-not $s2.HasExited) "$(if ($s2.HasExited) { "exit $($s2.ExitCode)" } else { 'running' })"
+    Stop $s2
+    $port = $tcpPort
+    Remove-Job $relay -Force -ErrorAction SilentlyContinue
+}
+Check "ipc: the server says it listens on the socket" ((Get-Content "$Out\server-ipc.wlog" -Raw -ErrorAction SilentlyContinue) -match "Listening on socket")
+Stop $ipc
 Remove-LocalUser -Name $user -ErrorAction SilentlyContinue
 
 # what the logs say about the codec and the capture (a report, not a check)
