@@ -23,7 +23,10 @@ toolchain) gets an entry here in the same commit.
   **`freerdp_host` `20261030.2`** (`3df368ba5`): our release picked from the fork's
   integration-shadow-win, FreeRDP master 472f1901f plus our pull requests #13931 and
   #13932 (build fixes), #13933 (DXGI capture that follows the secure desktop), #13934
-  (the service, Ctrl+Alt+Del) and #13935 (a Unix-socket listener on Windows); the
+  (the service, Ctrl+Alt+Del) and #13935 (a Unix-socket listener on Windows), and a fix
+  found by the web test, added to #13933 and #13934: DXGI reports changes only and the
+  Windows subsystem left refresh requests unanswered, so a client of a desktop that did
+  not change got a black screen until something moved; the
   clients keep `freerdp` `20261028.1`. `windows-host.yml` builds it and tests it on a
   Windows Server 2025 runner with `test/windows-host.ps1`: a SAM-file login and a Unix
   socket by hand; through the service, SYSTEM on the console session, Windows-account
