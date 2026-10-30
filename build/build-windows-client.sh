@@ -87,14 +87,17 @@ DEPRECATED_3X=ON
 if [ -n "${SHADOW:-}" ]; then
     cmake_dep aom "${CROSS[@]}" -DENABLE_TESTS=OFF -DENABLE_EXAMPLES=OFF -DENABLE_DOCS=OFF \
         -DENABLE_TOOLS=OFF
-    # shadow_client.c hands its int refCount to InterlockedIncrement(LONG*): the
-    # same 32 bits on Windows, a warning with MSVC, an error with clang
     SERVER=(-DWITH_SERVER=ON -DWITH_SHADOW=ON -DWITH_PROXY=OFF -DWITH_PLATFORM_SERVER=OFF
-            -DWITH_AOM=ON -DWITH_WINPR_TOOLS=ON
-            -DCMAKE_C_FLAGS=-Wno-error=incompatible-pointer-types)
-    # win_rdp.c still sets instance->Authenticate, which only the deprecated
-    # 3.x API has (AuthenticateEx replaces it): the shadow build keeps it
-    DEPRECATED_3X=OFF
+            -DWITH_AOM=ON -DWITH_WINPR_TOOLS=ON)
+    # until upstream has our two fixes (SHADOW_STRICT=1 builds without these
+    # allowances, to prove them): shadow_client.c hands its int refCount to
+    # InterlockedIncrement(LONG*), the same 32 bits on Windows, a warning with
+    # MSVC, an error with clang; win_rdp.c sets instance->Authenticate, which
+    # only the deprecated 3.x API has (AuthenticateEx replaces it)
+    if [ -z "${SHADOW_STRICT:-}" ]; then
+        SERVER+=(-DCMAKE_C_FLAGS=-Wno-error=incompatible-pointer-types)
+        DEPRECATED_3X=OFF
+    fi
     # SHADOW=dxgi: DXGI desktop duplication, which the service mode needs (it
     # follows the secure desktop); otherwise the Desktop Sharing API
     SHADOW_TOOLS=(freerdp-shadow-cli winpr-hash)
