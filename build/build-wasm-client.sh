@@ -60,13 +60,15 @@ wasm_dep sdl3_ttf -DSDLTTF_VENDORED=OFF -DSDLTTF_HARFBUZZ=OFF -DSDLTTF_PLUTOSVG=
     -DSDLTTF_SAMPLES=OFF
 
 # dav1d decodes AV1 where the browser's WebCodecs cannot
-# libavm decoder-only for the browser, as the AVM release kit builds it for wasm
+# libavm decoder-only for the browser, as the AVM release kit builds it for wasm;
+# AVM_TARGET_CPU=x86 compiles its SSE2-SSE4.1 kernels to WebAssembly SIMD128
+# (1.3-1.5x faster decoding than the generic C, bit-exact; libavm 20261030.2)
 # (CONFIG_AV2_ENCODER=0; FreeRDP then -DWITH_AVM_ENCODER=OFF): the whole library
 # made sdl-freerdp.wasm 10.6 -> 15.9 MB, mostly its encoder. Its two ML encoder
 # experiments stay off too (they would pull in TensorFlow Lite). libavm links
 # its own avmenc and avmdec whatever ENABLE_EXAMPLES says: they need more than
 # Emscripten's default memory; the kit uses the library only
-wasm_dep avm -DAVM_TARGET_CPU=generic -DCONFIG_MULTITHREAD=1 -DCONFIG_AV2_ENCODER=0 \
+wasm_dep avm -DAVM_TARGET_CPU=x86 -DCONFIG_MULTITHREAD=1 -DCONFIG_AV2_ENCODER=0 \
     -DCMAKE_C_FLAGS="-pthread -O2" -DCMAKE_CXX_FLAGS="-pthread -O2" \
     -DCMAKE_EXE_LINKER_FLAGS="-sINITIAL_MEMORY=67108864 -sALLOW_MEMORY_GROWTH=1" -DENABLE_TESTS=0 \
     -DENABLE_EXAMPLES=0 -DENABLE_DOCS=0 -DENABLE_TOOLS=0 \
