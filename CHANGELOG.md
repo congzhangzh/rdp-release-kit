@@ -21,10 +21,13 @@ toolchain) gets an entry here in the same commit.
   `20261030.3`** (`57d847e65`): integration-latest-av2, the clients' FreeRDP plus the AV2
   extension, FreeRDP#13925 (5 commits); the Linux, Windows and macOS clients now
   decode AV2 with libavm and offer it, and servers keep picking AV1 unless told to use
-  AV2. Not the web client yet: libavm made its WebAssembly 10.6 -> 15.9 MB (the zip
-  7.1 -> 10.7 MB, +51 %), mostly the encoder, which av2.c links though a browser only
-  decodes; it waits for a decoder-only build (FreeRDP's av2.c without the encoder) or
-  a decoder loaded on demand. **`freerdp_host` `20261030.4`** (`7ee083d79`): the Windows host's FreeRDP plus the
+  AV2. The web client too since **`freerdp` `20261030.5`** (`83e58241c`): our
+  `av2-decoder-only` commit lets av2.c link a decoder-only libavm (`WITH_AVM_ENCODER=OFF`,
+  libavm with `CONFIG_AV2_ENCODER=0`, as the AVM release kit builds it for wasm): its
+  WebAssembly grows 10.6 -> 12.6 MB (+19 %; the whole library, encoder included, made it
+  15.9 MB, so 20261030.4's kit left AV2 out of the page). **freerdp-web `20261030.5`**:
+  About names the AV2 decoder (libavm, in the page). `test/windows-host.ps1` also logs
+  the web client in to the AV2 server: the server must confirm AV2 (FRDP_2) for it. **`freerdp_host` `20261030.4`** (`7ee083d79`): the Windows host's FreeRDP plus the
   same extension, so its shadow server encodes AV2 when started with `/gfx-av2` (the
   service's install line keeps AV1). `test/windows-host.ps1` adds an AV2 session with the
   run's own client: the frames must come in as `RDPGFX_CODECID_AV2` (a scratch run of the

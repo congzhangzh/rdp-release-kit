@@ -148,6 +148,31 @@ Check "av2: a session holds 20 s" (-not $s.HasExited)
 $codecs = Codecs "av2-session"
 Check "av2: the frames came in AV2" (($codecs -join " ") -match "RDPGFX_CODECID_AV2") ($codecs -join ", ")
 Stop $s
+
+# the web client on the same AV2 server: the page decodes with libavm (no browser
+# decodes AV2); the server's log says which GFX version it confirmed (FRDP_2 = AV2)
+$webAv2 = "$Out\web-av2"
+New-Item -ItemType Directory -Force -Path $webAv2 | Out-Null
+$http = Start-Process -FilePath python -PassThru -NoNewWindow -RedirectStandardOutput "$webAv2\http.log" -RedirectStandardError "$webAv2\http.err" `
+    -ArgumentList "-m", "http.server", "8081", "--bind", "127.0.0.1", "--directory", $WebDir
+& python -m pip install --quiet websockify 2>&1 | Out-File "$webAv2\pip.log"
+$gw = Start-Process -FilePath python -PassThru -NoNewWindow -RedirectStandardOutput "$webAv2\websockify.log" -RedirectStandardError "$webAv2\websockify.err" `
+    -ArgumentList "-m", "websockify", "127.0.0.1:3391", "127.0.0.1:4492"
+for ($i = 0; $i -lt 20 -and -not ((Listening 8081) -and (Listening 3391)); $i++) { Start-Sleep -Seconds 1 }
+$env:CHROME = (Get-Command chrome.exe -ErrorAction SilentlyContinue).Source
+if (-not $env:CHROME) { $env:CHROME = "${env:ProgramFiles}\Google\Chrome\Application\chrome.exe" }
+& node "$KitTest\wasm-session.mjs" "http://127.0.0.1:8081/index.html" "127.0.0.1:3391" $user $pass $webAv2 2>&1 |
+    Tee-Object "$webAv2\driver.log"
+$about = Get-Content "$WebDir\MANIFEST" -Raw -ErrorAction SilentlyContinue
+$serverLog = Get-Content "$Out\server-av2.wlog" -Raw -ErrorAction SilentlyContinue
+if ($about -match "(?m)^\s+avm\s") {
+    # the native session confirmed it once already: the page makes it twice
+    Check "web-av2: the server confirmed AV2 for the page too (FRDP_2)" (([regex]::Matches($serverLog, "CAPS version=0x20000")).Count -ge 2)
+    Check "web-av2: the page got a picture" ((Get-Content "$webAv2\page.log" -Raw -ErrorAction SilentlyContinue) -match "Remote framebuffer format")
+} else {
+    "web-av2: this web client has no AV2 (its MANIFEST names no avm); skipped" | Out-File -Append "$Out\notes.txt"
+}
+Stop $gw; Stop $http
 Stop $server
 $port = 4489
 

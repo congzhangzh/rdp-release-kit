@@ -18,8 +18,9 @@
 # clipboard events with every field set (#13872) and hotkeys read from the key
 # event's own modifiers (#13852). Since 20261030.3 (integration-latest-av2:
 # the same plus FreeRDP#13925's 5 commits) the clients decode AV2 with libavm
-# and offer it; AV1 stays what servers pick unless told to use AV2
-freerdp     20261030.3 git+https://github.com/congzhangzh/FreeRDP.git                                        57d847e655ef1e0798ce1a0d4cf194d227e59edf
+# and offer it; AV1 stays what servers pick unless told to use AV2. .5: av2.c
+# also links a decoder-only libavm (branch av2-decoder-only), for the browser
+freerdp     20261030.5 git+https://github.com/congzhangzh/FreeRDP.git                                        83e58241c94f7f1f3e1a3b2230a010f2fad56d70
 # FreeRDP for the Windows host (freerdp-shadow-cli, freerdp-shadow-service),
 # not for the clients: our release-20261030.4, picked from the fork's
 # integration-shadow-win, FreeRDP master 472f1901f (2026-10-30) plus our pull
@@ -88,4 +89,4 @@ python_macos_x86_64   3.13.17+20261021 https://github.com/astral-sh/python-build
 # in SDL_Emscripten_TimerHelper); 3.4.18 already ignores FS.mkdir errors for
 # /tmp/filedrop, which 3.2.30 needed backported
 sdl3_wasm   3.4.18+timer git+https://github.com/congzhangzh/SDL.git                                      1d615c14f95a3389bf0026e719144ad51378e40c
-freerdp_web 20261030.4  git+https://github.com/congzhangzh/freerdp-web.git                                     24892e54130ce16b4dd62be579cbc5301fddf281
+freerdp_web 20261030.5  git+https://github.com/congzhangzh/freerdp-web.git                                     a4223849b02d2c08669a54348575bfc4f92938b8
