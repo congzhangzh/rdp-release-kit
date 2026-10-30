@@ -132,6 +132,26 @@ if (Test-Path $sock) {
 }
 Stop $server
 
+# ---- AV2 (scratch builds only): the host package then carries a client built
+# with it too; the server started by hand with /gfx-av2, the client asking for AV2
+if (Test-Path "$HostDir\sdl-freerdp.exe") {
+    $env:WLOG_FILEAPPENDER_OUTPUT_FILE_NAME = "server-av2.wlog"
+    $server = Start-Process -FilePath "$HostDir\freerdp-shadow-cli.exe" -PassThru -NoNewWindow `
+        -ArgumentList "/bind-address:127.0.0.1", "/port:4492", "/gfx-av2"
+    for ($i = 0; $i -lt 30 -and -not (Listening 4492) -and -not $server.HasExited; $i++) { Start-Sleep -Seconds 1 }
+    Check "av2: the server listens on 127.0.0.1:4492" (Listening 4492)
+    $env:WLOG_FILEAPPENDER_OUTPUT_FILE_NAME = "av2-session.wlog"
+    $c = Start-Process -FilePath "$HostDir\sdl-freerdp.exe" -PassThru `
+        -ArgumentList "/v:127.0.0.1:4492", "/u:$user", "/p:$pass", "/cert:ignore", "/gfx:AV2:on", "/size:1280x720"
+    Start-Sleep -Seconds 20
+    Shot "av2"
+    Check "av2: the session holds 20 s" (-not $c.HasExited)
+    $codecs = Codecs "av2-session"
+    Check "av2: the frames came in AV2" (($codecs -join " ") -match "RDPGFX_CODECID_AV2") ($codecs -join ", ")
+    Stop $c
+    Stop $server
+}
+
 # ---- 2. the service
 $port = 4490
 $logs = "$Out\service"

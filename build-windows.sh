@@ -61,7 +61,7 @@ for arch in "${ARCHES[@]}"; do
     # shellcheck disable=SC2016
     if ! "$ENGINE" run --rm -v "$KIT":/kit:ro -v "$SOURCES":/sources -v "$OUT":/out \
             -v "$work":/work "${CACHE[@]}" "${OVERRIDE[@]}" -e OWNER="$(owner)" -e ARCH="$arch" \
-            -e HOST="${HOST:-}" \
+            -e HOST="${HOST:-}" -e AV2="${AV2:-}" \
             "$IMAGE" \
             bash -c '/kit/build/build-windows-client.sh /kit /sources /out "$ARCH"; rc=$?;
                      [ -z "$OWNER" ] || chown -R "$OWNER" /out /work /sources ${CCACHE_DIR:-}

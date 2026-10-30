@@ -25,7 +25,7 @@ freerdp     20261028.1 git+https://github.com/congzhangzh/FreeRDP.git           
 # DXGI capture that follows the secure desktop (#13933), the service with
 # Ctrl+Alt+Del (#13934) and a Unix-socket listener on Windows (#13935); .2: a
 # client gets the whole screen at once on a desktop that does not change
-freerdp_host 20261030.2 git+https://github.com/congzhangzh/FreeRDP.git                                       3df368ba5db068ee040c0fc57b47dd239a732d88
+freerdp_host av2scratch git+https://github.com/congzhangzh/FreeRDP.git                                      7ee083d799cf5b5b06bff19a559e4a8b3df220d4
 sdl3        3.4.18   https://github.com/libsdl-org/SDL/releases/download/release-3.4.18/SDL3-3.4.18.tar.gz        9c75cf16330322c217dedd2e0609f1124f1b54b8633e763467b4684d0f4334a3
 sdl3_ttf    3.2.2    https://github.com/libsdl-org/SDL_ttf/releases/download/release-3.2.2/SDL3_ttf-3.2.2.tar.gz   63547d58d0185c833213885b635a2c0548201cc8f301e6587c0be1a67e1e045d
 freetype    2.15.0   https://download.savannah.gnu.org/releases/freetype/freetype-2.15.0.tar.xz                   93cd47eb719c325107f2d3cf087d06299e944c3b48a40b55537302304dea1dd5
@@ -35,6 +35,9 @@ dav1d       1.5.4    https://downloads.videolan.org/pub/videolan/dav1d/1.5.4/dav
 # libaom, the AV1 encoder of the Windows host; the hash is of the tarball as
 # downloaded on 2026-10-30 (upstream publishes none next to it)
 aom         3.15.2   https://storage.googleapis.com/aom-releases/libaom-3.15.2.tar.gz                         67bb54b245f33ed98600e08269e6139986e48114e14042474ddd8885801dfddc
+# libavm, the AV2 reference (encoder and decoder): scratch, the AVM session's
+# feature-avm-rt until its release pick exists
+avm         rt-dc33252  git+https://github.com/congzhangzh/avm.git                                            dc33252c968799c9a0053236f723a44e3c5460f3
 zlib        1.3.2    https://github.com/madler/zlib/releases/download/v1.3.2/zlib-1.3.2.tar.gz                    bb329a0a2cd0274d05519d61c667c062e06990d72e125ee2dfa8de64f0119d16
 jansson     2.15.1   https://github.com/akheron/jansson/releases/download/v2.15.1/jansson-2.15.1.tar.gz           0c7114dc0b2d22a670724a1f95922029d7077c19dbf79a584cb8084d2f267f2f
 # xrdp, for the server packages (Xorg and Wayland sessions): our release,

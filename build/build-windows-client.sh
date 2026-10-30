@@ -97,6 +97,15 @@ if [ -n "${HOST:-}" ]; then
     WHAT=(-DWITH_CLIENT=OFF -DWITH_SERVER=ON -DWITH_SHADOW=ON -DWITH_PROXY=OFF
           -DWITH_PLATFORM_SERVER=OFF -DWITH_SHADOW_WIN_DXGI=ON -DWITH_SHADOW_WIN_SERVICE=ON
           -DWITH_AOM=ON -DWITH_WINPR_TOOLS=ON)
+    # AV2=1 (scratch): libavm encodes and decodes AV2; the SDL client comes
+    # along, to test both ends
+    if [ -n "${AV2:-}" ]; then
+        cmake_dep avm "${CROSS[@]}" -DENABLE_TESTS=0 -DENABLE_EXAMPLES=0 -DENABLE_DOCS=0 \
+            -DENABLE_TOOLS=0 -DCONFIG_TUNE_VMAF=0 -DCONFIG_ML_PART_SPLIT=0 -DCONFIG_DIP_EXT_PRUNING=0 \
+            -DCONFIG_TENSORFLOW_LITE=0
+        WHAT+=(-DWITH_GFX_AV2=ON -DWITH_AVM=ON -DWITH_CLIENT=ON -DWITH_CLIENT_SDL=ON
+               -DWITH_CLIENT_SDL3=ON -DWITH_CLIENT_SDL2=OFF)
+    fi
 fi
 
 # FreeRDP: the SDL3 client only, static. Its fonts and icons are compiled
@@ -149,7 +158,7 @@ if [ -n "${HOST:-}" ]; then
     PKG=$WORK/pkg/$NAME
     rm -rf "$WORK/pkg"
     mkdir -p "$PKG/licenses"
-    for tool in freerdp-shadow-cli freerdp-shadow-service winpr-hash; do
+    for tool in freerdp-shadow-cli freerdp-shadow-service winpr-hash ${AV2:+sdl-freerdp}; do
         f=$(find "$STAGE" -name "$tool.exe" | head -1)
         [ -n "$f" ] || { echo "HOST=1: no $tool.exe in the build" >&2; exit 1; }
         cp "$f" "$PKG/"
