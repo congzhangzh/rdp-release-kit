@@ -60,15 +60,11 @@ wasm_dep sdl3_ttf -DSDLTTF_VENDORED=OFF -DSDLTTF_HARFBUZZ=OFF -DSDLTTF_PLUTOSVG=
     -DSDLTTF_SAMPLES=OFF
 
 # dav1d decodes AV1 where the browser's WebCodecs cannot
-# libavm, AV2's reference (FreeRDP#13925 decodes with it), with the AVM
-# release kit's options: its two ML encoder experiments off, which also keeps
-# TensorFlow Lite and what it would download out of the build
-# (the AVM release kit builds the decoder alone for the browser; FreeRDP's av2.c
-# links the encoder too, so here it is the whole library), threads as there
-wasm_dep avm -DAVM_TARGET_CPU=generic -DCONFIG_MULTITHREAD=1 \
-    -DCMAKE_C_FLAGS="-pthread -O2" -DCMAKE_CXX_FLAGS="-pthread -O2" -DENABLE_TESTS=0 \
-    -DENABLE_EXAMPLES=0 -DENABLE_DOCS=0 -DENABLE_TOOLS=0 \
-    -DCONFIG_ML_PART_SPLIT=0 -DCONFIG_DIP_EXT_PRUNING=0
+# No AV2 in the web client yet (2026-10-30): libavm made sdl-freerdp.wasm 10.6 ->
+# 15.9 MB (the zip 7.1 -> 10.7 MB), mostly its encoder, which FreeRDP's av2.c
+# links though a browser only decodes; it comes back with a decoder-only
+# libavm (the AVM release kit's wasm build) once av2.c can link without the
+# encoder, or with the decoder loaded on demand
 
 if ! built dav1d; then
     src=$(unpack dav1d)
@@ -116,7 +112,6 @@ configure "$WORK/build/freerdp" \
     -DWITH_DSP_FFMPEG=OFF -DWITH_OPENH264=OFF -DCHANNEL_URBDRC=OFF -DCHANNEL_RDPECAM=OFF \
     -DWITH_SIMD=OFF -DWITH_MANPAGES=OFF -DWITH_TIMEZONE_ICU=OFF -DWITH_UNICODE_BUILTIN=ON \
     -DUSE_UNWIND=OFF -DWITH_OPUS=ON -DWITH_GFX_AV1=ON -DWITH_DAV1D=ON \
-    -DWITH_GFX_AV2=ON -DWITH_AVM=ON \
     -DCMAKE_EXE_LINKER_FLAGS="-pthread $1 \
 -sALLOW_MEMORY_GROWTH=1 -sINITIAL_MEMORY=134217728 -sMAXIMUM_MEMORY=1073741824 \
 -sSTACK_SIZE=1048576 -sPTHREAD_POOL_SIZE=32 -sWEBSOCKET_SUBPROTOCOL=binary \
@@ -155,7 +150,7 @@ rm -rf "$OUT/web/tests"
 cp "$WORK/client/sdl-freerdp.js" "$WORK/client/sdl-freerdp.wasm" "$OUT/web/"
 mkdir -p "$OUT/web/jspi"
 cp "$WORK/client/jspi/sdl-freerdp.js" "$WORK/client/jspi/sdl-freerdp.wasm" "$OUT/web/jspi/"
-licenses "$OUT/web/licenses" freerdp sdl3_wasm sdl3_ttf freetype libressl opus dav1d avm \
+licenses "$OUT/web/licenses" freerdp sdl3_wasm sdl3_ttf freetype libressl opus dav1d \
     zlib jansson
 {
     echo "FreeRDP web client (preview), built $(date -u +%F) with $(emcc --version | head -1)"
@@ -163,7 +158,7 @@ licenses "$OUT/web/licenses" freerdp sdl3_wasm sdl3_ttf freetype libressl opus d
     override_manifest
     echo
     echo "sources (sources.lock):"
-    for name in freerdp sdl3_wasm sdl3_ttf freetype libressl opus dav1d avm zlib jansson; do
+    for name in freerdp sdl3_wasm sdl3_ttf freetype libressl opus dav1d zlib jansson; do
         printf '  %-16s %-9s %s\n' "$name" "${VERSION[$name]}" "${SHA[$name]}"
     done
 } > "$OUT/web/MANIFEST"

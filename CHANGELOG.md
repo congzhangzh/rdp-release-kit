@@ -19,14 +19,16 @@ toolchain) gets an entry here in the same commit.
   aarch64 and wasm), built here with the same options (its two ML encoder experiments
   off, so no TensorFlow Lite and nothing downloaded during the build). **`freerdp`
   `20261030.3`** (`57d847e65`): integration-latest-av2, the clients' FreeRDP plus the AV2
-  extension, FreeRDP#13925 (5 commits); the Linux, Windows, macOS and web clients now
+  extension, FreeRDP#13925 (5 commits); the Linux, Windows and macOS clients now
   decode AV2 with libavm and offer it, and servers keep picking AV1 unless told to use
-  AV2. **`freerdp_host` `20261030.4`** (`7ee083d79`): the Windows host's FreeRDP plus the
+  AV2. Not the web client yet: libavm made its WebAssembly 10.6 -> 15.9 MB (the zip
+  7.1 -> 10.7 MB, +51 %), mostly the encoder, which av2.c links though a browser only
+  decodes; it waits for a decoder-only build (FreeRDP's av2.c without the encoder) or
+  a decoder loaded on demand. **`freerdp_host` `20261030.4`** (`7ee083d79`): the Windows host's FreeRDP plus the
   same extension, so its shadow server encodes AV2 when started with `/gfx-av2` (the
   service's install line keeps AV1). `test/windows-host.ps1` adds an AV2 session with the
   run's own client: the frames must come in as `RDPGFX_CODECID_AV2` (a scratch run of the
-  same build: 136 of them, run 41110824436). The web client links the whole libavm
-  (FreeRDP's av2.c needs the encoder's symbols too); its size is in the release's MANIFEST.
+  same build: 136 of them, run 41110824436).
 
 - **A new product: the Windows host** (聪哥: a Windows backend, "go ahead to do them all").
   `freerdp-host-<version>-windows-x86_64.zip`: FreeRDP's shadow server
