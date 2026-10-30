@@ -65,7 +65,11 @@ function Ping($endpoint, $family) {
     } catch { return "error: $($_.Exception.Message)" }
 }
 $port = 5599
-$forms = @($sock, $sock.Replace("\", "/"))
+# ssh reads "C:" as a separator ("Bad local forwarding specification" on the
+# first run): the path without its drive letter, which sshd may resolve on
+# its own drive, as written and in lower case
+$noDrive = $sock.Substring(2).Replace("\", "/")
+$forms = @($noDrive, $noDrive.ToLower())
 foreach ($form in $forms) {
     $err = "$Out\ssh-$($forms.IndexOf($form)).err"
     $ssh = Start-Process -FilePath ssh -PassThru -NoNewWindow -RedirectStandardError $err -ArgumentList `

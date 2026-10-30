@@ -88,7 +88,7 @@ Start-Sleep -Seconds 1
 $pattern = "AV1|av1|aom|codec|GFX|gfx|CapsConfirm|WDS|DXGI|RDPSRAPI|sharing|0x[0-9A-Fa-f]{8}|error|ERROR|fail"
 foreach ($f in "server.wlog", "server.log", "server.err", "session.wlog", "session.log", "session.err") {
     if (Test-Path "$Out\$f") {
-        "== $f: $((Get-Content "$Out\$f").Count) lines; matching lines (first 60):"
+        "== ${f}: $((Get-Content "$Out\$f").Count) lines; matching lines (first 60):"
         Select-String -Path "$Out\$f" -Pattern $pattern | Select-Object -First 60 | ForEach-Object { $_.Line }
     }
 }

@@ -95,6 +95,9 @@ if [ -n "${SHADOW:-}" ]; then
     # win_rdp.c still sets instance->Authenticate, which only the deprecated
     # 3.x API has (AuthenticateEx replaces it): the shadow build keeps it
     DEPRECATED_3X=OFF
+    # SHADOW=dxgi: DXGI desktop duplication, which the service mode needs (it
+    # follows the secure desktop); otherwise the Desktop Sharing API
+    [ "$SHADOW" != dxgi ] || SERVER+=(-DWITH_SHADOW_WIN_DXGI=ON)
 fi
 
 # FreeRDP: the SDL3 client only, static. Its fonts and icons are compiled
