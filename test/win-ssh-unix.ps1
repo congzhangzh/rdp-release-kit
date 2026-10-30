@@ -25,6 +25,7 @@ Say "sshd: $((Get-Item "$env:WINDIR\System32\OpenSSH\sshd.exe" -ErrorAction Sile
 $key = "$Out\id_ed25519"
 & ssh-keygen -q -t ed25519 -N '""' -f $key | Out-Null
 if (-not (Test-Path $key)) { & ssh-keygen -q -t ed25519 -N "" -f $key | Out-Null }
+& icacls $key /inheritance:r /grant:r "${env:USERNAME}:F" | Out-Null
 $auth = "$env:ProgramData\ssh\administrators_authorized_keys"
 New-Item -ItemType Directory -Force -Path "$env:ProgramData\ssh" | Out-Null
 Get-Content "$key.pub" | Set-Content -Path $auth -Encoding ascii
@@ -40,12 +41,28 @@ $echo = Start-ThreadJob -ArgumentList $sock -ScriptBlock {
     $s = [System.Net.Sockets.Socket]::new([System.Net.Sockets.AddressFamily]::Unix,
         [System.Net.Sockets.SocketType]::Stream, [System.Net.Sockets.ProtocolType]::Unspecified)
     $s.Bind([System.Net.Sockets.UnixDomainSocketEndPoint]::new($path))
-    $s.Listen(1)
-    $c = $s.Accept()
-    $buf = New-Object byte[] 64
-    $n = $c.Receive($buf)
-    [void]$c.Send([System.Text.Encoding]::ASCII.GetBytes("pong:" + [System.Text.Encoding]::ASCII.GetString($buf, 0, $n)))
-    $c.Close(); $s.Close()
+    $s.Listen(4)
+    for ($i = 0; $i -lt 4; $i++) {
+        $c = $s.Accept()
+        $buf = New-Object byte[] 64
+        $n = $c.Receive($buf)
+        [void]$c.Send([System.Text.Encoding]::ASCII.GetBytes("pong:" + [System.Text.Encoding]::ASCII.GetString($buf, 0, $n)))
+        $c.Close()
+    }
+    $s.Close()
+}
+# a TCP echo server, the control: ssh -L to it must work if the harness does
+$tcpEcho = Start-ThreadJob -ScriptBlock {
+    $l = [System.Net.Sockets.TcpListener]::new([System.Net.IPAddress]::Loopback, 5700)
+    $l.Start()
+    for ($i = 0; $i -lt 2; $i++) {
+        $c = $l.AcceptSocket()
+        $buf = New-Object byte[] 64
+        $n = $c.Receive($buf)
+        [void]$c.Send([System.Text.Encoding]::ASCII.GetBytes("pong:" + [System.Text.Encoding]::ASCII.GetString($buf, 0, $n)))
+        $c.Close()
+    }
+    $l.Stop()
 }
 Start-Sleep -Seconds 2
 Say "socket file there: $(Test-Path $sock)"
@@ -64,31 +81,38 @@ function Ping($endpoint, $family) {
         return [System.Text.Encoding]::ASCII.GetString($buf, 0, $n)
     } catch { return "error: $($_.Exception.Message)" }
 }
-$port = 5599
+# one forward: ssh -N -L <port>:<target>, waited for until the port listens
+# (up to 20 s: the first try stopped after "Server accepts key" at 5 s), one
+# line through it, then the tail of ssh -v
+function Forward([int]$Port, [string]$Target) {
+    $err = "$Out\ssh-$Port.err"
+    $ssh = Start-Process -FilePath ssh -PassThru -NoNewWindow -RedirectStandardError $err -ArgumentList `
+        "-N", "-v", "-o", "BatchMode=yes", "-i", $key, "-o", "StrictHostKeyChecking=no",
+        "-o", "UserKnownHostsFile=$Out\known_hosts", "-L", "${Port}:$Target", "$env:USERNAME@localhost"
+    $up = $false
+    for ($i = 0; $i -lt 20 -and -not $up -and -not $ssh.HasExited; $i++) {
+        Start-Sleep -Seconds 1
+        $up = [bool](Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction SilentlyContinue)
+    }
+    $reply = if ($up) { Ping ([System.Net.IPEndPoint]::new([System.Net.IPAddress]::Loopback, $Port)) ([System.Net.Sockets.AddressFamily]::InterNetwork) } else { "no listener after 20 s" }
+    Start-Sleep -Seconds 1
+    Say "ssh -L ${Port}:$Target -> $reply"
+    Get-Content $err -ErrorAction SilentlyContinue | Select-Object -Last 8 | ForEach-Object { Say "   ssh: $_" }
+    if (-not $ssh.HasExited) { Stop-Process -Id $ssh.Id -Force }
+}
+Forward 5701 "127.0.0.1:5700"
 # ssh reads "C:" as a separator ("Bad local forwarding specification" on the
 # first run): the path without its drive letter, which sshd may resolve on
-# its own drive, as written and in lower case
+# its own drive, and the same in lower case
 $noDrive = $sock.Substring(2).Replace("\", "/")
-$forms = @($noDrive, $noDrive.ToLower())
-foreach ($form in $forms) {
-    $err = "$Out\ssh-$($forms.IndexOf($form)).err"
-    $ssh = Start-Process -FilePath ssh -PassThru -NoNewWindow -RedirectStandardError $err -ArgumentList `
-        "-N", "-v", "-i", $key, "-o", "StrictHostKeyChecking=no", "-o", "UserKnownHostsFile=$Out\known_hosts",
-        "-L", "${port}:$form", "$env:USERNAME@localhost"
-    Start-Sleep -Seconds 5
-    $reply = Ping ([System.Net.IPEndPoint]::new([System.Net.IPAddress]::Loopback, $port)) ([System.Net.Sockets.AddressFamily]::InterNetwork)
-    Say "ssh -L ${port}:$form -> $reply"
-    Get-Content $err -ErrorAction SilentlyContinue | Select-String -Pattern "forward|open failed|channel|streamlocal|prohibited|denied|refused|Authenticated" |
-        Select-Object -First 12 | ForEach-Object { Say "   ssh: $($_.Line)" }
-    if (-not $ssh.HasExited) { Stop-Process -Id $ssh.Id -Force }
-    $port++
-}
+Forward 5702 $noDrive
+Forward 5703 $noDrive.ToLower()
 # if ssh never reached it, the echo server is still waiting: try it directly
 if ($echo.State -eq "Running") {
     Say "direct AF_UNIX connect -> $(Ping ([System.Net.Sockets.UnixDomainSocketEndPoint]::new($sock)) ([System.Net.Sockets.AddressFamily]::Unix))"
 }
 Receive-Job $echo -ErrorAction SilentlyContinue 2>&1 | ForEach-Object { Say "echo server: $_" }
-Remove-Job $echo -Force -ErrorAction SilentlyContinue
+Remove-Job $echo, $tcpEcho -Force -ErrorAction SilentlyContinue
 # sshd's own log, when it wrote one
 Get-WinEvent -LogName "OpenSSH/Operational" -MaxEvents 30 -ErrorAction SilentlyContinue |
     Where-Object { $_.Message -match "forward|streamlocal|channel|refused|denied" } |
