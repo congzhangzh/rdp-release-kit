@@ -20,7 +20,7 @@ toolchain) gets an entry here in the same commit.
   the logon and lock screens, UAC prompts and Ctrl+Alt+Del included, in AV1 (libaom
   3.15.2, a new pin), with Windows-account logins (WinPR on Windows uses Windows' own
   SSPI). Built by `build-windows.sh` with `HOST=1` from a pin of its own,
-  **`freerdp_host` `20261030.1`** (`aaa5b04c6`): our release picked from the fork's
+  **`freerdp_host` `20261030.2`** (`3df368ba5`): our release picked from the fork's
   integration-shadow-win, FreeRDP master 472f1901f plus our pull requests #13931 and
   #13932 (build fixes), #13933 (DXGI capture that follows the secure desktop), #13934
   (the service, Ctrl+Alt+Del) and #13935 (a Unix-socket listener on Windows); the

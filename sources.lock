@@ -19,12 +19,13 @@
 # event's own modifiers (#13852)
 freerdp     20261028.1 git+https://github.com/congzhangzh/FreeRDP.git                                        b53133babf818f4e59cfac967326d6399c470091
 # FreeRDP for the Windows host (freerdp-shadow-cli, freerdp-shadow-service),
-# not for the clients: our release-20261030.1, picked from the fork's
+# not for the clients: our release-20261030.2, picked from the fork's
 # integration-shadow-win, FreeRDP master 472f1901f (2026-10-30) plus our pull
 # requests for the Windows shadow server: two build fixes (#13931, #13932),
 # DXGI capture that follows the secure desktop (#13933), the service with
-# Ctrl+Alt+Del (#13934) and a Unix-socket listener on Windows (#13935)
-freerdp_host 20261030.1 git+https://github.com/congzhangzh/FreeRDP.git                                       aaa5b04c6cf33a72b62320a24d668405616c8351
+# Ctrl+Alt+Del (#13934) and a Unix-socket listener on Windows (#13935); .2: a
+# client gets the whole screen at once on a desktop that does not change
+freerdp_host 20261030.2 git+https://github.com/congzhangzh/FreeRDP.git                                       3df368ba5db068ee040c0fc57b47dd239a732d88
 sdl3        3.4.18   https://github.com/libsdl-org/SDL/releases/download/release-3.4.18/SDL3-3.4.18.tar.gz        9c75cf16330322c217dedd2e0609f1124f1b54b8633e763467b4684d0f4334a3
 sdl3_ttf    3.2.2    https://github.com/libsdl-org/SDL_ttf/releases/download/release-3.2.2/SDL3_ttf-3.2.2.tar.gz   63547d58d0185c833213885b635a2c0548201cc8f301e6587c0be1a67e1e045d
 freetype    2.15.0   https://download.savannah.gnu.org/releases/freetype/freetype-2.15.0.tar.xz                   93cd47eb719c325107f2d3cf087d06299e944c3b48a40b55537302304dea1dd5
