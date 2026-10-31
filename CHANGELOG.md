@@ -13,6 +13,13 @@ toolchain) gets an entry here in the same commit.
 
 ## 2026-10-31
 
+- **`freerdp_host` `20261031.5`** (`d2136687d`, freerdp-59's): the Windows host's sound
+  works. It offered Opus with a block alignment of 4, so rdpsnd padded every packet and the
+  client's decoder gave up after the first one; now 1 (FreeRDP#13954; the generic fix in
+  rdpsnd's server is freerdp-d0's #13952). Measured on a Windows 11 PC: a 1 kHz tone at
+  -12 dBFS captured by the shadow server came out at -12.0 dBFS on the client, 321 packets
+  in 16 s (before: 1, then silence). The runner has no sound card, so the kit's test still
+  says SKIP there. Rebuilt on master dae0390a4; the 1601 x 901 fix is FreeRDP#13956.
 - **LibreSSL patched: NLA over TLS 1.3 to Windows' own Remote Desktop** (聪哥: "patch
   libressl"). LibreSSL's TLS 1.3 client sends `psk_key_exchange_modes` only when it means to
   resume, so a first connection has none; Windows' Schannel then fails issuing its session
