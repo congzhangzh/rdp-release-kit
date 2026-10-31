@@ -280,7 +280,11 @@ $http = Start-Process -FilePath python -PassThru -NoNewWindow -RedirectStandardO
 & python -m pip install --quiet websockify 2>&1 | Out-File "$web\pip.log"
 $gw = Start-Process -FilePath python -PassThru -NoNewWindow -RedirectStandardOutput "$web\websockify.log" -RedirectStandardError "$web\websockify.err" `
     -ArgumentList "-m", "websockify", "127.0.0.1:3390", "127.0.0.1:$port"
-for ($i = 0; $i -lt 20 -and -not ((Listening 8080) -and (Listening 3390)); $i++) { Start-Sleep -Seconds 1 }
+# the demos' page, from a server that sends COOP/COEP itself (test/coi-http.py): isolated at
+# once, with no service-worker reload to wait for
+$coi = Start-Process -FilePath python -PassThru -NoNewWindow -RedirectStandardOutput "$web\coi-http.log" -RedirectStandardError "$web\coi-http.err" `
+    -ArgumentList "$KitTest\coi-http.py", "8082", $WebDir
+for ($i = 0; $i -lt 20 -and -not ((Listening 8080) -and (Listening 3390) -and (Listening 8082)); $i++) { Start-Sleep -Seconds 1 }
 Check "web: the page and websockify are up" ((Listening 8080) -and (Listening 3390))
 $env:CHROME = (Get-Command chrome.exe -ErrorAction SilentlyContinue).Source
 if (-not $env:CHROME) { $env:CHROME = "${env:ProgramFiles}\Google\Chrome\Application\chrome.exe" }
@@ -328,7 +332,7 @@ if (-not (Get-Command ffmpeg -ErrorAction SilentlyContinue)) {
 Memory "before the host demo"
 $env:SERVER = "windows"
 $env:DEMO_SOUND = if ($playback) { "1" } else { "" }   # the captions claim sound only with a device
-& node "$KitTest\wasm-demo.mjs" "http://127.0.0.1:8080/index.html" "127.0.0.1:3390" $user $pass $demo "$demo\raw.mp4" 2>&1 |
+& node "$KitTest\wasm-demo.mjs" "http://127.0.0.1:8082/index.html" "127.0.0.1:3390" $user $pass $demo "$demo\raw.mp4" 2>&1 |
     Tee-Object "$demo\driver.log"
 Remove-Item Env:\SERVER
 Memory "after the host demo"
@@ -408,7 +412,7 @@ if ($site) {
     for ($i = 0; $i -lt 20 -and -not (Listening 3391); $i++) { Start-Sleep -Seconds 1 }
     Memory "before the Windows Remote Desktop demo"
     $env:SERVER = "windows-rdp"
-    & node "$KitTest\wasm-demo.mjs" "http://127.0.0.1:8080/index.html" "127.0.0.1:3391" $user $pass $rdemo "$rdemo\raw.mp4" 2>&1 |
+    & node "$KitTest\wasm-demo.mjs" "http://127.0.0.1:8082/index.html" "127.0.0.1:3391" $user $pass $rdemo "$rdemo\raw.mp4" 2>&1 |
         Tee-Object "$rdemo\driver.log"
     Remove-Item Env:\SERVER
     $peak = "none"
