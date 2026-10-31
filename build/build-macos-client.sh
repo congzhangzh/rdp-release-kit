@@ -52,6 +52,9 @@ done
 # Apple's headers then reject an API that is newer, and the linker warns
 # about an object built for a newer macOS (checked below).
 MACOS_MIN=12.0
+# the host (HOST=1) captures with ScreenCaptureKit (macOS 12.3) and its sound
+# with it too (macOS 13)
+[ -z "${HOST:-}" ] || MACOS_MIN=13.0
 export MACOSX_DEPLOYMENT_TARGET=$MACOS_MIN
 
 # GNU tools lib.sh uses, with the same output. sha256sum is always

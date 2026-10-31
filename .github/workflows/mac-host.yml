@@ -1,0 +1,64 @@
+# The macOS host: FreeRDP's shadow server as FreeRDP-Shadow.app
+# (build-macos-client.sh with HOST=1), built natively on both architectures.
+# Pushed alone, on the branch mac-host, it builds and packages; it cannot
+# test the capture: a CI Mac cannot grant a new app Screen Recording (TCC).
+# The FreeRDP build log is kept either way, for the code's author.
+name: mac-host
+
+on:
+  push:
+    branches: [mac-host]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: arm64
+            runner: macos-15
+          - arch: x86_64
+            runner: macos-15-intel
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Cache sources
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/rdp-release-kit/sources
+          key: sources-${{ hashFiles('sources.lock') }}
+
+      - name: Cache compiled objects
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/rdp-release-kit/ccache/macos
+          key: ccache-macos-host-${{ matrix.arch }}-${{ github.sha }}
+          restore-keys: |
+            ccache-macos-host-${{ matrix.arch }}-
+            ccache-macos-${{ matrix.arch }}-
+
+      - name: Build tools
+        run: brew install bash meson nasm ccache
+
+      - name: Build
+        env:
+          CCACHE_MAXSIZE: 1G
+          HOST: "1"
+        run: ./build-macos.sh ${{ matrix.arch }}
+
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: mac-host-log-${{ matrix.arch }}
+          path: ~/.cache/rdp-release-kit/macos-${{ matrix.arch }}/log
+          retention-days: 7
+      - uses: actions/upload-artifact@v7
+        with:
+          name: freerdp-host-macos-${{ matrix.arch }}
+          path: dist/freerdp-host-*.zip
+          if-no-files-found: error
+          retention-days: 3
