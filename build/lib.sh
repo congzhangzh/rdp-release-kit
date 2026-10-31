@@ -117,7 +117,7 @@ verify_signature() {
 # unpack <name>: a fresh copy of the source in $WORK/src/<name>, path on
 # stdout; an overridden source is synced from its local directory instead
 unpack() {
-    local name=$1 file
+    local name=$1 file p
     if overridden "$name"; then
         sync_override "$name" || return 1
         echo "$WORK/src/$name"
@@ -127,7 +127,21 @@ unpack() {
     rm -rf "${WORK:?}/src/$name"
     mkdir -p "$WORK/src/$name"
     tar -xf "$file" --strip-components=1 -C "$WORK/src/$name" || return 1
+    # the kit's patches for it, in order (build/patches/<name>/*.patch, each saying why)
+    for p in "$KIT"/build/patches/"$name"/*.patch; do
+        [ -f "$p" ] || continue
+        git -C "$WORK/src/$name" apply -p1 "$p" >&2 || { echo "unpack: $p does not apply to $name" >&2; return 1; }
+        echo "== $name: $(basename "$p")" >&2
+    done
     echo "$WORK/src/$name"
+}
+
+# patches_id <name>: the hash of the kit's patches for <name>, nothing without any; it
+# joins the build stamp, so a changed patch builds the source again
+patches_id() {
+    local files=("$KIT"/build/patches/"$1"/*.patch)
+    [ -f "${files[0]}" ] || return 0
+    cat "${files[@]}" | sha256sum | cut -c1-16
 }
 
 # overridden <name>: the host script mounted a local directory for <name>
@@ -190,7 +204,9 @@ built() {
         echo "== $1 (local)"
         return 1
     fi
-    if [ "$(cat "$WORK/stamp/$1" 2> /dev/null)" = "${SHA[$1]} $(toolchain_id)" ]; then
+    local pid
+    pid=$(patches_id "$1")
+    if [ "$(cat "$WORK/stamp/$1" 2> /dev/null)" = "${SHA[$1]} $(toolchain_id)${pid:+ patches $pid}" ]; then
         echo "== $1 ${VERSION[$1]} (built)"
         return 0
     fi
@@ -204,7 +220,9 @@ stamp() {
     if overridden "$1"; then
         echo "local" > "$WORK/stamp/$1"
     else
-        echo "${SHA[$1]} $(toolchain_id)" > "$WORK/stamp/$1"
+        local pid
+        pid=$(patches_id "$1")
+        echo "${SHA[$1]} $(toolchain_id)${pid:+ patches $pid}" > "$WORK/stamp/$1"
     fi
 }
 

@@ -11,6 +11,26 @@ from right now, and what our own changes to a source fix:
 Every change that alters what is built (a pin, a build option, a patch, a
 toolchain) gets an entry here in the same commit.
 
+## 2026-10-31
+
+- **LibreSSL patched: NLA over TLS 1.3 to Windows' own Remote Desktop** (聪哥: "patch
+  libressl"). LibreSSL's TLS 1.3 client sends `psk_key_exchange_modes` only when it means to
+  resume, so a first connection has none; Windows' Schannel then fails issuing its session
+  ticket and ends the connection with internal_error, right on the first CredSSP message.
+  OpenSSL always sends it, so the kit's Linux and macOS clients (OpenSSL) connected and the
+  Windows and web clients (LibreSSL) did not (freerdp-59, on a Windows 11 host: a minimal
+  LibreSSL client 0/3, patched 3/3). `build/patches/libressl/0001-tls13-send-psk-kex-modes.patch`
+  sends it always, as OpenSSL does; LibreSSL's master still has the old condition
+  (2026-10-31). The kit applies a source's patches after unpacking (`build/lib.sh`,
+  `build/patches/<name>/*.patch`), and their hash joins its build stamp. The Windows run's
+  TLS probe (native client, no `/tls` option) tells whether it works; the demos keep
+  `/tls:enforce:1.2` until it does.
+- **Correction, `freerdp` `20261031.3`**: its TLS 1.2 retry (FreeRDP#13944) never fires with
+  LibreSSL, where the failure shows on the first write, not as the alert it waits for; it
+  needs rework (freerdp-59). The entry below said every client reconnects with TLS 1.2.
+- **libavm `20261031.1`** (`02733e96a`, avm-6e's): speed 10's time budget (opt-in), the
+  per-frame mode-info clear from 3.3 to 0.3 ms, SIMD avg 8x8; bit-exact.
+
 ## 2026-10-30
 
 - **AV2, in every client and the Windows host** (聪哥: "go ahead", with AV2 opt-in next to
