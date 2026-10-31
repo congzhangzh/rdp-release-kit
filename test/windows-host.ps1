@@ -127,6 +127,12 @@ if (-not (Get-PnpDevice -Class AudioEndpoint -Status OK -ErrorAction SilentlyCon
             $store = New-Object System.Security.Cryptography.X509Certificates.X509Store $name, "LocalMachine"
             $store.Open("ReadWrite"); $store.Add($signer); $store.Close()
         }
+        # the driver into the store first with pnputil, which never asks (it fails
+        # instead): devcon then finds it there, trusted (run 41166695002: devcon alone
+        # still asked, with the signer in Root and TrustedPublisher)
+        & pnputil /add-driver "$scream\Install\driver\x64\Scream.inf" /install 2>&1 |
+            Out-File -Append "$Out\scream.log"
+        "Scream: pnputil exit $LASTEXITCODE" | Out-File -Append "$Out\where.txt"
         # and two minutes at most: if Windows asks anyway, the test goes on without sound
         $devcon = Start-Process -FilePath "$scream\Install\helpers\devcon-x64.exe" -PassThru -NoNewWindow `
             -WorkingDirectory "$scream\Install\driver\x64" -ArgumentList "install", "Scream.inf", "*Scream" `
