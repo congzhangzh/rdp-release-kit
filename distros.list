@@ -15,6 +15,8 @@
 # "no-av1": the release has no libaom 3.0 or newer (deps/*.txt), which
 # xrdp's AV1 encoder needs; it is built without AV1, and clients get H.264
 # instead. ./check-deps.sh shows which release needs it.
+# "no-av2": built without AV2 (libavm, built from sources.lock, so no release
+# needs it today; it is there if one cannot build libavm), and clients get AV1.
 debian:testing
 debian:13       no-sway no-kde   sway 1.10, plasma-wayland-protocols 1.17
 ubuntu:26.10

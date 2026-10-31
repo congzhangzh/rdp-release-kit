@@ -68,11 +68,12 @@ for image in "${IMAGES[@]}"; do
     # the release's marks in distros.list (see there)
     mark() { awk -v i="$image" -v m="$1" \
         '$1 == i { for (k = 2; k <= NF; k++) if ($k == m) f = 1 } END { exit !f }' "$KIT/distros.list"; }
-    NO_AV1='' NO_SWAY='' NO_KDE=''
+    NO_AV1='' NO_AV2='' NO_SWAY='' NO_KDE=''
     mark no-av1 && NO_AV1=1
+    mark no-av2 && NO_AV2=1
     mark no-sway && NO_SWAY=1
     mark no-kde && NO_KDE=1
-    echo "### $image${NO_AV1:+ (no AV1)}${NO_SWAY:+ (no sway)}${NO_KDE:+ (no KDE)}"
+    echo "### $image${NO_AV1:+ (no AV1)}${NO_AV2:+ (no AV2)}${NO_SWAY:+ (no sway)}${NO_KDE:+ (no KDE)}"
     if ! builder=$(NO_AV1=$NO_AV1 builder "$image" xrdp); then
         echo "### $image: FAILED"
         status=1
@@ -82,7 +83,7 @@ for image in "${IMAGES[@]}"; do
     # shellcheck disable=SC2016
     if ! "$ENGINE" run --rm -v "$KIT":/kit:ro -v "$SOURCES":/sources -v "$OUT":/out \
             -v "$work":/work "${CACHE[@]}" "${OVERRIDE[@]}" -e OWNER="$(owner)" \
-            -e NO_AV1="$NO_AV1" -e NO_SWAY="$NO_SWAY" -e NO_KDE="$NO_KDE" -e KIT_REV="$KIT_REV" "$builder" \
+            -e NO_AV1="$NO_AV1" -e NO_AV2="$NO_AV2" -e NO_SWAY="$NO_SWAY" -e NO_KDE="$NO_KDE" -e KIT_REV="$KIT_REV" "$builder" \
             bash -c '/kit/build/build-xrdp-pkg.sh /kit /sources /out; rc=$?;
                      [ -z "$OWNER" ] || chown -R "$OWNER" /out /work /sources ${CCACHE_DIR:-}
                      exit $rc'; then
