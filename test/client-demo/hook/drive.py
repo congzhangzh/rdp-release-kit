@@ -26,7 +26,9 @@ import traceback
 
 DIR = os.environ.get("CLIENT_DEMO_DIR", "/tmp/demo")
 MODE = os.environ.get("CLIENT_DEMO_MODE", "release")
-log = open(os.path.join(DIR, "driver.log"), "a", buffering=1)
+# UTF-8: on Windows a file opens in the ANSI code page, which has no "→" of
+# freerdp-tk's glyphs, and the print raised in Driver() (run 41166695002)
+log = open(os.path.join(DIR, "driver.log"), "a", buffering=1, encoding="utf-8")
 
 
 def say(*words):
@@ -360,7 +362,11 @@ def install():
         from freerdp_tk import app as tkapp
         ui = [w for w in self.winfo_children() if isinstance(w, tkapp.App)]
         if ui:
-            Driver(self, ui[0])
+            try:
+                Driver(self, ui[0])
+            except Exception:   # said at once, so the run does not wait for a mark
+                say("FAILED\n" + traceback.format_exc())
+                mark("failed", traceback.format_exc())
         return plain(self, n)
 
     tk.Misc.mainloop = mainloop

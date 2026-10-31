@@ -389,6 +389,18 @@ Add-LocalGroupMember -Group "Remote Desktop Users" -Member $user -ErrorAction Si
 $cred = New-Object PSCredential $user, (ConvertTo-SecureString $pass -AsPlainText -Force)
 Start-Process cmd -Credential $cred -LoadUserProfile -ArgumentList "/c", "exit" -Wait -WindowStyle Hidden
 Check "rdp: Windows' own Remote Desktop listens on 3389, the user's profile is made" ((Listening 3389) -and (Test-Path "C:\Users\$user"))
+# which TLS Windows' own server takes from our client (run 41166695002: "tlsv1 alert
+# internal error" from Windows in the browser): a login each way, a report
+foreach ($tls in @(), @("/tls:enforce:1.2"), @("/tls:enforce:1.3")) {
+    $name = if ($tls) { $tls[0] -replace "[/:]", "-" } else { "default" }
+    $env:WLOG_FILEAPPENDER_OUTPUT_FILE_NAME = "rdp-auth$name.wlog"
+    $r = Start-Process -FilePath "$ClientDir\sdl-freerdp.exe" -PassThru -NoNewWindow `
+        -ArgumentList (@("/v:127.0.0.2:3389", "/u:$user", "/p:$pass", "/cert:ignore", "/auth-only") + $tls)
+    $r.WaitForExit(30000) | Out-Null
+    $said = Select-String -Path "$Out\rdp-auth$name.wlog" -Pattern "Authentication only, exit status (\w+)|alert [a-z ]+" -ErrorAction SilentlyContinue |
+        Select-Object -Last 1 | ForEach-Object { $_.Matches[0].Value }
+    "rdp: TLS $name -> $(if ($said) { $said } else { "exit $($r.ExitCode)" })" | Tee-Object -FilePath "$Out\where.txt" -Append
+}
 function SignOut {   # the test user's Remote Desktop session, and what it left running
     Get-Process notepad, firefox -IncludeUserName -ErrorAction SilentlyContinue | Where-Object { $_.UserName -like "*\$user" } |
         Stop-Process -Force -ErrorAction SilentlyContinue
