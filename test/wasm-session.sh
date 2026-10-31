@@ -263,7 +263,7 @@ fi
 # a fixed host name: the remote desktop shows nothing of the machine running the test
 "$ENGINE" run -d --name "$NAME" --hostname rdp-test -p 127.0.0.1:2223:22 -v "$OUT/ssh/key.pub":/key.pub:ro \
     "${PKG_MOUNT[@]}" "${DEMO_MOUNTS[@]}" -e DESKTOP="$DESKTOP" -e SCREENS="${SCREENS:+1}" \
-    -e XRDP_INSTALL="$XRDP_INSTALL" debian:13 sleep 3600 > /dev/null
+    -e XRDP_INSTALL="$XRDP_INSTALL" -e XRDP_AV2="${XRDP_AV2:-}" debian:13 sleep 3600 > /dev/null
 "$ENGINE" exec "$NAME" bash -c '
     set -e
     export DEBIAN_FRONTEND=noninteractive
@@ -286,6 +286,16 @@ fi
         install -m 755 -o test -g test /home/tester/.xsession /home/test/.xsession
     fi
     sed -i "/^\[Globals\]/,/^\[/ s|^port=.*|port=tcp://.:3389|" /etc/xrdp/xrdp.ini
+    # XRDP_AV2=1: AV2 first in the codec order, as the release notes say, when this
+    # xrdp has it (it records --enable-av2 in its binary); else a word, and AV1
+    if [ -n "$XRDP_AV2" ]; then
+        if grep -a -q -- "--enable-av2" /usr/sbin/xrdp; then
+            sed -i "s/^order = \[ \"AV1\"/order = [ \"AV2\", \"AV1\"/" /etc/xrdp/gfx.toml
+            grep "^order" /etc/xrdp/gfx.toml
+        else
+            echo "SKIP  this xrdp has no AV2 (no --enable-av2): the session stays AV1"
+        fi
+    fi
     mkdir -p /run/sshd && /usr/sbin/sshd
     (xrdp-sesman --nodaemon > /tmp/sesman.out 2>&1 &); (xrdp --nodaemon > /tmp/xrdp.out 2>&1 &)
     sleep 3' || { echo "the test server could not be set up" >&2; exit 1; }
@@ -456,6 +466,10 @@ check "gnome-remote-desktop runs for tester" '"$ENGINE" exec "$NAME" pgrep -u te
 else
 check "an Xorg session started for tester" \
     '"$ENGINE" exec "$NAME" pgrep -u tester -f "Xorg .*xrdp/xorg.conf" > /dev/null'
+fi
+if [ -n "${XRDP_AV2:-}" ] && "$ENGINE" exec "$NAME" grep -a -q -- "--enable-av2" /usr/sbin/xrdp 2> /dev/null; then
+    check "xrdp encodes the session in AV2 (AV2 first in gfx.toml), the page decodes it" \
+        '"$ENGINE" exec "$NAME" grep -q -h "starting AV2 codec session" /var/log/xrdp.log /tmp/xrdp.out'
 fi
 check "RDP for a native client on 127.0.0.1:$LOCAL_RDP_PORT" 'timeout 3 bash -c "exec 3<> /dev/tcp/127.0.0.1/$LOCAL_RDP_PORT"'
 [ "$SERVER" != xrdp ] || check "the session runs its $SHELL_PROC" '"$ENGINE" exec "$NAME" pgrep -u tester "$SHELL_PROC" > /dev/null'

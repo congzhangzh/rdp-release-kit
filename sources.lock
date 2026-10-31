@@ -57,7 +57,7 @@ jansson     2.15.1   https://github.com/akheron/jansson/releases/download/v2.15.
 # picked as release-<YYYYMMDD>.<N>: xrdp devel plus our branches on their
 # way upstream (pins.notes says what). Its submodules by the commits it
 # uses; xorgxrdp's development commit, whose module interface it needs.
-xrdp        20261027.1 git+https://github.com/congzhangzh/xrdp.git                                          8ef7574a72af69afe9135b0d67b7b4d2ee2745d4
+xrdp        20261030.1 git+https://github.com/congzhangzh/xrdp.git                                          4986f5c75272fd6c2746e606e9f9ea587fcf5942
 librfxcodec      0badc06  git+https://github.com/neutrinolabs/librfxcodec.git                                  0badc062e96d170af57870480a4aa7cf469302b0
 libpainter       379b8fb  git+https://github.com/neutrinolabs/libpainter.git                                   379b8fbf40f309829364bf3414d721f9ba77766d
 xorgxrdp    20261018.1 git+https://github.com/neutrinolabs/xorgxrdp.git                                     59d0735c4321b5baff3feaa980a01f78a1c1e96f

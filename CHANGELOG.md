@@ -93,6 +93,13 @@ toolchain) gets an entry here in the same commit.
   (`hook/wininput.py`). ffmpeg records the screen (gdigrab), `winrec.py` the speakers
   (WASAPI loopback; a runner without a sound device gives a silent video), muxed at the
   measured offset. It joins Get a client's freerdp-tk videos (demo.json's `clients`).
+- **`xrdp` `20261030.1`** (`4986f5c7`, avm-6e's pick of integration-wlup-all): the kit's
+  xrdp (release-20261028.1's stack) plus the AV2 encoder (libavm), so the packages are built
+  with `--enable-av2`. In avm-6e's runs: make check 295/295, AV2 end to end 17/17 (4:2:0 and
+  4:4:4, every frame acknowledged, AV1 and H.264 still for the others), the wlup suites green
+  (sway 42/42 and 57/57, GNOME 46/46, KDE 39/39, with FreeRDP 1ba0aa521 as the client). The
+  kit's web test logs in a third time with `XRDP_AV2=1`: AV2 first in `gfx.toml` (the release
+  notes' line), and xrdp's log must say it started an AV2 session.
 - **xrdp packages are built with AV2 when the pinned xrdp has it** (聪哥: xrdp with AV2,
   on this machine too): `build/build-xrdp-pkg.sh` builds libavm from `sources.lock`
   (static, the AVM release kit's options, the encoder only) and passes `--enable-av2` when
