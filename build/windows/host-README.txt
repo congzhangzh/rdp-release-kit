@@ -18,6 +18,11 @@ Install the service (in an administrator's PowerShell, in this folder)
 
   .\freerdp-shadow-service.exe install --allow-sas -- /bind-address:127.0.0.1 /gfx-av1
 
+AV2 too, for the clients that offer it (the kit's FreeRDP clients and FreeRDP
+Web; the others still get AV1): add /gfx-av2 after /gfx-av1. Smaller frames for
+the same picture, for more processor time on both sides: this PC encodes with
+libavm, and FreeRDP Web decodes in the page, in software.
+
 It starts at once and with Windows, on port 3389. If Windows' own Remote
 Desktop is turned on, it holds 3389 already: add /port:<another>, e.g. 3388. --allow-sas lets the service send
 Ctrl+Alt+Del (it sets the policy SoftwareSASGeneration = 1); leave it out

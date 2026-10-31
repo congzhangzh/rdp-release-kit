@@ -216,7 +216,7 @@ Stop $server
 # kit's client asking for it; AV1 stays what the service offers
 $env:WLOG_FILEAPPENDER_OUTPUT_FILE_NAME = "server-av2.wlog"
 $server = Start-Process -FilePath "$HostDir\freerdp-shadow-cli.exe" -PassThru -NoNewWindow `
-    -ArgumentList "/bind-address:127.0.0.1", "/port:4492", "/gfx-av2"
+    -ArgumentList "/bind-address:127.0.0.1", "/port:4492", "/gfx-av1", "/gfx-av2"   # as host-README.txt says
 for ($i = 0; $i -lt 30 -and -not (Listening 4492) -and -not $server.HasExited; $i++) { Start-Sleep -Seconds 1 }
 Check "av2: the server listens on 127.0.0.1:4492" (Listening 4492)
 $port = 4492

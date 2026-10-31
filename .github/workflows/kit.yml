@@ -794,7 +794,7 @@ jobs:
           | macOS Apple Silicon | \`sdl3-freerdp-$freerdp-macos-arm64.tar.xz\` | unpack, then double-click \`freerdp-tk.command\` (or \`bin/sdl-freerdp /v:server /u:user\`); downloaded with a browser, clear macOS's quarantine first: \`xattr -dr com.apple.quarantine sdl3-freerdp-*\` (not notarized) |
           | macOS Intel | \`sdl3-freerdp-$freerdp-macos-x86_64.tar.xz\` | the same |
           | xrdp server | see Install xrdp below | |
-          | Windows host x86_64 | \`$host\` | share a Windows PC's own screen (logon and lock screens included, AV1): unzip, then in an administrator's PowerShell \`.\\freerdp-shadow-service.exe install --allow-sas -- /bind-address:127.0.0.1 /gfx-av1\` (README.txt) |
+          | Windows host x86_64 | \`$host\` | share a Windows PC's own screen (logon and lock screens included, AV1, its sound): unzip, then in an administrator's PowerShell \`.\\freerdp-shadow-service.exe install --allow-sas -- /bind-address:127.0.0.1 /gfx-av1\` (add \`/gfx-av2\` for AV2; README.txt) |
 
           The Linux client runs on glibc 2.34 and newer (RHEL 9, Debian 12, Ubuntu 22.04, Fedora 35 and newer) with PulseAudio's or PipeWire's libpulse; nothing else to install. The macOS client runs on macOS 12 and newer. Check a download: \`sha256sum -c --ignore-missing SHA256SUMS\`; its origin: \`gh attestation verify <file> -R $GITHUB_REPOSITORY\`. Each archive's MANIFEST lists what it was built from.
 
