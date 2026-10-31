@@ -718,6 +718,14 @@ jobs:
                caption: "FreeRDP Web in a browser on a Windows Server 2025 machine of the CI, through websockify, to FreeRDP'"'"'s shadow server run by freerdp-shadow-service as SYSTEM on the console session: Notepad from Win+R, typing, then Firefox there with web video and WebGL; the picture in AV1, no sound yet. Big Buck Bunny © Blender Foundation, CC BY 3.0; WebGL Aquarium © Google, BSD."} as $w
               | .windows = [$w] | .videos += [$w + {title: "FreeRDP shadow server + Windows Server 2025, AV1"}]' \
               dist/demo/demo.json > dist/demo/demo.json.new && mv dist/demo/demo.json.new dist/demo/demo.json
+          # freerdp-tk on Windows (test/client-demo/windows.ps1), with the other freerdp-tk
+          # videos on Get a client, when the run made it
+          if [ -s dist/demo/freerdp-tk-windows.mp4 ]; then
+            jq '.clients += [{title: "Windows Remote Desktop, freerdp-tk release (Windows)",
+                              src: "demo/freerdp-tk-windows.mp4", poster: "demo/freerdp-tk-windows.jpg",
+                              caption: "freerdp-tk on Windows (Server 2025, a CI machine): the kit'"'"'s Windows client unpacked from its zip in PowerShell, freerdp-tk started from it, a connection to Windows'"'"' own Remote Desktop on the same PC: Notepad from Win+R, then Firefox in the session with web video and WebGL, its sound through the session; disconnect, freerdp-tk again, the saved connection opened with the password from Windows'"'"' Credential Manager. Big Buck Bunny © Blender Foundation, CC BY 3.0; WebGL Aquarium © Google, BSD."}]' \
+                dist/demo/demo.json > dist/demo/demo.json.new && mv dist/demo/demo.json.new dist/demo/demo.json
+          fi
           # assets are flat and GitHub turns '~' and '+' into '.': name the
           # files so first, so SHA256SUMS matches what is downloaded
           mkdir -p upload

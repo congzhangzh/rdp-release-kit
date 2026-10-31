@@ -125,6 +125,7 @@ jobs:
         run: >
           ./test/windows-host.ps1 (Get-ChildItem host -Directory | Select-Object -First 1).FullName
           (Get-ChildItem client -Directory | Select-Object -First 1).FullName dl/wasm/web out dl/media
+          (Get-ChildItem dl/client/*.zip | Select-Object -First 1).FullName
 
       - uses: actions/upload-artifact@v7
         if: always()
@@ -139,5 +140,7 @@ jobs:
           path: |
             out/windows-host.mp4
             out/windows-host.jpg
+            out/freerdp-tk-windows.mp4
+            out/freerdp-tk-windows.jpg
           if-no-files-found: error
           retention-days: 3

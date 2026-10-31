@@ -3,10 +3,12 @@
 # package, reached by the kit's own Windows client and by the web client:
 #
 #   windows-host.ps1 <unpacked freerdp-host-* folder> <unpacked sdl3-freerdp-*-windows-x86_64 folder>
-#                    <web client folder> <out dir> [<demo media folder>]
+#                    <web client folder> <out dir> [<demo media folder> [<client zip>]]
 #
 # The demo media folder is test/demo-assets.sh's (Big Buck Bunny, the WebGL
-# Aquarium): with it, the demo video also plays them, in Firefox here.
+# Aquarium): with it, the demo video also plays them, in Firefox here. With the
+# client's zip too, a second video: freerdp-tk from it, to Windows' own Remote
+# Desktop on this PC (test/client-demo/windows.ps1).
 #
 # 1. The server started by hand, as the user: a SAM-file login (WinPR's NTLM,
 #    WINPR_NATIVE_SSPI=0), a Unix socket (/ipc-socket) reached through a
@@ -20,7 +22,7 @@
 #    locked (last: this job's desktop stays locked).
 # Everything listens on 127.0.0.1 only. A local Windows user is made for the
 # test (the machine is thrown away afterwards). It fails when a check fails.
-param([string]$HostDir, [string]$ClientDir, [string]$WebDir, [string]$Out, [string]$Media = "")
+param([string]$HostDir, [string]$ClientDir, [string]$WebDir, [string]$Out, [string]$Media = "", [string]$ClientZip = "")
 $ErrorActionPreference = "Stop"
 New-Item -ItemType Directory -Force -Path $Out | Out-Null
 $HostDir = (Resolve-Path $HostDir).Path
@@ -286,8 +288,10 @@ if ($Media -and (Test-Path "$Media\bunny.webm") -and (Test-Path $firefox)) {
     Copy-Item "$Media\bunny.webm" "$wd\site\"
     Copy-Item -Recurse -Force "$Media\webgl" "$wd\site\"
     Copy-Item "$KitTest\demo\user.js" "$wd\firefox\"
-    Set-Content -Encoding ascii -Path "$env:SystemRoot\webdemo.cmd" -Value `
-        "@start `"`" `"$firefox`" -no-remote -profile `"$wd\firefox`" -width 1500 -height 820 http://127.0.0.1:8000/"
+    # a profile per user (the freerdp-tk demo's user runs it too, in a session of its own)
+    Set-Content -Encoding ascii -Path "$env:SystemRoot\webdemo.cmd" -Value @(
+        "@if not exist `"%LOCALAPPDATA%\webdemo-firefox`" mkdir `"%LOCALAPPDATA%\webdemo-firefox`" && copy `"$wd\firefox\user.js`" `"%LOCALAPPDATA%\webdemo-firefox\`" > nul",
+        "@start `"`" `"$firefox`" -no-remote -profile `"%LOCALAPPDATA%\webdemo-firefox`" -width 1500 -height 820 http://127.0.0.1:8000/")
     $site = Start-Process -FilePath python -PassThru -NoNewWindow -RedirectStandardOutput "$demo\webdemo-http.log" `
         -RedirectStandardError "$demo\webdemo-http.err" -ArgumentList "-m", "http.server", "8000", "--bind", "127.0.0.1", "--directory", "$wd\site"
     for ($i = 0; $i -lt 10 -and -not (Listening 8000); $i++) { Start-Sleep -Seconds 1 }
@@ -313,12 +317,21 @@ if (Test-Path "$demo\raw.mp4") {
 # the demo leaves Notepad and Firefox open on this same desktop: close them, and any
 # menu, before the native client needs the focus
 Stop-Process -Name notepad, firefox -Force -ErrorAction SilentlyContinue
-Stop $site
 Add-Type -Namespace Kit -Name Esc -MemberDefinition '[DllImport("user32.dll")] public static extern void keybd_event(byte vk, byte scan, uint flags, System.UIntPtr extra);'
 [Kit.Esc]::keybd_event(0x1B, 0x01, 0, [UIntPtr]::Zero); [Kit.Esc]::keybd_event(0x1B, 0x01, 2, [UIntPtr]::Zero)
 (New-Object -ComObject Shell.Application).MinimizeAll()
 Check "demo: a video of the web client on this host" ((Test-Path "$Out\windows-host.mp4") -and (Test-Path "$Out\windows-host.jpg")) `
     "$(if (Test-Path "$Out\windows-host.mp4") { '{0:N1} MB' -f ((Get-Item "$Out\windows-host.mp4").Length / 1MB) })"
+
+# the second video: freerdp-tk from the client's zip, to Windows' own Remote Desktop here
+if ($ClientZip -and $site) {
+    & "$KitTest\client-demo\windows.ps1" $ClientZip $user $pass $Out 2>&1 | Tee-Object "$Out\tk-demo.log"
+    $sound = (Get-Content "$Out\tk-demo\winrec.log" -Raw -ErrorAction SilentlyContinue) -replace "\s+", " "
+    Check "demo: freerdp-tk to Windows' own Remote Desktop, a video" ((Test-Path "$Out\freerdp-tk-windows.mp4") -and (Test-Path "$Out\freerdp-tk-windows.jpg")) `
+        "$(if (Test-Path "$Out\freerdp-tk-windows.mp4") { '{0:N1} MB' -f ((Get-Item "$Out\freerdp-tk-windows.mp4").Length / 1MB) }); $sound"
+    (New-Object -ComObject Shell.Application).MinimizeAll()
+}
+Stop $site
 Stop $gw; Stop $http
 
 # the native client: an AV1 session, Ctrl+Alt+Del, the lock screen

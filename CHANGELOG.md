@@ -72,6 +72,18 @@ toolchain) gets an entry here in the same commit.
   Properties" dialog, serves the page on 127.0.0.1:8000 and puts `webdemo.cmd` where Run
   finds it. `windows-host.yml` hands it the media from `demo.yml`'s cache. The video also
   joins the intro (demo.json's `videos`, address `#windows-host`).
+- **freerdp-tk on Windows, a video** (聪哥: Windows' own Remote Desktop as the server,
+  and the same video and fish as the other demos). `test/client-demo/windows.ps1` on the
+  Windows runner: the kit's Windows client unpacked from its zip in a PowerShell window,
+  freerdp-tk started from it, a connection to Windows' own Remote Desktop on the same PC
+  (127.0.0.2, a session of its own for the test user, whose profile is made first),
+  Notepad and then `webdemo` from Win+R (the client holds the keyboard), disconnect,
+  freerdp-tk again and the saved connection, its password from Credential Manager.
+  `hook/drive.py` keeps its steps; its pointer and keys now go through a small layer,
+  xdotool on Linux as before, Windows' SendInput with scan codes on Windows
+  (`hook/wininput.py`). ffmpeg records the screen (gdigrab), `winrec.py` the speakers
+  (WASAPI loopback; a runner without a sound device gives a silent video), muxed at the
+  measured offset. It joins Get a client's freerdp-tk videos (demo.json's `clients`).
 
 - **A new product: the Windows host** (聪哥: a Windows backend, "go ahead to do them all").
   `freerdp-host-<version>-windows-x86_64.zip`: FreeRDP's shadow server
