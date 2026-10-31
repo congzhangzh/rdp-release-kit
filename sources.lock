@@ -20,8 +20,9 @@
 # the same plus FreeRDP#13925's 5 commits) the clients decode AV2 with libavm
 # and offer it; AV1 stays what servers pick unless told to use AV2. .6: av2.c
 # also builds against a decoder-only libavm (branch av2-decoder-only), for the
-# browser
-freerdp     20261030.6 git+https://github.com/congzhangzh/FreeRDP.git                                        3814e44b9a1bd611641a940f14cc87869726f930
+# browser. 20261031.1: .6 plus freerdp-59's update-bitmap-padded-width, which
+# accepts xrdp's legacy bitmaps again (master 343f23134, #13884, dropped them)
+freerdp     20261031.1 git+https://github.com/congzhangzh/FreeRDP.git                                        b646cb806567af03436d309246021e1d34cc4a20
 # FreeRDP for the Windows host (freerdp-shadow-cli, freerdp-shadow-service),
 # not for the clients: our release-20261030.7, picked from the fork's
 # integration-shadow-win, FreeRDP master 2a508c725 (2026-10-31) plus our pull

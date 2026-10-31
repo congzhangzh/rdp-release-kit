@@ -93,6 +93,13 @@ toolchain) gets an entry here in the same commit.
   (`hook/wininput.py`). ffmpeg records the screen (gdigrab), `winrec.py` the speakers
   (WASAPI loopback; a runner without a sound device gives a silent video), muxed at the
   measured offset. It joins Get a client's freerdp-tk videos (demo.json's `clients`).
+- **`freerdp` `20261031.1`** (`b646cb806`, freerdp-59's pick): `20261030.6` plus one
+  commit, update-bitmap-padded-width: a legacy bitmap wider than its rectangle is accepted
+  again; only a rectangle wider than its bitmap (memory) is refused. With 20261030.6, every
+  client of the kit lost xrdp sessions that use legacy bitmap updates (freerdp-59 found it
+  through avm-6e's sway e2e: "Invalid BITMAP_DATA: width=12 != right - left=8", then the
+  session dropped). Its proof: xrdp's sway-systemd e2e 57/57 with this client (the
+  microphone records again), FreeRDP's new TestUpdateBitmap; here, the login test below.
 - **The native login test types, without GFX** (`test/xrdp-session.sh`): freerdp-59 found
   that FreeRDP master 343f23134 (#13884) refuses xrdp's legacy bitmap updates, whose bitmap
   is padded to a multiple of 4 pixels while the rectangle keeps its width, and drops the
