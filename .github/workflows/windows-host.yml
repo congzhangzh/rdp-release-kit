@@ -52,6 +52,27 @@ jobs:
           if-no-files-found: error
           retention-days: 3
 
+      # the media the demo plays (Big Buck Bunny, the WebGL Aquarium), from
+      # demo.yml's cache (fetched once on a miss), for the Windows job
+      - name: Cache the media the demo plays
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/rdp-release-kit/demo
+          key: demo-media-${{ hashFiles('test/demo-assets.sh') }}
+      - name: The demo media
+        run: |
+          dir=$(test/demo-assets.sh)
+          mkdir -p dist/demo-media
+          cp "$dir/bunny.webm" dist/demo-media/
+          rsync -a --exclude .git "$dir/webgl" dist/demo-media/
+          du -sh dist/demo-media
+      - uses: actions/upload-artifact@v7
+        with:
+          name: windows-host-demo-media
+          path: dist/demo-media
+          if-no-files-found: error
+          retention-days: 1
+
   test:
     needs: build
     runs-on: windows-2025
@@ -65,6 +86,10 @@ jobs:
         with:
           name: freerdp-host-windows-x86_64
           path: dl/host
+      - uses: actions/download-artifact@v8
+        with:
+          name: windows-host-demo-media
+          path: dl/media
       # this run's Windows client and web client, or the latest release's
       - if: inputs.from_run
         uses: actions/download-artifact@v8
@@ -99,7 +124,7 @@ jobs:
         shell: pwsh
         run: >
           ./test/windows-host.ps1 (Get-ChildItem host -Directory | Select-Object -First 1).FullName
-          (Get-ChildItem client -Directory | Select-Object -First 1).FullName dl/wasm/web out
+          (Get-ChildItem client -Directory | Select-Object -First 1).FullName dl/wasm/web out dl/media
 
       - uses: actions/upload-artifact@v7
         if: always()

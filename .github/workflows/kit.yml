@@ -712,9 +712,11 @@ jobs:
 
       - name: The files
         run: |
-          jq '.windows = [{title: "FreeRDP Web on a Windows host, AV1",
-                            src: "demo/windows-host.mp4", poster: "demo/windows-host.jpg",
-                            caption: "FreeRDP Web in a browser on a Windows Server 2025 machine of the CI, through websockify, to FreeRDP'"'"'s shadow server run by freerdp-shadow-service as SYSTEM on the console session: the Start menu, Notepad, typing; the picture in AV1."}]' \
+          # and the intro's last video ("videos"; build/site-anchors.json gives its address)
+          jq '{title: "FreeRDP Web on a Windows host, AV1",
+               src: "demo/windows-host.mp4", poster: "demo/windows-host.jpg",
+               caption: "FreeRDP Web in a browser on a Windows Server 2025 machine of the CI, through websockify, to FreeRDP'"'"'s shadow server run by freerdp-shadow-service as SYSTEM on the console session: Notepad from Win+R, typing, then Firefox there with web video and WebGL; the picture in AV1, no sound yet. Big Buck Bunny © Blender Foundation, CC BY 3.0; WebGL Aquarium © Google, BSD."} as $w
+              | .windows = [$w] | .videos += [$w + {title: "FreeRDP shadow server + Windows Server 2025, AV1"}]' \
               dist/demo/demo.json > dist/demo/demo.json.new && mv dist/demo/demo.json.new dist/demo/demo.json
           # assets are flat and GitHub turns '~' and '+' into '.': name the
           # files so first, so SHA256SUMS matches what is downloaded

@@ -11,7 +11,10 @@
 // desktop, then, in Firefox there, web video with sound (Big Buck Bunny) next
 // to a WebGL scene (the WebGL Aquarium), started by typing "webdemo", the Info
 // panel, Disconnect. On GNOME, the terminal is started from the search, as a
-// user would. DEMO_LABEL names the remote desktop in a corner label.
+// user would; on Windows, Notepad and then "webdemo" from Win+R's Run box (the
+// Start menu's search is slow there: its indexing is off on the runner, and
+// what is typed meanwhile lands in the search box). DEMO_LABEL names the remote
+// desktop in a corner label.
 //
 // Sound: the page plays the session's sound with Web Audio; for the recording
 // only, everything it sends to the speakers is also copied to a MediaRecorder,
@@ -177,6 +180,15 @@ function key(ch) {
   if (/[0-9]/.test(ch)) return { key: ch, code: "Digit" + ch, vk: ch.charCodeAt(0), text: ch };
   return { "-": { key: "-", code: "Minus", vk: 189, text: "-" }, ".": { key: ".", code: "Period", vk: 190, text: "." } }[ch];
 }
+// a key with the Windows (Super) key held, e.g. Win+R: the client sends both
+async function chordRemote(ch) {
+  const meta = key("\u2318"), k = key(ch);
+  await send("Input.dispatchKeyEvent", { type: "rawKeyDown", key: meta.key, code: meta.code, windowsVirtualKeyCode: meta.vk, modifiers: 4 });
+  await send("Input.dispatchKeyEvent", { type: "rawKeyDown", key: k.key, code: k.code, windowsVirtualKeyCode: k.vk, modifiers: 4 });
+  await sleep(60);
+  await send("Input.dispatchKeyEvent", { type: "keyUp", key: k.key, code: k.code, windowsVirtualKeyCode: k.vk, modifiers: 4 });
+  await send("Input.dispatchKeyEvent", { type: "keyUp", key: meta.key, code: meta.code, windowsVirtualKeyCode: meta.vk });
+}
 async function typeRemote(text, ms = 110) {
   for (const ch of text) {
     const k = key(ch);
@@ -268,14 +280,14 @@ if (GNOME) {   // GNOME starts in the overview: typing searches, Enter starts th
   // typing goes to the overview's search; Fedora's terminal is Ptyxis, Debian's Console
   await typeRemote(XRDP_GNOME ? "terminal\n" : "console\n");
   await sleep(4000);
-} else if (WINDOWS) {   // the Windows key opens Start, typing searches it, Enter starts
+} else if (WINDOWS) {   // Win+R opens Run: a name and Enter start the program at once
   await ev("document.getElementById('canvas').focus(), true");
-  await caption("Windows: the Start menu searches as you type, Enter starts");
+  await caption("Windows: Win+R, a name, Enter");
   await sleep(1200);
-  await typeRemote("\u2318");
-  await sleep(1800);
+  await chordRemote("r");
+  await sleep(1500);
   await typeRemote("notepad\n");
-  await sleep(4000);
+  await sleep(3000);
 } else if (XRDP_KDE) {   // Plasma starts on its desktop: Meta opens the launcher, typing searches it
   await ev("document.getElementById('canvas').focus(), true");
   await caption(`KDE Plasma on Wayland through xrdp, in AV1${serverCodec()}`);
@@ -314,9 +326,18 @@ writeFileSync(join(out, "page.log"),
   (await ev("document.getElementById('log')?.textContent ?? ''")) + "\n--- console ---\n" + logs.join("\n"));
 
 // 6. web video with sound and WebGL, in Firefox on the server, started by typing "webdemo"
+// (Windows: "webdemo" from Run, test/windows-host.ps1 puts it there; the shadow server
+// sends no sound, so the captions claim none)
 if (WINDOWS) {
+  await caption("Web video and WebGL: Firefox on the Windows PC");
+  await chordRemote("r");
+  await sleep(1500);
+  await typeRemote("webdemo\n");
+  await sleep(14000);
+  await caption("Big Buck Bunny, © Blender Foundation, CC BY 3.0 · WebGL Aquarium, © Google, BSD");
+  await sleep(8000);
   await caption("Drawn on the Windows PC, streamed to this browser in AV1");
-  await sleep(4000);
+  await sleep(6000);
 } else {
   await caption("Web video with sound, and WebGL: Firefox on the server");
   await typeRemote("webdemo\n");

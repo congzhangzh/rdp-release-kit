@@ -56,6 +56,22 @@ toolchain) gets an entry here in the same commit.
   row's arrows) next to Automatic, which still sends a bare `/gfx`. RDP cannot send an
   order (the server confirms the best capability set it knows), so the page keeps the
   list's order by leaving out a codec the server would take before one placed above it.
+- **libavm `20261030.4`** (`caea56916`): the encoder's realtime speed 10 at the middle
+  point 聪哥 chose between speed and quality: against the full RD search +4.8 % BD-rate
+  (was +11.6 %) for about 11 % more encoding time (1440p in the AVM release's CI: x86
+  17.4 -> 16.1 fps, ARM 23.8 -> 21.4 fps); the decoder and screen content are unchanged.
+- **The Windows host's demo, as the others** (聪哥: Start's search was slow, and what was
+  typed landed in it; a dialog about the paging file sat on the desktop; the desktop
+  filled half the picture). `test/wasm-demo.mjs` starts Notepad from Win+R's Run box (a
+  new `chordRemote`: a key with the Windows key held), then `webdemo` from it: Firefox on
+  the Windows PC with Big Buck Bunny next to the WebGL Aquarium, the same page and
+  settings as on the Linux servers (`test/demo/media.html`, `user.js`); the captions
+  claim no sound, which the Windows shadow server does not send yet.
+  `test/windows-host.ps1` sets the runner's screen to 1600 x 900 before any server starts
+  (1024 x 768 before; the shadow server shares the screen as it is), closes the "System
+  Properties" dialog, serves the page on 127.0.0.1:8000 and puts `webdemo.cmd` where Run
+  finds it. `windows-host.yml` hands it the media from `demo.yml`'s cache. The video also
+  joins the intro (demo.json's `videos`, address `#windows-host`).
 
 - **A new product: the Windows host** (聪哥: a Windows backend, "go ahead to do them all").
   `freerdp-host-<version>-windows-x86_64.zip`: FreeRDP's shadow server

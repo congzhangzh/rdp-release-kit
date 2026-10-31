@@ -3,7 +3,10 @@
 # package, reached by the kit's own Windows client and by the web client:
 #
 #   windows-host.ps1 <unpacked freerdp-host-* folder> <unpacked sdl3-freerdp-*-windows-x86_64 folder>
-#                    <web client folder> <out dir>
+#                    <web client folder> <out dir> [<demo media folder>]
+#
+# The demo media folder is test/demo-assets.sh's (Big Buck Bunny, the WebGL
+# Aquarium): with it, the demo video also plays them, in Firefox here.
 #
 # 1. The server started by hand, as the user: a SAM-file login (WinPR's NTLM,
 #    WINPR_NATIVE_SSPI=0), a Unix socket (/ipc-socket) reached through a
@@ -17,7 +20,7 @@
 #    locked (last: this job's desktop stays locked).
 # Everything listens on 127.0.0.1 only. A local Windows user is made for the
 # test (the machine is thrown away afterwards). It fails when a check fails.
-param([string]$HostDir, [string]$ClientDir, [string]$WebDir, [string]$Out)
+param([string]$HostDir, [string]$ClientDir, [string]$WebDir, [string]$Out, [string]$Media = "")
 $ErrorActionPreference = "Stop"
 New-Item -ItemType Directory -Force -Path $Out | Out-Null
 $HostDir = (Resolve-Path $HostDir).Path
@@ -49,8 +52,46 @@ function Stop($p) {
     Start-Sleep -Seconds 2
 }
 
+# The screen: the runner's is 1024 x 768, half of what the demo's browser shows (the
+# shadow server shares the screen as it is; it cannot take the client's size as xrdp
+# does), so 1600 x 900 first, before any server reads it. And the dialog the runner
+# shows at login ("Windows created a temporary paging file ..."): closed, it would sit
+# in the middle of every picture.
+Add-Type -Namespace Kit -Name Screen -MemberDefinition @'
+[StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+public struct DEVMODE {
+    [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 32)] public string dmDeviceName;
+    public short dmSpecVersion, dmDriverVersion, dmSize, dmDriverExtra; public int dmFields;
+    public int dmPositionX, dmPositionY, dmDisplayOrientation, dmDisplayFixedOutput;
+    public short dmColor, dmDuplex, dmYResolution, dmTTOption, dmCollate;
+    [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 32)] public string dmFormName;
+    public short dmLogPixels; public int dmBitsPerPel, dmPelsWidth, dmPelsHeight, dmDisplayFlags, dmDisplayFrequency;
+    public int dmICMMethod, dmICMIntent, dmMediaType, dmDitherType, dmReserved1, dmReserved2, dmPanningWidth, dmPanningHeight;
+}
+[DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern bool EnumDisplaySettings(string dev, int mode, ref DEVMODE dm);
+[DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern int ChangeDisplaySettings(ref DEVMODE dm, int flags);
+[DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern System.IntPtr FindWindow(string cls, string title);
+[DllImport("user32.dll")] static extern bool PostMessage(System.IntPtr w, uint msg, System.IntPtr wp, System.IntPtr lp);
+public static string Size(int w, int h) {
+    DEVMODE dm = new DEVMODE(); dm.dmSize = (short)Marshal.SizeOf(typeof(DEVMODE));
+    if (!EnumDisplaySettings(null, -1, ref dm)) return "the current mode is unknown";
+    string was = dm.dmPelsWidth + " x " + dm.dmPelsHeight;
+    dm.dmPelsWidth = w; dm.dmPelsHeight = h; dm.dmFields = 0x80000 | 0x100000;   // DM_PELSWIDTH | DM_PELSHEIGHT
+    return was + " -> " + w + " x " + h + ": " + ChangeDisplaySettings(ref dm, 0);   // 0: DISP_CHANGE_SUCCESSFUL
+}
+public static int Close(string title) {   // WM_CLOSE to every top-level window of that title
+    int n = 0;
+    for (System.IntPtr h; n < 10 && (h = FindWindow(null, title)) != System.IntPtr.Zero; n++) {
+        PostMessage(h, 0x10, System.IntPtr.Zero, System.IntPtr.Zero); System.Threading.Thread.Sleep(500);
+    }
+    return n;
+}
+'@
+"screen: $([Kit.Screen]::Size(1600, 900))" | Tee-Object -FilePath "$Out\where.txt"
+"closed $([Kit.Screen]::Close('System Properties')) System Properties dialog(s)" | Tee-Object -FilePath "$Out\where.txt" -Append
+
 $console = (Get-Process -Id $PID).SessionId
-"session of this job: $console" | Tee-Object "$Out\where.txt"
+"session of this job: $console" | Tee-Object -FilePath "$Out\where.txt" -Append
 (qwinsta 2>&1) | Out-File -Append "$Out\where.txt"
 Get-CimInstance Win32_OperatingSystem | Select-Object Caption, Version | Format-Table | Out-File -Append "$Out\where.txt"
 # New-LocalUser: net user asks Y/N on stdin for a password over 14 characters
@@ -224,6 +265,29 @@ Check "web: the page decodes AV1 (a WebCodecs decoder configured)" ($av1 -match 
 # (test/record-demos.sh: 720p, H.264 CRF 28, AAC 96 kbit/s, a poster from 70 %)
 $demo = "$Out\demo"
 New-Item -ItemType Directory -Force -Path $demo | Out-Null
+# its web video and WebGL, as test/demo/webdemo does on the Linux servers: the same page
+# (media.html) and Firefox settings (user.js), served from this PC's 127.0.0.1:8000 and
+# opened by "webdemo" typed into Win+R's Run box (a .cmd in the Windows folder, where
+# Run finds it)
+$site = $null
+$firefox = "${env:ProgramFiles}\Mozilla Firefox\firefox.exe"
+if ($Media -and (Test-Path "$Media\bunny.webm") -and (Test-Path $firefox)) {
+    $wd = "$env:PUBLIC\webdemo"
+    New-Item -ItemType Directory -Force -Path "$wd\site", "$wd\firefox" | Out-Null
+    Copy-Item "$KitTest\demo\media.html" "$wd\site\index.html"
+    Copy-Item "$Media\bunny.webm" "$wd\site\"
+    Copy-Item -Recurse -Force "$Media\webgl" "$wd\site\"
+    Copy-Item "$KitTest\demo\user.js" "$wd\firefox\"
+    Set-Content -Encoding ascii -Path "$env:SystemRoot\webdemo.cmd" -Value `
+        "@start `"`" `"$firefox`" -no-remote -profile `"$wd\firefox`" -width 1500 -height 820 http://127.0.0.1:8000/"
+    $site = Start-Process -FilePath python -PassThru -NoNewWindow -RedirectStandardOutput "$demo\webdemo-http.log" `
+        -RedirectStandardError "$demo\webdemo-http.err" -ArgumentList "-m", "http.server", "8000", "--bind", "127.0.0.1", "--directory", "$wd\site"
+    for ($i = 0; $i -lt 10 -and -not (Listening 8000); $i++) { Start-Sleep -Seconds 1 }
+}
+Check "demo: webdemo ready (the media page on 127.0.0.1:8000, Firefox)" ($site -and (Listening 8000)) `
+    "$(if (-not $Media) { 'no media folder' } elseif (-not (Test-Path $firefox)) { 'no Firefox' })"
+[Kit.Screen]::Close("System Properties") | Out-Null
+(New-Object -ComObject Shell.Application).MinimizeAll()
 if (-not (Get-Command ffmpeg -ErrorAction SilentlyContinue)) {
     & choco install ffmpeg -y --no-progress 2>&1 | Out-File "$demo\choco.log"
 }
@@ -238,9 +302,10 @@ if (Test-Path "$demo\raw.mp4") {
     & ffmpeg -v error -y -ss ("{0:F1}" -f ($len * 0.7)) -i "$demo\raw.mp4" -frames:v 1 `
         -vf "scale=1280:720:flags=lanczos" -q:v 4 "$Out\windows-host.jpg"
 }
-# the demo leaves Notepad open on this same desktop: close it, and any menu,
-# before the native client needs the focus
-Stop-Process -Name notepad -Force -ErrorAction SilentlyContinue
+# the demo leaves Notepad and Firefox open on this same desktop: close them, and any
+# menu, before the native client needs the focus
+Stop-Process -Name notepad, firefox -Force -ErrorAction SilentlyContinue
+Stop $site
 Add-Type -Namespace Kit -Name Esc -MemberDefinition '[DllImport("user32.dll")] public static extern void keybd_event(byte vk, byte scan, uint flags, System.UIntPtr extra);'
 [Kit.Esc]::keybd_event(0x1B, 0x01, 0, [UIntPtr]::Zero); [Kit.Esc]::keybd_event(0x1B, 0x01, 2, [UIntPtr]::Zero)
 (New-Object -ComObject Shell.Application).MinimizeAll()

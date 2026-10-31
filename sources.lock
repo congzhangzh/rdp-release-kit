@@ -41,12 +41,11 @@ dav1d       1.5.4    https://downloads.videolan.org/pub/videolan/dav1d/1.5.4/dav
 # downloaded on 2026-10-30 (upstream publishes none next to it)
 aom         3.15.2   https://storage.googleapis.com/aom-releases/libaom-3.15.2.tar.gz                         67bb54b245f33ed98600e08269e6139986e48114e14042474ddd8885801dfddc
 # libavm, the AV2 reference encoder and decoder: the AVM work's release
-# release-20261030.3 on congzhangzh/avm (gated by its own release kit on every
+# release-20261030.4 on congzhangzh/avm (gated by its own release kit on every
 # target; .2: NEON high-bit-depth loop filter, WebAssembly SIMD128 decoding;
-# .3: realtime speed 10 decides camera blocks without the full RD search,
-# bit-exact trims in encoder and decoder, run-time CPU detection on ARM64
-# Windows with mingw), built here with the same options
-avm         20261030.3 git+https://github.com/congzhangzh/avm.git                                            45f70cd113ef9e414c092b9f562289d5e4c53624
+# .3: run-time CPU detection on ARM64 Windows with mingw; .4: realtime speed 10
+# at the middle point between speed and quality), built here with the same options
+avm         20261030.4 git+https://github.com/congzhangzh/avm.git                                            caea56916edcb3160c2f8cb8b89e99b8b12f28ab
 zlib        1.3.2    https://github.com/madler/zlib/releases/download/v1.3.2/zlib-1.3.2.tar.gz                    bb329a0a2cd0274d05519d61c667c062e06990d72e125ee2dfa8de64f0119d16
 jansson     2.15.1   https://github.com/akheron/jansson/releases/download/v2.15.1/jansson-2.15.1.tar.gz           0c7114dc0b2d22a670724a1f95922029d7077c19dbf79a584cb8084d2f267f2f
 # xrdp, for the server packages (Xorg and Wayland sessions): our release,

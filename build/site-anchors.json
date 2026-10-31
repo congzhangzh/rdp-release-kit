@@ -22,5 +22,8 @@
   "xrdp-gnome-screens": [
     "xrdp-preview-gnome-screens",
     "xrdp-gnome-screens"
+  ],
+  "windows-host": [
+    "windows-host"
   ]
 }
