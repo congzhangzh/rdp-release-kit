@@ -13,6 +13,12 @@ toolchain) gets an entry here in the same commit.
 
 ## 2026-10-31
 
+- **`freerdp` `20261031.9`** (`76b4c2e1f`, freerdp-59's, from integration-latest): `.7` plus
+  two fixes. The SDL3 clients' connection dialog and clipboard read a freed queue item for
+  every message (FreeRDP#13961; master d5d230ddd turned a copy into `auto&` before `pop()`), so
+  the page log read "����ection is being established": valgrind on sdl-freerdp 165 errors with
+  `.7`, 0 with `.9`. And a sound wave that does not decode is dropped, sound plays on
+  (FreeRDP#13957). The web test now fails on a garbled page log.
 - **`freerdp` `20261031.7`** (`d7f066be3`, freerdp-59's, from integration-latest): the clients
   move to FreeRDP master dae0390a4, where our Emscripten and SDL pull requests are now merged;
   on top only the AV2 extension (#13925), the physical monitor size (#13805) and xrdp's padded

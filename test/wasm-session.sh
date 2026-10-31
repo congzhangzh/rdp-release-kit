@@ -448,6 +448,9 @@ sleep 2
 pass=0; fail=0
 check() { if eval "$2"; then echo "PASS  $1"; pass=$((pass + 1)); else echo "FAIL  $1"; fail=$((fail + 1)); fi; }
 check "the page started the client as tester" 'grep -q -- " /u:tester " "$OUT/page.log"'
+# the client's own messages arrive whole: a freed queue item read in the SDL3 dialog
+# (FreeRDP#13961) turned "The connection is being established" into "����ection …"
+check "the page log has no garbled text (no U+FFFD)" '! grep -q $'"'"'\xef\xbf\xbd'"'"' "$OUT/page.log"'
 if [ "$SERVER" = xrdp-gnome ]; then
 check "sesman started GNOME for tester (gnome-session, GNOME Shell)" \
     '"$ENGINE" exec "$NAME" pgrep -u tester -f "gnome-session-service --session=gnome" > /dev/null &&
