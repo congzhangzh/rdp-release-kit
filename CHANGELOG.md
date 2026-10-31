@@ -18,8 +18,12 @@ toolchain) gets an entry here in the same commit.
   libressl/portable#1452 (a bug report, no code). `freerdp` `20261031.3` keeps the retry
   commit; the kit's LibreSSL patch is the fix for the Windows and web clients until LibreSSL
   decides.
-- **`freerdp_host` `20261031.5`** (`d2136687d`, freerdp-59's): the Windows host's sound
-  works. It offered Opus with a block alignment of 4, so rdpsnd padded every packet and the
+- **`freerdp_host` `20261031.6`** (`c4a445237`, freerdp-59's, from integration-shadow-win):
+  uninstall puts back the Ctrl+Alt+Del policy as install found it (`SoftwareSASGeneration`;
+  install keeps the old state in the service's key and changes it only when services could
+  not send Ctrl+Alt+Del; tested from not set, 2 and 3), so README.txt drops its `reg delete`.
+  It is `20261031.5` plus that, and `20261031.5` (`d2136687d`) made the Windows host's sound
+  work. It offered Opus with a block alignment of 4, so rdpsnd padded every packet and the
   client's decoder gave up after the first one; now 1 (FreeRDP#13954; the generic fix in
   rdpsnd's server is freerdp-d0's #13952). Measured on a Windows 11 PC: a 1 kHz tone at
   -12 dBFS captured by the shadow server came out at -12.0 dBFS on the client, 321 packets

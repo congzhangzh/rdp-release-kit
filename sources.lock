@@ -41,8 +41,9 @@ freerdp     dev.d7f066be git+https://github.com/congzhangzh/FreeRDP.git         
 # screen's true size (a 1600x900 screen was a 1601x901 surface, and the first
 # frame's copy read a row past the capture: the server died, run 41166695002);
 # 20261031.5: rebuilt on master dae0390a4, and Opus offered with a block
-# alignment of 1 (with 4, rdpsnd padded each packet and the client went silent)
-freerdp_host 20261031.5 git+https://github.com/congzhangzh/FreeRDP.git                                       d2136687d7b92081a8a171352da7e711fcbb43e6
+# alignment of 1 (with 4, rdpsnd padded each packet and the client went silent);
+# 20261031.6: uninstall puts back the Ctrl+Alt+Del policy as install found it
+freerdp_host 20261031.6 git+https://github.com/congzhangzh/FreeRDP.git                                       c4a445237281b7517f7233ac0c1285226c56d8a3
 sdl3        3.4.18   https://github.com/libsdl-org/SDL/releases/download/release-3.4.18/SDL3-3.4.18.tar.gz        9c75cf16330322c217dedd2e0609f1124f1b54b8633e763467b4684d0f4334a3
 sdl3_ttf    3.2.2    https://github.com/libsdl-org/SDL_ttf/releases/download/release-3.2.2/SDL3_ttf-3.2.2.tar.gz   63547d58d0185c833213885b635a2c0548201cc8f301e6587c0be1a67e1e045d
 freetype    2.15.0   https://download.savannah.gnu.org/releases/freetype/freetype-2.15.0.tar.xz                   93cd47eb719c325107f2d3cf087d06299e944c3b48a40b55537302304dea1dd5
