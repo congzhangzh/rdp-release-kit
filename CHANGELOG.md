@@ -45,6 +45,17 @@ toolchain) gets an entry here in the same commit.
   -12 dBFS captured by the shadow server came out at -12.0 dBFS on the client, 321 packets
   in 16 s (before: 1, then silence). The runner has no sound card, so the kit's test still
   says SKIP there. Rebuilt on master dae0390a4; the 1601 x 901 fix is FreeRDP#13956.
+- **A new product: the macOS host** (聪哥: "make it possible", freerdp-d0's work).
+  `freerdp-host-<version>-macos-<arch>.zip`: FreeRDP's shadow server as FreeRDP-Shadow.app
+  (bundle id org.freerdp.shadow, so macOS keeps its Screen & System Audio Recording and
+  Accessibility permissions across updates), a LaunchAgent that starts it in your session at
+  login (`/sec:tls`: logins are the Mac's own), and a README. **`freerdp_mac_host`
+  `20261031.4`** (`920d496f4`): ScreenCaptureKit capture of every display and of the sound
+  the Mac plays, Quartz input, the cursor drawn by the client, capture again after the
+  display sleeps; confirmed by 聪哥 on his Mac. `build-macos-client.sh` builds it with
+  `HOST=1` (macOS 13 at least, libaom for AV1, libavm for AV2), and
+  `.github/workflows/mac-host.yml` builds and packages it on both architectures; CI cannot
+  grant a new app Screen Recording, so the capture itself is tested by hand on a Mac.
 - **LibreSSL patched: NLA over TLS 1.3 to Windows' own Remote Desktop** (聪哥: "patch
   libressl"). LibreSSL's TLS 1.3 client sends `psk_key_exchange_modes` only when it means to
   resume, so a first connection has none; Windows' Schannel then fails issuing its session
