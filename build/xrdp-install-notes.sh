@@ -8,7 +8,8 @@
 #
 # --json prints the same as data for the site's "Get a server" page (the
 # release's install.json): {"server": [{"name", "sessions", "command",
-# "more": [{"what", "command"}]}], "start"}. Where <dir> has the kit's Mutter
+# "more": [{"what", "command"}]}], "start", "av2"}; "av2" ({"what",
+# "command"}) only when the packages have AV2. Where <dir> has the kit's Mutter
 # for a Fedora release (build/build-mutter.sh), its command is offered too.
 #
 # <dir> holds the release's assets (the xrdp, xorgxrdp and, for Fedora,
@@ -33,6 +34,18 @@ trap 'rm -f "$XORG" "$XORG.rows" "$XORG.mutter"' EXIT
 : > "$XORG.mutter"
 
 START='sudo systemctl enable --now xrdp'
+# AV2: in the packages when xrdp was configured with --enable-av2, which xrdp
+# records in its binary (xrdp --version prints it); asked of one Debian package.
+# The server's to turn on: "AV2" first in gfx.toml's codec order
+AV2_ON='sudo sed -i '"'"'s/^order = \[ "AV1"/order = [ "AV2", "AV1"/'"'"' /etc/xrdp/gfx.toml && sudo systemctl restart xrdp'
+AV2=
+deb=$(asset "xrdp_[0-9]*_amd64.deb")
+if [ -n "$deb" ]; then
+    unpacked=$(mktemp -d)
+    dpkg-deb -x "$DIR/$deb" "$unpacked"
+    grep -a -q -- "--enable-av2" "$unpacked/usr/sbin/xrdp" && AV2=1
+    rm -rf "$unpacked"
+fi
 # one release's row: name, sessions, command, and Fedora's xorgxrdp and
 # Mutter commands
 row() {
@@ -117,7 +130,10 @@ grep -v -E '^\s*(#|$)' "$KIT/distros.list" | while read -r image rest; do
     row "$name" "$sessions" "$cmd" "$xorg" "$mutter"
 done > "$XORG.rows"
 if [ -n "$JSON" ]; then
-    jq -s --arg start "$START" '{server: ., start: $start}' "$XORG.rows"
+    jq -s --arg start "$START" --arg av2 "${AV2:+$AV2_ON}" \
+        '{server: ., start: $start} + (if $av2 == "" then {} else
+          {av2: {what: "AV2: xrdp sends it to the clients that offer it (the kit'"'"'s FreeRDP clients and FreeRDP Web) once it is first in the codec order", command: $av2}} end)' \
+        "$XORG.rows"
     exit 0
 fi
 cat "$XORG.rows"
@@ -149,3 +165,9 @@ screen lists them as `[GNOME]`, `[KDE]` and `[Wayland]` (sway) in
 with `/dev/udmabuf` (the user in its group, often `kvm`), before that a DRM
 render node (a GPU, or the `vgem` module).
 EOF
+if [ -n "$AV2" ]; then
+    printf '\n### AV2\n\n%s\n\n`%s`\n\n%s\n' \
+        "These packages have AV2 (libavm) next to AV1. xrdp keeps AV1 first; with AV2 first in its codec order it sends AV2 to the clients that offer it, the kit's FreeRDP clients and FreeRDP Web among them (the others still get AV1 or H.264):" \
+        "$AV2_ON" \
+        "AV2 makes smaller frames for the same picture, for more processor time on both sides: the server encodes with libavm, and FreeRDP Web decodes in the page, in software (no browser decodes AV2 yet)."
+fi
