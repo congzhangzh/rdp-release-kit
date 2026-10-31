@@ -31,6 +31,11 @@ toolchain) gets an entry here in the same commit.
   On ARM64 Windows libavm is built with `CONFIG_RUNTIME_CPU_DETECT=0`: its
   `arm_cpudetect.c` knows MSVC's way to ask the CPU, not mingw clang's, and NEON is in
   every ARM64 CPU (run 41116070345's windows (aarch64) job failed there).
+  **`freerdp_host` `20261030.4`** (`7ee083d79`): the Windows host's FreeRDP plus the
+  same extension, so its shadow server encodes AV2 when started with `/gfx-av2` (the
+  service's install line keeps AV1). `test/windows-host.ps1` adds an AV2 session with the
+  run's own client: the frames must come in as `RDPGFX_CODECID_AV2` (a scratch run of the
+  same build: 136 of them, run 41110824436).
 - **AV2 in the web client, fixed; libavm `20261030.2`** (`faad89dfe`). Run 41117771521
   built every native client with AV2 but not the web client: a decoder-only libavm
   installs no `avm_encoder.h`, and the earlier local build had passed only on headers a
@@ -39,11 +44,13 @@ toolchain) gets an entry here in the same commit.
   of stubs); **`freerdp` `20261030.6`** carries it (integration-latest-av2). libavm
   20261030.2 (the AVM release: NEON high-bit-depth loop filter, SIMD128 for WebAssembly)
   is built for the browser with `AVM_TARGET_CPU=x86`, its SSE kernels compiled to
-  SIMD128, 1.3-1.5x faster decoding; checked with a build from an empty work tree. **`freerdp_host` `20261030.4`** (`7ee083d79`): the Windows host's FreeRDP plus the
-  same extension, so its shadow server encodes AV2 when started with `/gfx-av2` (the
-  service's install line keeps AV1). `test/windows-host.ps1` adds an AV2 session with the
-  run's own client: the frames must come in as `RDPGFX_CODECID_AV2` (a scratch run of the
-  same build: 136 of them, run 41110824436).
+  SIMD128, 1.3-1.5x faster decoding; checked with a build from an empty work tree.
+- **libavm `20261030.3`** (`45f70cd11`). The encoder's realtime speed 10 (camera-like
+  content) decides blocks without the full RD search: 1440p on 4 threads goes from 25 to
+  about 35 fps in the AVM release's own measure, at +11.6 % BD-rate, on speed 10 only;
+  speed 9, which the Windows host uses for screens, is unchanged. Two per-block clears are
+  trimmed, bit-exact, in the decoder too. libavm now asks an ARM64 Windows CPU what it has
+  when built with mingw, so the Windows ARM64 client gets its run-time CPU check back.
 
 - **A new product: the Windows host** (聪哥: a Windows backend, "go ahead to do them all").
   `freerdp-host-<version>-windows-x86_64.zip`: FreeRDP's shadow server
