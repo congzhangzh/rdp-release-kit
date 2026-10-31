@@ -197,6 +197,13 @@ class WinInput:
             time.sleep(0.5)
             if user32.GetForegroundWindow() == hwnd:
                 return
+            # a toast already on screen kept the front through all of this (kit run
+            # 41214959835, after toasts were turned off): it is closed
+            title = ctypes.create_unicode_buffer(200)
+            user32.GetWindowTextW(front, title, 200)
+            if front and title.value == "New notification":
+                user32.ShowWindow(front, 0)                # SW_HIDE
+                user32.PostMessageW(front, 0x0010, 0, 0)   # WM_CLOSE
 
 
 # For test/client-demo/windows.ps1, which types into its PowerShell window as

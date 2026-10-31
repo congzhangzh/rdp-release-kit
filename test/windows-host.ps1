@@ -441,9 +441,17 @@ if ($ClientZip -and $site) {
     $sound = (Get-Content "$Out\tk-demo\winrec.log" -Raw -ErrorAction SilentlyContinue) -replace "\s+", " "
     # both visits done (connect, Notepad, webdemo, disconnect; the saved connection again)
     $tkDone = (Get-Content "$Out\tk-demo\run.log" -Raw -ErrorAction SilentlyContinue) -match "done: True"
-    Check "demo: freerdp-tk to Windows' own Remote Desktop, both visits and a video" `
-        ($tkDone -and (Test-Path "$Out\freerdp-tk-windows.mp4") -and (Test-Path "$Out\freerdp-tk-windows.jpg")) `
-        "$(if (Test-Path "$Out\freerdp-tk-windows.mp4") { '{0:N1} MB' -f ((Get-Item "$Out\freerdp-tk-windows.mp4").Length / 1MB) }); $sound"
+    $tkLog = Get-Content "$Out\tk-demo\run.log" -Raw -ErrorAction SilentlyContinue
+    if (-not $tkDone -and $tkLog -match "not in front" -and $tkLog -match "unpacked: -1 files") {
+        # nothing typed reached PowerShell: the test could not focus its window (a toast kept
+        # the front), so freerdp-tk was never started; the harness, not the product
+        "SKIP  demo: freerdp-tk to Windows' own Remote Desktop: the test could not bring PowerShell to the front" |
+            Tee-Object -FilePath "$Out\checks.txt" -Append
+    } else {
+        Check "demo: freerdp-tk to Windows' own Remote Desktop, both visits and a video" `
+            ($tkDone -and (Test-Path "$Out\freerdp-tk-windows.mp4") -and (Test-Path "$Out\freerdp-tk-windows.jpg")) `
+            "$(if (Test-Path "$Out\freerdp-tk-windows.mp4") { '{0:N1} MB' -f ((Get-Item "$Out\freerdp-tk-windows.mp4").Length / 1MB) }); $sound"
+    }
     # the web demos before it pressed Win+R and Win+D on this console through the shadow
     # server, and their clients then left: none of their keys may still be held here
     # (FreeRDP#13958 lets go of a leaving client's keys; wininput.py release logs them)
