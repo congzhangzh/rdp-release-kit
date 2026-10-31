@@ -77,12 +77,15 @@ const ws = new WebSocket(target.webSocketDebuggerUrl);
 await new Promise(r => ws.addEventListener("open", r));
 let id = 0; const pending = new Map(); const shots = [];
 const send = (method, params = {}) => new Promise(r => { const i = ++id; pending.set(i, r); ws.send(JSON.stringify({ id: i, method, params })); });
+let recordingStopped = false;
 const logs = [];   // the page's console, for page.log (as wasm-session.mjs writes it)
 ws.addEventListener("message", e => {
   const m = JSON.parse(e.data);
   if (m.id && pending.has(m.id)) { pending.get(m.id)(m.result); pending.delete(m.id); }
   if (m.method === "Runtime.consoleAPICalled") logs.push(m.params.args.map(a => a.value).join(" "));
-  if (m.method === "Page.screencastFrame") {   // keep each frame with the time it was shown
+  // keep each frame with the time it was shown; none after the recording stopped (one came in
+  // after its folder was gone, kit run 41196854812)
+  if (m.method === "Page.screencastFrame" && !recordingStopped) {
     const file = join(frames, String(shots.length).padStart(5, "0") + ".jpg");
     writeFileSync(file, Buffer.from(m.params.data, "base64"));
     shots.push({ file, t: m.params.metadata.timestamp });
@@ -389,6 +392,7 @@ await load();
 await caption("FreeRDP Web: github.com/congzhangzh/freerdp-web");
 await sleep(3500);
 await send("Page.stopScreencast");
+recordingStopped = true;
 // Windows: Firefox, still playing the video and drawing the Aquarium in software, would
 // starve the encode below (run 41172690875: 39 minutes, unfinished); it is not needed now
 if (WINDOWS_ANY) spawnSync("taskkill", ["/IM", "firefox.exe", "/F"], { stdio: "ignore" });

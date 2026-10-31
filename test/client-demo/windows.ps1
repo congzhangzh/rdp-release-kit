@@ -77,7 +77,7 @@ try {
     $dir = "$desk\$name"
     $need = "$dir\freerdp-tk.cmd", "$dir\lib\freerdp-tk\freerdp_tk\__main__.py", "$dir\python\pythonw.exe"
     $last = -1
-    for ($i = 0; $i -lt 240; $i++) {
+    for ($i = 0; $i -lt 600; $i++) {   # up to 5 minutes: 93 s once, past 2 minutes once (run 41196854812)
         Start-Sleep -Milliseconds 500
         if (@($need | Where-Object { -not (Test-Path $_) }).Count) { continue }
         $n = @(Get-ChildItem $dir -Recurse -File -ErrorAction SilentlyContinue).Count

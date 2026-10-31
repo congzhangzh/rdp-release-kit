@@ -435,7 +435,9 @@ if ($site) {
 
 # the third video: freerdp-tk from the client's zip, to Windows' own Remote Desktop here
 if ($ClientZip -and $site) {
-    & "$KitTest\client-demo\windows.ps1" $ClientZip $user $pass $Out 2>&1 | Tee-Object "$Out\tk-demo.log"
+    # a failure there is its own check below, not the end of this test (run 41196854812)
+    try { & "$KitTest\client-demo\windows.ps1" $ClientZip $user $pass $Out 2>&1 | Tee-Object "$Out\tk-demo.log" }
+    catch { "the freerdp-tk demo stopped: $($_.Exception.Message)" | Tee-Object -FilePath "$Out\tk-demo.log" -Append }
     $sound = (Get-Content "$Out\tk-demo\winrec.log" -Raw -ErrorAction SilentlyContinue) -replace "\s+", " "
     # both visits done (connect, Notepad, webdemo, disconnect; the saved connection again)
     $tkDone = (Get-Content "$Out\tk-demo\run.log" -Raw -ErrorAction SilentlyContinue) -match "done: True"
