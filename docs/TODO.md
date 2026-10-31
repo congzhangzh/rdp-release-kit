@@ -47,14 +47,15 @@ says who owns it, what it waits on, and where it lives.
 - **Sound on the Windows runner** can't be tested (no playback device; Scream's driver
   won't install unattended). It's proven by hand on a Windows 11 PC (−12.0 dBFS, 321
   packets in 16 s) and by 聪哥's own test.
-- **The browser demo against the Windows host sometimes gets no picture** (kit runs
-  41192237422, 41208207833; fine in 41196854812 and 41199723802, all with host `.6`). The
-  server negotiates AV1, then captures almost nothing for a minute, and the page decodes 0
-  frames until the connection drops after 5 minutes ("BIO_read retries exceeded"). Then
-  the 20-minute recording runs into the job's 45-minute limit. 🔎 Likely the 4-CPU runner
-  starving the software AV1 encoder while Firefox plays the video and the Aquarium. To do:
-  have the demo stop after a minute with no frame (so a stall costs minutes, not the job),
-  and log the encoder's frame times.
+- **The browser demo against the Windows host got no picture with the web client from
+  `freerdp 20261031.3`**: kit runs 41192237422, 41208207833 and its rerun, while
+  41196854812 and 41199723802 passed with `d7f066be3` (now `20261031.7`). The server
+  negotiates AV1, then captures almost nothing; the page decodes 0 frames until the
+  connection drops after 5 minutes ("BIO_read retries exceeded"), and the 20-minute
+  recording then runs into the job's 45-minute limit. 🔎 `.3`'s TLS 1.2 retry commit is
+  the likeliest difference (`.7` dropped it). The second safe point ships `.7`; if the stall
+  comes back with it, look further. To do either way: the demo stops after a minute with no
+  frame, so a stall costs minutes, not the job.
 - **The ARM builder image** sometimes fails on the Rocky/EPEL mirror (`dnf`, 3 tries), and
   then xrdp and the screens tests skip. Rerun the failed jobs.
 - **This machine** is short of memory (about 2 GB free), and Claude Code stops background
