@@ -17,18 +17,18 @@ says who owns it, what it waits on, and where it lives.
 
 | # | What | Owner | Waits on | Where |
 |---|------|-------|----------|-------|
-| 1 | AVM `20261031.2` (`b132a0a6`): two encoder thread races fixed, bit-exact with `.1` | avm-6e | avm-release-kit CI run 41203636198 green | kit branch `host-sound`, commit `e82dffb` (cherry-pick it) |
+| 1 | AVM `20261031.2` (`b132a0a6`): two encoder thread races fixed, bit-exact with `.1` | avm-6e | done: avm-release-kit run 41203636198 green (15/15, TSan included) | the second safe point, kit branch `safepoint-2` |
 | 2 | Client `release-20261031.7` = `d7f066be3` from `integration-latest` (master dae0390a4 + the bitmap fix + AV2, no TLS retry) | freerdp-59 picks it, the kit pins it | freerdp-59's xrdp wlup e2e on d7f066be3; a kit round on it was green apart from the demo script (runs 41196854812, 41199723802) | `host-sound` `ae47d4a`/`0a86e0c`, renamed from `dev.d7f066be` to `20261031.7` |
 | 3 | Mac host, a new pick replacing `20261031.4`: the extended keys (both ⌘, arrows, Home/End, PgUp/PgDn, Forward Delete, keypad Enter) reach the Mac | freerdp-d0 | its KBDEXT fix verified on the Mac | kit branch `mac-host` (local, not pushed); then the CI compile, then the release wiring (asset, install notes, Get a server) |
-| 4 | Windows host with the stuck-keys fix (below) | freerdp-59 | the code (not started) | then drop the host README's known-issue paragraph |
+| 4 | Windows host with the stuck-keys fix: FreeRDP#13958, `integration-shadow-win` `be82c8dc0` (tested on X11 under Xvfb) | freerdp-59 picks it | a kit PR round with `freerdp_host = dev.be82c8dc`, test only, no release: the freerdp-tk demo's `wininput release` should log "held: none" | then pin the pick and drop the host README's known-issue paragraph |
 
 ## Bugs known, not fixed yet
 
 - **Shadow server keeps a dropped client's keys held** (all hosts). No subsystem sets
   `ClientDisconnect` (`shadow_client.c:3137`), and `win_shadow_input_synchronize_event`
-  (`win_shadow.c:115`) is a stub. Plan: track each client's held keys (scan code +
-  extended flag), and send key-ups on disconnect and on Synchronize, only for keys no other
-  client holds. Owner: freerdp-59. The kit's test works around it (`wininput.py release`),
+  (`win_shadow.c:115`) is a stub. Fixed as FreeRDP#13958 (each client's held keys are
+  released when it leaves and at a Synchronize, unless another client holds them); waits for
+  its Windows test (pin 4). Owner: freerdp-59. The kit's test works around it (`wininput.py release`),
   and the host README says how to clear it by hand.
 - **TLS 1.3 to Windows' own Remote Desktop with LibreSSL**: its ClientHello leaves out
   `psk_key_exchange_modes`, and Schannel aborts. Reported as libressl/portable#1452 (a
@@ -87,7 +87,8 @@ says who owns it, what it waits on, and where it lives.
 
 | Branch | State |
 |--------|-------|
-| `safepoint` | this release |
+| `safepoint` | the first safe point (main a2d77ac) |
+| `safepoint-2` | the second safe point: the first plus AVM `20261031.2` |
 | `host-sound` | PR #18: the safe point plus AVM `.2` and the client candidate; rebase onto main after the safe point, then use it for pins 1 and 2 |
 | `mac-host` | local only; waits for pin 3 |
 | `windows-host`, `xrdp-av2`, `libressl-psk`, `demo-ready` | merged; safe to delete with 聪哥's word |
