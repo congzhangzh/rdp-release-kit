@@ -104,45 +104,13 @@ Get-Service Audiosrv, AudioEndpointBuilder -ErrorAction SilentlyContinue | Selec
 Get-CimInstance Win32_SoundDevice -ErrorAction SilentlyContinue | Select-Object Name, Status | Format-Table | Out-File -Append "$Out\where.txt"
 Get-PnpDevice -Class AudioEndpoint -ErrorAction SilentlyContinue | Select-Object FriendlyName, Status | Format-Table |
     Out-File -Append "$Out\where.txt"
-# A runner has no sound card: then Scream, a virtual one (github.com/duncanthrax/scream,
-# MS-PL, release 4.0, pinned by its hash), installed as CI audio setups install it: its
-# signer trusted first, so Windows installs the driver without asking. With it there is a
-# playback device: the session's sound plays somewhere, and WASAPI loopback can record it
-# (the freerdp-tk demo's video; the shadow server's sound, later). And the audio service,
-# which Windows Server leaves stopped.
-if (-not (Get-PnpDevice -Class AudioEndpoint -Status OK -ErrorAction SilentlyContinue)) {
-    $scream = "$env:TEMP\scream"
-    try {
-        Invoke-WebRequest "https://github.com/duncanthrax/scream/releases/download/4.0/Scream4.0.zip" -OutFile "$scream.zip"
-        if ((Get-FileHash "$scream.zip" -Algorithm SHA256).Hash -ne "FA33E25F9A46C61E4E0CD83362C51C3D2A45C6FE4091AAD7507E240E40F1A520") {
-            throw "Scream4.0.zip: not the pinned file"
-        }
-        Expand-Archive "$scream.zip" $scream -Force
-        # its signer trusted as a root and as a publisher: as a publisher alone, Windows
-        # still asks whether to install it (its certificate chains to no trusted root),
-        # in a dialog nobody here can answer (run 41164824167 hung on it)
-        $signer = (Get-AuthenticodeSignature "$scream\Install\driver\x64\scream.cat").SignerCertificate
-        "Scream's signer: $($signer.Subject)" | Out-File -Append "$Out\where.txt"
-        foreach ($name in "Root", "TrustedPublisher") {
-            $store = New-Object System.Security.Cryptography.X509Certificates.X509Store $name, "LocalMachine"
-            $store.Open("ReadWrite"); $store.Add($signer); $store.Close()
-        }
-        # the driver into the store first with pnputil, which never asks (it fails
-        # instead): devcon then finds it there, trusted (run 41166695002: devcon alone
-        # still asked, with the signer in Root and TrustedPublisher)
-        & pnputil /add-driver "$scream\Install\driver\x64\Scream.inf" /install 2>&1 |
-            Out-File -Append "$Out\scream.log"
-        "Scream: pnputil exit $LASTEXITCODE" | Out-File -Append "$Out\where.txt"
-        # and two minutes at most: if Windows asks anyway, the test goes on without sound
-        $devcon = Start-Process -FilePath "$scream\Install\helpers\devcon-x64.exe" -PassThru -NoNewWindow `
-            -WorkingDirectory "$scream\Install\driver\x64" -ArgumentList "install", "Scream.inf", "*Scream" `
-            -RedirectStandardOutput "$Out\scream.log" -RedirectStandardError "$Out\scream.err"
-        if (-not $devcon.WaitForExit(120000)) {
-            Stop-Process -Id $devcon.Id -Force -ErrorAction SilentlyContinue
-            "Scream: devcon did not finish in 2 minutes (a dialog?), stopped: no sound card" | Out-File -Append "$Out\where.txt"
-        } else { "Scream: devcon exit $($devcon.ExitCode)" | Out-File -Append "$Out\where.txt" }
-    } catch { "Scream: $($_.Exception.Message)" | Out-File -Append "$Out\where.txt" }
-}
+# A runner has no sound card, and no virtual one installs here unattended: Scream
+# (github.com/duncanthrax/scream) waited on Windows' driver prompt with devcon (runs
+# 41164824167, 41166695002) and with pnputil (run 41169262905), however its signer was
+# trusted. So the shadow server's sound is checked only where there is a playback device
+# (SKIP otherwise); Windows' own Remote Desktop sessions have their own (Remote Audio).
+$playback = [bool](Get-PnpDevice -Class AudioEndpoint -Status OK -ErrorAction SilentlyContinue)
+"playback device: $playback" | Out-File -Append "$Out\where.txt"
 Set-Service Audiosrv -StartupType Automatic -ErrorAction SilentlyContinue
 Start-Service Audiosrv -ErrorAction SilentlyContinue
 Start-Sleep -Seconds 3
@@ -349,6 +317,7 @@ if (-not (Get-Command ffmpeg -ErrorAction SilentlyContinue)) {
     & choco install ffmpeg -y --no-progress 2>&1 | Out-File "$demo\choco.log"
 }
 $env:SERVER = "windows"
+$env:DEMO_SOUND = if ($playback) { "1" } else { "" }   # the captions claim sound only with a device
 & node "$KitTest\wasm-demo.mjs" "http://127.0.0.1:8080/index.html" "127.0.0.1:3390" $user $pass $demo "$demo\raw.mp4" 2>&1 |
     Tee-Object "$demo\driver.log"
 Remove-Item Env:\SERVER
@@ -367,7 +336,7 @@ Add-Type -Namespace Kit -Name Esc -MemberDefinition '[DllImport("user32.dll")] p
 (New-Object -ComObject Shell.Application).MinimizeAll()
 Check "demo: a video of the web client on this host" ((Test-Path "$Out\windows-host.mp4") -and (Test-Path "$Out\windows-host.jpg")) `
     "$(if (Test-Path "$Out\windows-host.mp4") { '{0:N1} MB' -f ((Get-Item "$Out\windows-host.mp4").Length / 1MB) })"
-# the shadow server's sound: what this PC plays (WASAPI loopback, the Scream card above),
+# the shadow server's sound: what this PC plays (WASAPI loopback), when it has a playback device,
 # sent over rdpsnd; the video's last 30 s show the web video, so they must be heard, as
 # record-demos.sh requires of the Linux demos (above -50 dB; silence is about -91)
 $hostPeak = $null
@@ -376,9 +345,14 @@ if (Test-Path "$demo\raw.mp4") {
     if ($vd -match "max_volume: (-?[0-9.]+) dB") { $hostPeak = [double]$Matches[1] }
 }
 $capture = ([regex]::Matches((ServerLog), "audio: [^\r\n]*") | ForEach-Object Value | Select-Object -Unique) -join " | "
-Check "sound: the shadow server captures what this PC plays" ((ServerLog) -match "audio: capturing what the default render endpoint plays") $capture
-Check "sound: the web client hears the Windows PC (rdpsnd)" ($null -ne $hostPeak -and $hostPeak -gt -50) `
-    "peak $(if ($null -ne $hostPeak) { "$hostPeak dB" } else { 'none' })"
+if ($playback) {
+    Check "sound: the shadow server captures what this PC plays" ((ServerLog) -match "audio: capturing what the default render endpoint plays") $capture
+    Check "sound: the web client hears the Windows PC (rdpsnd)" ($null -ne $hostPeak -and $hostPeak -gt -50) `
+        "peak $(if ($null -ne $hostPeak) { "$hostPeak dB" } else { 'none' })"
+} else {
+    "SKIP  sound: no playback device on this runner to capture; the server says: $capture" |
+        Tee-Object -FilePath "$Out\checks.txt" -Append
+}
 
 # Windows' own Remote Desktop on this PC, for the next two videos (FreeRDP Web, then
 # freerdp-tk, each in a session of its own for the test user at 127.0.0.2): allowed for

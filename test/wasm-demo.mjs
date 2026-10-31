@@ -336,8 +336,10 @@ writeFileSync(join(out, "page.log"),
 // (Windows: "webdemo" from Run, test/windows-host.ps1 puts it there; the shadow server's
 // sound is what the PC plays, WASAPI loopback; Windows' own Remote Desktop sends its own)
 if (WINDOWS_ANY) {
+  // the shadow server sends what the PC plays: sound only where it has a playback device
+  const pcSound = !!process.env.DEMO_SOUND;
   await caption(WINDOWS_RDP ? "Web video with sound, and WebGL: Firefox in the Windows session"
-    : "Web video with sound, and WebGL: Firefox on the Windows PC");
+    : pcSound ? "Web video with sound, and WebGL: Firefox on the Windows PC" : "Web video and WebGL: Firefox on the Windows PC");
   await chordRemote("r");
   await sleep(1500);
   await typeRemote("webdemo\n");
@@ -345,7 +347,7 @@ if (WINDOWS_ANY) {
   await caption("Big Buck Bunny, © Blender Foundation, CC BY 3.0 · WebGL Aquarium, © Google, BSD");
   await sleep(8000);
   await caption(WINDOWS_RDP ? "Drawn by Windows Server, streamed to this browser, sound included"
-    : "Drawn on the Windows PC, streamed to this browser in AV1, sound included");
+    : `Drawn on the Windows PC, streamed to this browser in AV1${pcSound ? ", sound included" : ""}`);
   await sleep(6000);
 } else {
   await caption("Web video with sound, and WebGL: Firefox on the server");

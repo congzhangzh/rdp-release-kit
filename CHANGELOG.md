@@ -107,12 +107,14 @@ toolchain) gets an entry here in the same commit.
   #13932 are merged. `test/windows-host.ps1` checks the server's word that it captures, and
   that the web client hears the Windows PC (the shadow host video's last 30 s above
   -50 dB); the native client asks for `/sound` too.
-- **Sound on the Windows runner**: it has no sound card, so `test/windows-host.ps1`
-  installs Scream (a virtual one, github.com/duncanthrax/scream 4.0, MS-PL, pinned by its
-  SHA-256; its signer trusted first, so Windows installs it without asking, as CI audio
-  setups do) and starts the audio service; `where.txt` reports the devices before and
-  after. With a playback device, WASAPI loopback can record the freerdp-tk video's sound
-  (and, once FreeRDP's Windows shadow server captures sound, test it).
+- **Sound on the Windows runner: none.** It has no sound card, and none installs unattended:
+  the virtual Scream card (github.com/duncanthrax/scream 4.0) waited on Windows' driver prompt
+  with devcon and with pnputil, its signer trusted as a publisher and as a root (runs
+  41164824167, 41166695002, 41169262905). So `test/windows-host.ps1` checks the shadow
+  server's sound only where there is a playback device and says SKIP otherwise, and the shadow
+  host video's captions claim sound only then. Windows' own Remote Desktop sessions have their
+  own playback device (Remote Audio), so the browser's video to it has sound; the freerdp-tk
+  video plays it on the runner, which has nowhere to play it.
 - **The Linux freerdp-tk videos play the web video and WebGL too, with sound**: in GNOME a
   terminal, a line, then `webdemo` (Firefox with Big Buck Bunny next to the WebGL
   Aquarium), as the page's demos do. `test/client-demo/run.sh` records the client's sound
