@@ -10,6 +10,15 @@
 # against them. The client needs only macOS's own libraries and frameworks.
 # The result is <output dir>/sdl3-freerdp-<version>-macos-<arch>.tar.xz with
 # the client, the licences of everything inside it and a manifest.
+#
+# HOST=1 builds the macOS host instead: FreeRDP's shadow server
+# (ScreenCaptureKit capture, AV1 with libaom, AV2 with libavm, the sound the
+# Mac plays) from freerdp_mac_host, our FreeRDP release with the macOS
+# shadow work, as an app: FreeRDP-Shadow.app with a fixed bundle id, so
+# macOS keeps its Screen Recording and Accessibility permissions across
+# updates (TCC grants them to a code identity), a LaunchAgent that starts it
+# in the user's session at login, and a README
+# (freerdp-host-<version>-macos-<arch>.zip).
 set -Eeuo pipefail
 
 KIT=$1
@@ -149,8 +158,21 @@ cmake_dep sdl3_ttf "${MAC[@]}" -DSDLTTF_VENDORED=OFF -DSDLTTF_HARFBUZZ=OFF \
 # which macOS has as system libraries, as on Linux. JSON must be our
 # jansson, never one CMake finds elsewhere. MD4 and RC4 are FreeRDP's own:
 # OpenSSL 3 has them only in its legacy provider, and NTLM needs them.
-echo "== freerdp ${VERSION[freerdp]}"
-src=$(unpack freerdp)
+# HOST=1: the shadow server instead of the client, and libaom to encode AV1
+# (its decoder stays: FreeRDP's av1.c includes aom_decoder.h with libaom; dav1d
+# still decodes), as the Windows host is built
+FREERDP=freerdp
+WHAT=(-DWITH_CLIENT=ON -DWITH_CLIENT_SDL=ON -DWITH_CLIENT_SDL3=ON -DWITH_CLIENT_SDL2=OFF
+      -DWITH_CLIENT_MAC=OFF -DWITH_SERVER=OFF)
+if [ -n "${HOST:-}" ]; then
+    FREERDP=freerdp_mac_host
+    cmake_dep aom "${MAC[@]}" -DENABLE_TESTS=OFF -DENABLE_EXAMPLES=OFF -DENABLE_DOCS=OFF \
+        -DENABLE_TOOLS=OFF
+    WHAT=(-DWITH_CLIENT=OFF -DWITH_SERVER=ON -DWITH_SHADOW=ON -DWITH_PROXY=OFF
+          -DWITH_PLATFORM_SERVER=OFF -DWITH_AOM=ON -DWITH_WINPR_TOOLS=ON)
+fi
+echo "== $FREERDP ${VERSION[$FREERDP]}"
+src=$(unpack "$FREERDP")
 # always a fresh configure: a kept CMake cache would keep options that
 # were removed from this script, and the release must match a clean build
 rm -rf "$STAGE" "$WORK/build/freerdp"
@@ -160,9 +182,8 @@ configure "$WORK/build/freerdp" \
     -DCMAKE_SKIP_RPATH=ON -DBUILD_SHARED_LIBS=OFF -DBUILD_TESTING=OFF \
     -DOPENSSL_ROOT_DIR="$DEPS" -DOPENSSL_USE_STATIC_LIBS=ON \
     -DCMAKE_DISABLE_FIND_PACKAGE_X11=ON \
-    -DWITH_CLIENT=ON -DWITH_CLIENT_SDL=ON -DWITH_CLIENT_SDL3=ON -DWITH_CLIENT_SDL2=OFF \
-    -DWITH_CLIENT_MAC=OFF -DWITH_SDL_LINK_SHARED=OFF -DWITH_X11=OFF -DWITH_WAYLAND=OFF \
-    -DWITH_SERVER=OFF -DWITH_SAMPLE=OFF \
+    "${WHAT[@]}" -DWITH_SDL_LINK_SHARED=OFF -DWITH_X11=OFF -DWITH_WAYLAND=OFF \
+    -DWITH_SAMPLE=OFF \
     -DWITH_MACAUDIO=ON -DWITH_PULSE=OFF -DWITH_ALSA=OFF -DWITH_OSS=OFF -DWITH_CUPS=OFF \
     -DWITH_PCSC=OFF -DWITH_KRB5=OFF -DWITH_FUSE=OFF -DWITH_FFMPEG=OFF -DWITH_SWSCALE=OFF \
     -DWITH_OPENH264=OFF -DWITH_GFX_AV1=ON -DWITH_DAV1D=ON -DWITH_OPUS=ON \
@@ -181,6 +202,49 @@ if grep -i "built for newer" "$WORK/log/freerdp.log" >&2; then
 fi
 DESTDIR=$STAGE cmake --install "$WORK/build/freerdp" >> "$WORK/log/freerdp.log" 2>&1
 ccache_stats
+
+# --- HOST=1: the host's app, LaunchAgent, README, licences, manifest; then done
+if [ -n "${HOST:-}" ]; then
+    NAME=freerdp-host-${VERSION[$FREERDP]}-macos-$ARCH
+    PKG=$WORK/pkg/$NAME
+    APP=$PKG/FreeRDP-Shadow.app
+    rm -rf "$WORK/pkg"
+    mkdir -p "$APP/Contents/MacOS" "$PKG/licenses"
+    for tool in freerdp-shadow-cli winpr-hash; do
+        f=$(find "$STAGE/opt/freerdp/bin" -name "$tool" | head -1)
+        [ -n "$f" ] || { echo "HOST=1: no $tool in the build" >&2; exit 1; }
+        dest=$APP/Contents/MacOS
+        [ "$tool" = freerdp-shadow-cli ] || dest=$PKG
+        cp "$f" "$dest/"
+        strip -S "$dest/$tool"
+    done
+    sed "s/@VERSION@/${VERSION[$FREERDP]}/; s/@MACOS_MIN@/$MACOS_MIN/" \
+        "$KIT/build/macos/host-Info.plist" > "$APP/Contents/Info.plist"
+    cp "$KIT/build/macos/org.freerdp.shadow.plist" "$KIT/build/macos/host-README.txt" "$PKG/"
+    mv "$PKG/host-README.txt" "$PKG/README.txt"
+    # the bundle id is the code identity TCC remembers (ad hoc, no certificate)
+    codesign --force --sign - "$PKG/winpr-hash"
+    codesign --force --sign - --identifier org.freerdp.shadow "$APP"
+    codesign --verify --strict "$APP"
+    licenses "$PKG/licenses" freerdp_mac_host openssl opus dav1d aom avm zlib jansson
+    {
+        echo "FreeRDP's shadow server for macOS ${VERSION[$FREERDP]}, $ARCH, built $(date -u +%F)"
+        echo "build environment: macOS $(sw_vers -productVersion) ($(sw_vers -buildVersion))," \
+            "$("$CC" --version | head -1), SDK $(xcrun --show-sdk-version)"
+        echo "minimum macOS: $MACOS_MIN"
+        echo
+        echo "sources (sources.lock):"
+        for name in freerdp_mac_host openssl opus dav1d aom avm zlib jansson; do
+            printf '  %-16s %-10s %s\n' "$name" "${VERSION[$name]}" "${SHA[$name]}"
+        done
+    } > "$PKG/MANIFEST"
+    "$KIT/build/check-macos.sh" "$APP/Contents/MacOS/freerdp-shadow-cli" "$MACOS_MIN"
+    # ditto keeps the app's signature and attributes as macOS's own zips do
+    (cd "$WORK/pkg" && ditto -c -k --keepParent "$NAME" "$OUT/$NAME.zip")
+    (cd "$OUT" && sha256sum "$NAME.zip" > "$NAME.zip.sha256")
+    echo "== done: $OUT/$NAME.zip"
+    exit 0
+fi
 
 # --- package: the client, licences, manifest
 NAME=sdl3-freerdp-${VERSION[freerdp]}-macos-$ARCH

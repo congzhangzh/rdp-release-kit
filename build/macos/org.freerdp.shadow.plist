@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- A LaunchAgent: FreeRDP's shadow server in the user's own session, started at login and
+     again if it ends; on 127.0.0.1 only (README.txt: reach it over SSH). Copy it to
+     ~/Library/LaunchAgents/ with the app in /Applications. -->
+<plist version="1.0">
+<dict>
+    <key>Label</key>              <string>org.freerdp.shadow</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Applications/FreeRDP-Shadow.app/Contents/MacOS/freerdp-shadow-cli</string>
+        <string>/bind-address:127.0.0.1</string>
+        <string>/port:3389</string>
+        <string>/gfx-av1</string>
+    </array>
+    <key>RunAtLoad</key>          <true/>
+    <key>KeepAlive</key>          <true/>
+    <key>ProcessType</key>        <string>Interactive</string>
+    <key>StandardErrorPath</key>  <string>/tmp/freerdp-shadow.log</string>
+</dict>
+</plist>

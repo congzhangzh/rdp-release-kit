@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- FreeRDP-Shadow.app (build-macos-client.sh, HOST=1): FreeRDP's shadow server as an app,
+     so its bundle id is the code identity macOS's privacy settings (TCC) remember for
+     Screen Recording and Accessibility; no Dock icon (LSUIElement) -->
+<plist version="1.0">
+<dict>
+    <key>CFBundleIdentifier</key>          <string>org.freerdp.shadow</string>
+    <key>CFBundleName</key>                <string>FreeRDP Shadow</string>
+    <key>CFBundleExecutable</key>          <string>freerdp-shadow-cli</string>
+    <key>CFBundlePackageType</key>         <string>APPL</string>
+    <key>CFBundleShortVersionString</key>  <string>@VERSION@</string>
+    <key>CFBundleVersion</key>             <string>@VERSION@</string>
+    <key>LSMinimumSystemVersion</key>      <string>@MACOS_MIN@</string>
+    <key>LSUIElement</key>                 <true/>
+</dict>
+</plist>
