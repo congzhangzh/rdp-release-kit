@@ -444,6 +444,11 @@ if ($ClientZip -and $site) {
     Check "demo: freerdp-tk to Windows' own Remote Desktop, both visits and a video" `
         ($tkDone -and (Test-Path "$Out\freerdp-tk-windows.mp4") -and (Test-Path "$Out\freerdp-tk-windows.jpg")) `
         "$(if (Test-Path "$Out\freerdp-tk-windows.mp4") { '{0:N1} MB' -f ((Get-Item "$Out\freerdp-tk-windows.mp4").Length / 1MB) }); $sound"
+    # the web demos before it pressed Win+R and Win+D on this console through the shadow
+    # server, and their clients then left; the server lets go of a leaving client's keys
+    # (FreeRDP#13958), so none may still be held here (wininput.py release logs them)
+    $held = [regex]::Match((Get-Content "$Out\tk-demo\run.log" -Raw -ErrorAction SilentlyContinue), "held: ([^\r\n]*)").Groups[1].Value
+    Check "keys: none still held after the web clients left (FreeRDP#13958)" ($held -eq "none") "held: $held"
     SignOut
     (New-Object -ComObject Shell.Application).MinimizeAll()
 }

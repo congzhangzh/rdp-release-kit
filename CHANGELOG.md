@@ -13,6 +13,17 @@ toolchain) gets an entry here in the same commit.
 
 ## 2026-10-31
 
+- **`freerdp` `20261031.7`** (`d7f066be3`, freerdp-59's, from integration-latest): the clients
+  move to FreeRDP master dae0390a4, where our Emscripten and SDL pull requests are now merged;
+  on top only the AV2 extension (#13925), the physical monitor size (#13805) and xrdp's padded
+  bitmaps (#13946). The TLS 1.2 retry (#13944, closed) is gone: the kit's LibreSSL patch fixes
+  the cause. Tested before the pick: ctest 211/211, kit round 41199723802, xrdp sway e2e 57/57.
+- **`freerdp_host` `20261031.8`** (`be82c8dc0`, freerdp-59's, from integration-shadow-win):
+  `.6` plus FreeRDP#13958, the keys a client leaves held are let go when it leaves or sends a
+  Synchronize (a client dropped mid-shortcut left Win or Alt down on the console; the web
+  demos' Win+R and Win+D did exactly that to the freerdp-tk demo after them). The host README
+  drops its known-issue paragraph. The Windows test's freerdp-tk demo logs which keys were
+  still held ("held: none").
 - **`avm` `20261031.2`** (`b132a0a6`, avm-6e's): two encoder thread races fixed (tile-packing
   counters, TMVP bands); bit-exact with `20261031.1` at 1 and 4 threads. The first race is why
   `20261031.1`'s ARM bench stream differed from x86. avm-release-kit's new thread-safety gate

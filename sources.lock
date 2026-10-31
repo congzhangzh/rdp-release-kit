@@ -24,7 +24,11 @@
 # accepts xrdp's legacy bitmaps again (master 343f23134, #13884, dropped them)
 # 20261031.3: and NLA over TLS 1.2 again when a server (Windows Server 2025's own
 # Remote Desktop) refuses it over TLS 1.3 with an internal_error alert.
-freerdp     20261031.3 git+https://github.com/congzhangzh/FreeRDP.git                                        99a0bd94cff68f39047040e4c8a2e02d91f81d66
+# 20261031.7: integration-latest rebuilt on master dae0390a4 (2026-10-31), where
+# the emscripten and SDL parts are merged; ours on top: the physical monitor size
+# (#13805), xrdp's padded legacy bitmaps (#13946) and AV2 with its decoder-only
+# build (#13925). No TLS 1.2 retry: the kit's LibreSSL patch fixes the cause.
+freerdp     20261031.7 git+https://github.com/congzhangzh/FreeRDP.git                                       d7f066be3bbca560dd34a2639cdc0d0d8313fd80
 # FreeRDP for the Windows host (freerdp-shadow-cli, freerdp-shadow-service),
 # not for the clients: our release-20261030.7, picked from the fork's
 # integration-shadow-win, FreeRDP master 2a508c725 (2026-10-31) plus our pull
@@ -39,8 +43,10 @@ freerdp     20261031.3 git+https://github.com/congzhangzh/FreeRDP.git           
 # frame's copy read a row past the capture: the server died, run 41166695002);
 # 20261031.5: rebuilt on master dae0390a4, and Opus offered with a block
 # alignment of 1 (with 4, rdpsnd padded each packet and the client went silent);
-# 20261031.6: uninstall puts back the Ctrl+Alt+Del policy as install found it
-freerdp_host 20261031.6 git+https://github.com/congzhangzh/FreeRDP.git                                       c4a445237281b7517f7233ac0c1285226c56d8a3
+# 20261031.6: uninstall puts back the Ctrl+Alt+Del policy as install found it;
+# 20261031.8: the keys a client leaves held are let go when it leaves or sends a
+# Synchronize (#13958; before, a client dropped mid-shortcut left Win/Alt down)
+freerdp_host 20261031.8 git+https://github.com/congzhangzh/FreeRDP.git                                       be82c8dc0e039b7cc28eac23045a162f141a9db6
 sdl3        3.4.18   https://github.com/libsdl-org/SDL/releases/download/release-3.4.18/SDL3-3.4.18.tar.gz        9c75cf16330322c217dedd2e0609f1124f1b54b8633e763467b4684d0f4334a3
 sdl3_ttf    3.2.2    https://github.com/libsdl-org/SDL_ttf/releases/download/release-3.2.2/SDL3_ttf-3.2.2.tar.gz   63547d58d0185c833213885b635a2c0548201cc8f301e6587c0be1a67e1e045d
 freetype    2.15.0   https://download.savannah.gnu.org/releases/freetype/freetype-2.15.0.tar.xz                   93cd47eb719c325107f2d3cf087d06299e944c3b48a40b55537302304dea1dd5

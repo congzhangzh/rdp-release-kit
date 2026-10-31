@@ -59,10 +59,5 @@ server and give it /sam-file:<file>, one line per user from
 winpr-hash -u <user> -p <password> -f sam. An NT hash works like the
 password itself: keep the file's ACL strict.
 
-Known issue: when a client drops in the middle of a shortcut (Win+R, Alt+Tab),
-Windows may keep that key held, and typing at this PC acts strangely. Press and
-release Win, Alt, Ctrl and Shift here once. (The server does not yet let go of
-a client's keys when it leaves; that fix is planned.)
-
 What is in it: MANIFEST (the sources and their versions), licenses\.
 More: https://github.com/congzhangzh/rdp-release-kit
