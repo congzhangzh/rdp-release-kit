@@ -207,7 +207,9 @@ async function load() {   // (re)loaded page: wait for isolation and the client,
   let isolated = false;
   for (let i = 0; i < 100 && !isolated; i++) { await sleep(300); isolated = await ev("self.crossOriginIsolated === true"); }
   let ready = false;
-  for (let i = 0; i < 200 && !ready; i++) { await sleep(300); ready = await ev("document.getElementById('status')?.textContent === 'ready'"); }
+  // up to 3 minutes: on a busy Windows runner the client's first compile (JSPI) took past
+  // the minute this used to wait (kit run 41188821119, both attempts)
+  for (let i = 0; i < 600 && !ready; i++) { await sleep(300); ready = await ev("document.getElementById('status')?.textContent === 'ready'"); }
   await ev(OVERLAY);
   return isolated && ready;
 }
