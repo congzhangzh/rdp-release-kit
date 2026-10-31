@@ -15,6 +15,7 @@ import time
 from ctypes import wintypes
 
 user32 = ctypes.WinDLL("user32", use_last_error=True)
+kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
 
 INPUT_MOUSE, INPUT_KEYBOARD = 0, 1
 KEYEVENTF_EXTENDEDKEY, KEYEVENTF_KEYUP, KEYEVENTF_SCANCODE = 0x1, 0x2, 0x8
@@ -177,12 +178,25 @@ class WinInput:
 
     def activate(self, hwnd):
         """To the front. Windows lets a process bring a window forward only
-        right after input: an Alt press first, as tools that do this do."""
+        right after input: an Alt press first, as tools that do this do. When
+        another window keeps the front (a toast, "New notification", did in kit
+        run 41204726933), this thread joins the front window's input queue
+        for a moment, which lifts that lock, and tries again."""
         alt = NAMED["alt"][0]
-        _send(_scan(alt), _scan(alt, up=True))
-        user32.ShowWindow(hwnd, 9)   # SW_RESTORE
-        user32.SetForegroundWindow(hwnd)
-        time.sleep(0.5)
+        for _ in range(5):
+            _send(_scan(alt), _scan(alt, up=True))
+            user32.ShowWindow(hwnd, 9)   # SW_RESTORE
+            front = user32.GetForegroundWindow()
+            mine = kernel32.GetCurrentThreadId()
+            theirs = user32.GetWindowThreadProcessId(front, None) if front else 0
+            joined = theirs and theirs != mine and user32.AttachThreadInput(mine, theirs, True)
+            user32.BringWindowToTop(hwnd)
+            user32.SetForegroundWindow(hwnd)
+            if joined:
+                user32.AttachThreadInput(mine, theirs, False)
+            time.sleep(0.5)
+            if user32.GetForegroundWindow() == hwnd:
+                return
 
 
 # For test/client-demo/windows.ps1, which types into its PowerShell window as

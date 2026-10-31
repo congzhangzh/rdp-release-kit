@@ -26,6 +26,12 @@ function Hands { & python "$here\hook\wininput.py" @args 2>&1 | ForEach-Object {
 # (windows-host.ps1 has opened Windows' own Remote Desktop to the user, started the
 # audio service and made the user's profile)
 Say "Audiosrv: $((Get-Service Audiosrv).Status); profile: $(Test-Path "C:\Users\$User")"
+# no toasts on this console: one ("New notification") took the front, and what was
+# typed for PowerShell went nowhere (kit run 41204726933)
+$push = "HKCU:\Software\Microsoft\Windows\CurrentVersion\PushNotifications"
+New-Item -Force -Path $push | Out-Null
+Set-ItemProperty -Path $push -Name ToastEnabled -Type DWord -Value 0
+Get-Process ShellExperienceHost -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
 & python -m pip install --quiet soundcard numpy 2>&1 | Out-File "$work\pip.log"
 
 # the user's folder with the zip, and a PowerShell window there
