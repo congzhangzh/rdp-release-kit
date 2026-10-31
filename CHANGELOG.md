@@ -93,6 +93,14 @@ toolchain) gets an entry here in the same commit.
   (`hook/wininput.py`). ffmpeg records the screen (gdigrab), `winrec.py` the speakers
   (WASAPI loopback; a runner without a sound device gives a silent video), muxed at the
   measured offset. It joins Get a client's freerdp-tk videos (demo.json's `clients`).
+- **Windows' own Remote Desktop takes TLS 1.2 from our clients, not 1.3** (run 41176456545:
+  the native client's `/auth-only` against Windows Server 2025's own server failed by default
+  and with `/tls:enforce:1.3`, and passed with `/tls:enforce:1.2`; the page got "tlsv1 alert
+  internal error" from Windows). Until a client release fixes it (freerdp-59 is on it), the
+  two demos to it pass `/tls:enforce:1.2` as a user would, in the page's Extra options and in
+  freerdp-tk's extra arguments, and their checks ask for a session, not a file: the page's
+  data in, freerdp-tk's both visits. Win+D before `webdemo`, so Firefox opens in front of
+  Notepad (it opened behind it).
 - **FreeRDP Web to Windows' own Remote Desktop, a video** (聪哥: "freerdp-tk and
   freerdp-web to the Windows server"). `test/windows-host.ps1` opens Windows Server's own
   Remote Desktop to the test user (Remote Desktop Users, its profile made first), and the

@@ -261,6 +261,14 @@ class Driver:
         if MODE == "release":
             # the kit's client has AV1 (dav1d); Debian's has not, and gets H.264
             yield from self.choose(a.vars["gfx"], "AV1:i444", tkapp.GFX_CHOICES)
+        if win:
+            # Windows' own Remote Desktop takes TLS 1.2 from our client, not 1.3 (run
+            # 41176456545): until a client release fixes it, the extra argument a user adds
+            nb, x = self.tab("Advanced")
+            yield self.to(nb, dx=x, dy=10)
+            yield self.click()
+            yield 0.6
+            yield from self.fill(a.vars["extra"], "/tls:enforce:1.2")
         # (windows: the default; Windows' own server picks H.264, it has no AV1)
         yield 0.8
         say("keyring:", repr(a.keyring_problem) if a.keyring_problem else "usable")
@@ -290,6 +298,8 @@ class Driver:
             yield 3.0
             yield self.type("Typed in Windows through freerdp-tk.", 80)
             yield 2.0
+            yield self.io.chord("super", "d")   # the desktop first: Firefox opens in front
+            yield 1.2
             yield self.io.chord("super", "r")
             yield 1.5
             yield self.type("webdemo", 110)

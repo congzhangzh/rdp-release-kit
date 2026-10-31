@@ -408,8 +408,12 @@ if ($site) {
     }
     Stop $rgw
     SignOut
-    Check "demo: FreeRDP Web to Windows' own Remote Desktop, a video" ((Test-Path "$Out\windows-rdp.mp4") -and (Test-Path "$Out\windows-rdp.jpg")) `
-        "$(if (Test-Path "$Out\windows-rdp.mp4") { '{0:N1} MB' -f ((Get-Item "$Out\windows-rdp.mp4").Length / 1MB) }); sound peak $peak"
+    # a session, not only a file: the page got the desktop (as wasm-session.sh asks of the
+    # Linux logins), else the video shows a failed connection (run 41176456545)
+    $rx = try { (Get-Content "$rdemo\canvas.json" -Raw | ConvertFrom-Json).rx } catch { 0 }
+    Check "demo: FreeRDP Web to Windows' own Remote Desktop, a session and its video" `
+        ((Test-Path "$Out\windows-rdp.mp4") -and (Test-Path "$Out\windows-rdp.jpg") -and $rx -gt 300000) `
+        "$(if (Test-Path "$Out\windows-rdp.mp4") { '{0:N1} MB' -f ((Get-Item "$Out\windows-rdp.mp4").Length / 1MB) }); $rx bytes in; sound peak $peak"
     (New-Object -ComObject Shell.Application).MinimizeAll()
 }
 
@@ -417,7 +421,10 @@ if ($site) {
 if ($ClientZip -and $site) {
     & "$KitTest\client-demo\windows.ps1" $ClientZip $user $pass $Out 2>&1 | Tee-Object "$Out\tk-demo.log"
     $sound = (Get-Content "$Out\tk-demo\winrec.log" -Raw -ErrorAction SilentlyContinue) -replace "\s+", " "
-    Check "demo: freerdp-tk to Windows' own Remote Desktop, a video" ((Test-Path "$Out\freerdp-tk-windows.mp4") -and (Test-Path "$Out\freerdp-tk-windows.jpg")) `
+    # both visits done (connect, Notepad, webdemo, disconnect; the saved connection again)
+    $tkDone = (Get-Content "$Out\tk-demo\run.log" -Raw -ErrorAction SilentlyContinue) -match "done: True"
+    Check "demo: freerdp-tk to Windows' own Remote Desktop, both visits and a video" `
+        ($tkDone -and (Test-Path "$Out\freerdp-tk-windows.mp4") -and (Test-Path "$Out\freerdp-tk-windows.jpg")) `
         "$(if (Test-Path "$Out\freerdp-tk-windows.mp4") { '{0:N1} MB' -f ((Get-Item "$Out\freerdp-tk-windows.mp4").Length / 1MB) }); $sound"
     SignOut
     (New-Object -ComObject Shell.Application).MinimizeAll()

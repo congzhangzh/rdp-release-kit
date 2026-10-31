@@ -216,7 +216,10 @@ const record = () => send("Page.startScreencast", { format: "jpeg", quality: 88,
 await send("Runtime.enable"); await send("Page.enable");
 await send("Page.addScriptToEvaluateOnNewDocument", { source: AUDIO_TAP });
 await send("Emulation.setDeviceMetricsOverride", { width: W, height: H, deviceScaleFactor: 1, mobile: false });
-await send("Page.navigate", { url });
+// Windows' own Remote Desktop takes TLS 1.2 from our client, not 1.3 (run 41176456545's
+// probe: 1.3 fails, "tlsv1 alert internal error"): until a client release fixes it, the
+// demo passes /tls:enforce:1.2 as a user would, in Extra options (the page's ?extra=)
+await send("Page.navigate", { url: WINDOWS_RDP ? url + (url.includes("?") ? "&" : "?") + "extra=" + encodeURIComponent("/tls:enforce:1.2") : url });
 if (!await load()) { console.log("the page did not get ready"); done(1); }
 await ev(`document.getElementById('host').value = ${JSON.stringify(gateway)}; true`);
 await record();
@@ -340,6 +343,9 @@ if (WINDOWS_ANY) {
   const pcSound = !!process.env.DEMO_SOUND;
   await caption(WINDOWS_RDP ? "Web video with sound, and WebGL: Firefox in the Windows session"
     : pcSound ? "Web video with sound, and WebGL: Firefox on the Windows PC" : "Web video and WebGL: Firefox on the Windows PC");
+  // Win+D first: the desktop, so Firefox opens in front of Notepad (run 41176456545: behind it)
+  await chordRemote("d");
+  await sleep(1200);
   await chordRemote("r");
   await sleep(1500);
   await typeRemote("webdemo\n");
