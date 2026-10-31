@@ -93,6 +93,13 @@ toolchain) gets an entry here in the same commit.
   (`hook/wininput.py`). ffmpeg records the screen (gdigrab), `winrec.py` the speakers
   (WASAPI loopback; a runner without a sound device gives a silent video), muxed at the
   measured offset. It joins Get a client's freerdp-tk videos (demo.json's `clients`).
+- **xrdp packages are built with AV2 when the pinned xrdp has it** (聪哥: xrdp with AV2,
+  on this machine too): `build/build-xrdp-pkg.sh` builds libavm from `sources.lock`
+  (static, the AVM release kit's options, the encoder only) and passes `--enable-av2` when
+  xrdp's `configure.ac` offers it (avm-6e's encoder, FreeRDP's FRDP_2 / AV2 codec id), then
+  checks configure's summary; `NO_AV2=1` (a release marked `no-av2`) leaves it out.
+  Fedora's build image gets `gcc-c++` (libavm's CMake project declares C++). Today's xrdp
+  pin has no `--enable-av2`, so its packages are as before until the pin moves.
 - **The demos' Firefox skips its terms-of-use dialog** (`test/demo/user.js`): newer Firefox,
   the Windows runner's, opened on "Welcome to Firefox" in front of the video and the Aquarium.
 - **Windows' own Remote Desktop takes TLS 1.2 from our clients, not 1.3** (run 41176456545:

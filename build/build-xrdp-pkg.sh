@@ -47,7 +47,7 @@ case " $ID ${ID_LIKE:-} " in
     *" fedora "*) FAMILY=rpm ;;
     *) echo "unsupported distribution: $PRETTY_NAME" >&2; exit 1 ;;
 esac
-export NO_AV1=${NO_AV1:-} NO_SWAY=${NO_SWAY:-} NO_KDE=${NO_KDE:-}
+export NO_AV1=${NO_AV1:-} NO_AV2=${NO_AV2:-} NO_SWAY=${NO_SWAY:-} NO_KDE=${NO_KDE:-}
 # the build dependencies (deps/<family>.txt), unless the image has them
 # (build/builder.sh)
 [ -n "${KIT_TOOLS:-}" ] || "$KIT/build/tools.sh" "$KIT" xrdp
@@ -118,9 +118,21 @@ for sub in librfxcodec libpainter; do
 done
 bootstrap "$src"
 base=$(sed -n 's/^AC_INIT(\[xrdp\], \[\([^]]*\)\].*/\1/p' "$src/configure.ac")
+# AV2 (libavm, the AVM work's release in sources.lock, static and found by pkg-config
+# as avm) when the pinned xrdp has it (--enable-av2), unless the release is marked
+# no-av2; built with the AVM release kit's options (its two ML encoder experiments
+# off, so no TensorFlow Lite and nothing downloaded), the encoder only: xrdp decodes
+# nothing
+AV2=
+if [ -z "${NO_AV2:-}" ] && grep -q "enable-av2" "$src/configure.ac"; then
+    cmake_dep avm -DENABLE_TESTS=0 -DENABLE_EXAMPLES=0 -DENABLE_DOCS=0 -DENABLE_TOOLS=0 \
+        -DCONFIG_ML_PART_SPLIT=0 -DCONFIG_DIP_EXT_PRUNING=0 -DCONFIG_AV2_DECODER=0
+    AV2=1
+fi
 XRDP_VERSION=$base+${VERSION[$XRDP]}.${SHA[$XRDP]:0:8}
 EXTRA=(--enable-wlup)
 [ -z "$NO_AV1" ] && EXTRA+=(--enable-av1)
+[ -z "$AV2" ] || EXTRA+=(--enable-av2)
 # the GNOME backend needs libei and PipeWire (GNOME 46 and newer)
 WLUP_GNOME=
 if pkg-config --exists libei-1.0 libpipewire-0.3 libsystemd; then
@@ -154,9 +166,12 @@ rm -rf "$STAGE"
  make -j"$JOBS" && make install DESTDIR="$STAGE/xrdp" "${KEEP_TIME[@]}") > "$WORK/log/xrdp.log" 2>&1
 # configure's summary; a kept configuration passed these checks before
 grep -q -E -e "x264 +yes" -e "configuration kept" "$WORK/log/xrdp.log"
-# AV1 is in unless the release is marked no-av1
+# AV1 is in unless the release is marked no-av1; AV2 when it was asked for
 if [ -z "$NO_AV1" ]; then
     grep -q -E -e "av1 \(libaom\) +yes" -e "configuration kept" "$WORK/log/xrdp.log"
+fi
+if [ -n "$AV2" ]; then
+    grep -q -E -e "av2 \(libavm\) +yes" -e "configuration kept" "$WORK/log/xrdp.log"
 fi
 
 # xorgxrdp builds against the xrdp just staged: a copy of its .pc file
@@ -255,6 +270,7 @@ else
         > "$WORK/log/package.log" 2>&1
 fi
 licenses "$OUT/$DISTRO/licenses" $XRDP $XORGXRDP x264 opus
+[ -z "$AV2" ] || licenses "$OUT/$DISTRO/licenses" avm
 [ $FAMILY = deb ] || licenses "$OUT/$DISTRO/licenses" pipewire_xrdp
 (cd "$OUT/$DISTRO" && sha256sum ./*.deb ./*.rpm 2> /dev/null > SHA256SUMS || true)
 echo "== done: $OUT/$DISTRO"

@@ -7,6 +7,7 @@
 
 # tools
 gcc                     C compiler
+gcc-c++                 libavm's CMake project (AV2) declares C++ too
 make                    builds xrdp, xorgxrdp and x264
 autoconf                xrdp and xorgxrdp use autotools
 automake                xrdp and xorgxrdp use autotools
