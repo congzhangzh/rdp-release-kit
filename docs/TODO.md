@@ -68,6 +68,21 @@ says who owns it, what it waits on, and where it lives.
 - **This machine** is short of memory (about 2 GB free), and Claude Code stops background
   watchers. Check rounds by hand.
 
+## AV2 (聪哥 chose these on 2026-10-31)
+
+- **AV2 on by default**: kit branch `av2-default` (xrdp packages AV2 first, both hosts with
+  `/gfx-av2`, the tests). Watch the demo recordings' frame rate: AV2 encodes in software.
+- **The page's presets**: put AV2 first in the bandwidth preset (freerdp-web, a page release).
+- **dav2d 4:4:4**: a client built with dav2d only still advertises AV2 4:4:4, so the screen
+  stays black (84x get_picture -22). FreeRDP fix, plus a plain bug report to dav2d (profile 4
+  is AV2 4:4:4; dav2d rejects profile > 2, `src/obu.c:224`). It's FreeRDP work, and
+  freerdp-59's session has ended: it needs a FreeRDP session.
+- **FreeRDP#13925**: ask for the re-review (the flags are reworked), and fold in the
+  av2-decoder-only commit (`f164292ac`). Also FreeRDP work for a FreeRDP session, with
+  聪哥's go per submission.
+- **This host**: the xrdp AV2 package (`xrdp-20261031.7`, debian-forky) is downloaded and
+  checked. The restart waits for 聪哥, since live xrdp sessions are running.
+
 ## Decisions waiting for 聪哥
 
 - **Signing the Mac app.** It is ad hoc, so each update asks for Screen Recording and

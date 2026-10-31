@@ -36,8 +36,8 @@ trap 'rm -f "$XORG" "$XORG.rows" "$XORG.mutter"' EXIT
 START='sudo systemctl enable --now xrdp'
 # AV2: in the packages when xrdp was configured with --enable-av2, which xrdp
 # records in its binary (xrdp --version prints it); asked of one Debian package.
-# The server's to turn on: "AV2" first in gfx.toml's codec order
-AV2_ON='sudo sed -i '"'"'s/^order = \[ "AV1"/order = [ "AV2", "AV1"/'"'"' /etc/xrdp/gfx.toml && sudo systemctl restart xrdp'
+# The packages put "AV2" first in gfx.toml's codec order; the command puts AV1 first again
+AV2_OFF='sudo sed -i '"'"'s/^order = \[ "AV2", "AV1"/order = [ "AV1"/'"'"' /etc/xrdp/gfx.toml && sudo systemctl restart xrdp'
 AV2=
 deb=$(asset "xrdp_[0-9]*_amd64.deb")
 if [ -n "$deb" ]; then
@@ -130,9 +130,9 @@ grep -v -E '^\s*(#|$)' "$KIT/distros.list" | while read -r image rest; do
     row "$name" "$sessions" "$cmd" "$xorg" "$mutter"
 done > "$XORG.rows"
 if [ -n "$JSON" ]; then
-    jq -s --arg start "$START" --arg av2 "${AV2:+$AV2_ON}" \
+    jq -s --arg start "$START" --arg av2 "${AV2:+$AV2_OFF}" \
         '{server: ., start: $start} + (if $av2 == "" then {} else
-          {av2: {what: "AV2: xrdp sends it to the clients that offer it (the kit'"'"'s FreeRDP clients and FreeRDP Web) once it is first in the codec order", command: $av2}} end)' \
+          {av2: {what: "AV2 is on: xrdp sends it to the clients that offer it (the kit'"'"'s FreeRDP clients and FreeRDP Web), AV1 to the others. To put AV1 first again", command: $av2}} end)' \
         "$XORG.rows"
     exit 0
 fi
@@ -167,7 +167,7 @@ render node (a GPU, or the `vgem` module).
 EOF
 if [ -n "$AV2" ]; then
     printf '\n### AV2\n\n%s\n\n`%s`\n\n%s\n' \
-        "These packages have AV2 (libavm) next to AV1. xrdp keeps AV1 first; with AV2 first in its codec order it sends AV2 to the clients that offer it, the kit's FreeRDP clients and FreeRDP Web among them (the others still get AV1 or H.264):" \
-        "$AV2_ON" \
+        "These packages have AV2 (libavm) next to AV1, and AV2 is first in xrdp's codec order: xrdp sends AV2 to the clients that offer it, the kit's FreeRDP clients and FreeRDP Web among them, and AV1 or H.264 to the others. To put AV1 first again:" \
+        "$AV2_OFF" \
         "AV2 makes smaller frames for the same picture, for more processor time on both sides: the server encodes with libavm, and FreeRDP Web decodes in the page, in software (no browser decodes AV2 yet)."
 fi

@@ -346,8 +346,9 @@ if [ -n "${CLIENT_DEMO:-}" ]; then
         # Debian's sdl-freerdp3 is installed too, and comes first by name
         check "(auto) takes the release's own client first, Debian's after it" \
             'grep -q "$own_first" "$OUT/client/driver.log"'
-        check "xrdp encodes the session in AV1" \
-            '"$ENGINE" exec "$NAME" grep -q "starting AV1 codec session" /var/log/xrdp.log'
+        xc=$("$ENGINE" exec "$NAME" grep -a -q -- "--enable-av2" /usr/sbin/xrdp 2> /dev/null && echo AV2 || echo AV1)
+        check "xrdp encodes the session in $xc" \
+            '"$ENGINE" exec "$NAME" grep -q "starting $xc codec session" /var/log/xrdp.log'
     else
         check "plain uvx: freerdp-tk started again with uv's own Python" \
             '[ "$(grep -c "python: .*/uv/python/" "$OUT/client/driver.log")" = 2 ]'
@@ -441,12 +442,15 @@ DRIVER=${WASM_DRIVER:-$DRIVER}   # another driver, e.g. while debugging
 # what xrdp says it encodes, for the demo's caption: the web client reports no
 # codec of its own yet (its build has no codec statistics)
 [ "$SERVER" != xrdp-gnome ] && [ "$SERVER" != xrdp-kde ] ||
-    export DEMO_CODEC_CMD="$ENGINE exec $NAME grep -h 'xrdp_encoder_av1: encoder for' /var/log/xrdp.log"
+    export DEMO_CODEC_CMD="$ENGINE exec $NAME grep -h -E 'xrdp_encoder_av[12]: encoder for' /var/log/xrdp.log"
 node "$DRIVER" "${PAGE_URL:-http://127.0.0.1:8199/index.html}$QUERY" 127.0.0.1:"$LOCAL_WS_PORT" \
     tester kit-test-pw "$OUT" ${DEMO_VIDEO:+"$DEMO_VIDEO"}
 sleep 2
 pass=0; fail=0
 check() { if eval "$2"; then echo "PASS  $1"; pass=$((pass + 1)); else echo "FAIL  $1"; fail=$((fail + 1)); fi; }
+# the codec xrdp picks for the kit's clients: AV2 first where the packages have it (they
+# record --enable-av2 in xrdp's binary), else AV1
+xcodec() { "$ENGINE" exec "$NAME" grep -a -q -- "--enable-av2" /usr/sbin/xrdp 2> /dev/null && echo AV2 || echo AV1; }
 check "the page started the client as tester" 'grep -q -- " /u:tester " "$OUT/page.log"'
 # the client's own messages arrive whole: a freed queue item read in the SDL3 dialog
 # (FreeRDP#13961) turned "The connection is being established" into "����ection …"
@@ -455,14 +459,14 @@ if [ "$SERVER" = xrdp-gnome ]; then
 check "sesman started GNOME for tester (gnome-session, GNOME Shell)" \
     '"$ENGINE" exec "$NAME" pgrep -u tester -f "gnome-session-service --session=gnome" > /dev/null &&
      "$ENGINE" exec "$NAME" pgrep -u tester -x gnome-shell > /dev/null'
-check "xrdp encodes the session in AV1" \
-    '"$ENGINE" exec "$NAME" grep -q "starting AV1 codec session" /var/log/xrdp.log'
+check "xrdp encodes the session in $(xcodec)" \
+    '"$ENGINE" exec "$NAME" grep -q "starting $(xcodec) codec session" /var/log/xrdp.log'
 elif [ "$SERVER" = xrdp-kde ]; then
 check "sesman started Plasma for tester (KWin, the Plasma shell)" \
     '"$ENGINE" exec "$NAME" pgrep -u tester -x kwin_wayland > /dev/null &&
      "$ENGINE" exec "$NAME" pgrep -u tester -x plasmashell > /dev/null'
-check "xrdp encodes the session in AV1" \
-    '"$ENGINE" exec "$NAME" grep -q "starting AV1 codec session" /var/log/xrdp.log'
+check "xrdp encodes the session in $(xcodec)" \
+    '"$ENGINE" exec "$NAME" grep -q "starting $(xcodec) codec session" /var/log/xrdp.log'
 elif [ "$SERVER" = gnome ]; then
 check "GNOME Shell runs headless for tester" '"$ENGINE" exec "$NAME" pgrep -u tester -f "gnome-shell --headless" > /dev/null'
 check "gnome-remote-desktop runs for tester" '"$ENGINE" exec "$NAME" pgrep -u tester -f "gnome-remote-desktop-daemon --headless" > /dev/null'

@@ -26,8 +26,8 @@ After an update, macOS asks for both permissions again: the app is signed withou
 developer certificate (ad hoc), so macOS knows it only by its exact build. Remove
 FreeRDP Shadow from both lists (the minus button), then allow the new one.
 
-AV2 too, for the clients that offer it (the kit's FreeRDP clients and FreeRDP Web; the
-others get AV1): add <string>/gfx-av2</string> after /gfx-av1 in the plist, and restart.
+AV2 is on: the clients that offer it (the kit's FreeRDP clients and FreeRDP Web) get AV2,
+the others AV1. AV1 only: remove <string>/gfx-av2</string> from the plist, and restart.
 
 Remove it with
 

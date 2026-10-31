@@ -13,6 +13,13 @@ toolchain) gets an entry here in the same commit.
 
 ## 2026-10-31
 
+- **AV2 on by default** (聪哥, 2026-10-31): where both ends have it, sessions use AV2.
+  The xrdp packages built with AV2 ship `gfx.toml` with `order = [ "AV2", "AV1", "H.264",
+  "RFX" ]`, and the install notes now give the command that puts AV1 first again. The Windows
+  host's install command and the Mac host's LaunchAgent add `/gfx-av2` next to `/gfx-av1`.
+  Clients that don't offer AV2 still get AV1 (or H.264). The web tests expect AV2 from xrdp
+  where its packages have it. The Windows test keeps its own AV1 sessions, and the page's
+  presets are unchanged (a freerdp-web change).
 - **`freerdp` `20261031.9`** (`76b4c2e1f`, freerdp-59's, from integration-latest): `.7` plus
   two fixes. The SDL3 clients' connection dialog and clipboard read a freed queue item for
   every message (FreeRDP#13961; master d5d230ddd turned a copy into `auto&` before `pop()`), so

@@ -15,6 +15,7 @@
              check a SAM file instead (-sec-nla does not turn that off) -->
         <string>/sec:tls</string>
         <string>/gfx-av1</string>
+        <string>/gfx-av2</string>
     </array>
     <key>RunAtLoad</key>          <true/>
     <key>KeepAlive</key>          <true/>
