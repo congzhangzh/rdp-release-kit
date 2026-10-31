@@ -13,6 +13,11 @@ toolchain) gets an entry here in the same commit.
 
 ## 2026-10-31
 
+- **Upstream, TLS 1.3 to Windows' own Remote Desktop**: FreeRDP#13944 (the retry with TLS
+  1.2) is closed, since the cause is LibreSSL's ClientHello; it is reported to LibreSSL as
+  libressl/portable#1452 (a bug report, no code). `freerdp` `20261031.3` keeps the retry
+  commit; the kit's LibreSSL patch is the fix for the Windows and web clients until LibreSSL
+  decides.
 - **`freerdp_host` `20261031.5`** (`d2136687d`, freerdp-59's): the Windows host's sound
   works. It offered Opus with a block alignment of 4, so rdpsnd padded every packet and the
   client's decoder gave up after the first one; now 1 (FreeRDP#13954; the generic fix in
