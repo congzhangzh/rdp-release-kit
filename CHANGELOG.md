@@ -56,6 +56,12 @@ toolchain) gets an entry here in the same commit.
   row's arrows) next to Automatic, which still sends a bare `/gfx`. RDP cannot send an
   order (the server confirms the best capability set it knows), so the page keeps the
   list's order by leaving out a codec the server would take before one placed above it.
+- **`freerdp_host` `20261031.2`** (`39bc96a1`, freerdp-59's): `20261030.7` plus
+  shadow-win-monitor-bounds. Windows gives a monitor's right and bottom as exclusive bounds,
+  the shadow core read them as inclusive: a 1600 x 900 screen became a 1601 x 901 surface, the
+  copy rounded to 16 rows and clipped to it read one row past the 1600 x 900 capture, and the
+  server died on the first frame (run 41166695002, the first with a 1600 x 900 screen; at
+  1024 x 768 the rounding happened to fit, and clients were told 1025 x 769 since 2014).
 - **freerdp-web `20261030.7`**: only its page test changes, which still chose the AV1 4:2:0
   that 20261030.6 replaced and so stopped `site.yml` before 20261030.6 went live (site run
   41164816290; the live site stayed on 20261031.1). It chooses Least data now.
