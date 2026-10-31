@@ -30,6 +30,11 @@ if you do not want that. --log <folder> writes logs there. Remove it with
 
   .\freerdp-shadow-service.exe uninstall
 
+That leaves the policy --allow-sas set (SoftwareSASGeneration = 1: services may send
+Ctrl+Alt+Del). To put it back as Windows has it by default:
+
+  reg delete "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System" /v SoftwareSASGeneration /f
+
 Or, without a service, for the logged-on user's desktop only:
 
   .\freerdp-shadow-cli.exe /bind-address:127.0.0.1 /gfx-av1
