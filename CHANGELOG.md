@@ -45,6 +45,11 @@ toolchain) gets an entry here in the same commit.
   -12 dBFS captured by the shadow server came out at -12.0 dBFS on the client, 321 packets
   in 16 s (before: 1, then silence). The runner has no sound card, so the kit's test still
   says SKIP there. Rebuilt on master dae0390a4; the 1601 x 901 fix is FreeRDP#13956.
+- **The macOS host joins the release** (聪哥: "do not do real build, just as it should works,
+  go on"): kit.yml builds it on both architectures (job `mac-host`, as mac-host.yml does on its
+  branch), and the release carries `freerdp-host-<version>-macos-arm64.zip` and `-x86_64.zip`
+  with a line each in the release notes. It is built and packaged, not tested: a CI Mac cannot
+  grant a new app Screen Recording. The site's Get a server doesn't show it yet (a page change).
 - **`freerdp_mac_host` `20261031.10`** (`fc2c32540`, freerdp-d0's, from integration-shadow-mac,
   in place of `20261031.4`): the extended keys reach the Mac: both Command keys (so ⌘C and ⌘V),
   the arrows, Home/End, PgUp/PgDn, Forward Delete, keypad Enter and right Option/Ctrl

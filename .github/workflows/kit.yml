@@ -166,6 +166,61 @@ jobs:
           if-no-files-found: error
           retention-days: 3
 
+  # The macOS host: FreeRDP's shadow server as FreeRDP-Shadow.app (build-macos-client.sh
+  # with HOST=1, freerdp_mac_host), as mac-host.yml builds it on its branch. Built and
+  # packaged, not tested: a CI Mac cannot grant a new app Screen Recording (TCC)
+  mac-host:
+    needs: [releases]
+    if: needs.releases.outputs.scope == 'all'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: arm64
+            runner: macos-15
+          - arch: x86_64
+            runner: macos-15-intel
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Cache sources
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/rdp-release-kit/sources
+          key: sources-${{ hashFiles('sources.lock') }}
+
+      - name: Cache compiled objects
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/rdp-release-kit/ccache/macos
+          key: ccache-macos-host-${{ matrix.arch }}-${{ github.sha }}
+          restore-keys: |
+            ccache-macos-host-${{ matrix.arch }}-
+            ccache-macos-${{ matrix.arch }}-
+
+      - name: Build tools
+        run: brew install bash meson nasm ccache
+
+      - name: Build
+        env:
+          CCACHE_MAXSIZE: 1G
+          HOST: "1"
+        run: ./build-macos.sh ${{ matrix.arch }}
+
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: mac-host-log-${{ matrix.arch }}
+          path: ~/.cache/rdp-release-kit/macos-${{ matrix.arch }}/log
+          retention-days: 7
+      - uses: actions/upload-artifact@v7
+        with:
+          name: freerdp-host-macos-${{ matrix.arch }}
+          path: dist/freerdp-host-*.zip
+          if-no-files-found: error
+          retention-days: 3
+
   # The distribution lists, and which builds this push needs (build/changes.sh):
   # "web" when it only moves the freerdp_web pin, else "all" (a pull request
   # and a run by hand: always all)
@@ -671,7 +726,7 @@ jobs:
   # download (docs/RELEASE.md, "Products and channels")
   release:
     if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
-    needs: [build, windows, macos, xrdp, mutter, wasm, demo, windows-host]
+    needs: [build, windows, macos, mac-host, xrdp, mutter, wasm, demo, windows-host]
     runs-on: ubuntu-24.04
     # one at a time across commits: each counts N from the releases before it,
     # so two pushes close together get .1 and .2, not both .1 (the second
@@ -702,6 +757,12 @@ jobs:
         with:
           name: freerdp-host-windows-x86_64
           path: dist
+      # the macOS host, both architectures
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: freerdp-host-macos-*
+          path: dist
+          merge-multiple: true
       # the web client on the Windows host, recorded by windows-host.yml: it
       # joins demo.json as "windows", which the page's Get a server shows
       - uses: actions/download-artifact@v8
@@ -797,6 +858,8 @@ jobs:
           | macOS Apple Silicon | \`sdl3-freerdp-$freerdp-macos-arm64.tar.xz\` | unpack, then double-click \`freerdp-tk.command\` (or \`bin/sdl-freerdp /v:server /u:user\`); downloaded with a browser, clear macOS's quarantine first: \`xattr -dr com.apple.quarantine sdl3-freerdp-*\` (not notarized) |
           | macOS Intel | \`sdl3-freerdp-$freerdp-macos-x86_64.tar.xz\` | the same |
           | xrdp server | see Install xrdp below | |
+          | macOS host Apple Silicon | \`$(cd upload && ls freerdp-host-*-macos-arm64.zip)\` | share a Mac's own screen (AV1, its sound): unzip, copy \`FreeRDP-Shadow.app\` to /Applications and the LaunchAgent \`org.freerdp.shadow.plist\` to ~/Library/LaunchAgents, \`launchctl bootstrap gui/\$(id -u) ~/Library/LaunchAgents/org.freerdp.shadow.plist\`, then allow Screen & System Audio Recording and Accessibility (README.txt; signed ad hoc, so each update asks again; not tested on CI, which cannot grant those) |
+          | macOS host Intel | \`$(cd upload && ls freerdp-host-*-macos-x86_64.zip)\` | the same |
           | Windows host x86_64 | \`$host\` | share a Windows PC's own screen (logon and lock screens included, AV1, its sound): unzip, then in an administrator's PowerShell \`.\\freerdp-shadow-service.exe install --allow-sas -- /bind-address:127.0.0.1 /gfx-av1\` (add \`/gfx-av2\` for AV2; README.txt) |
 
           The Linux client runs on glibc 2.34 and newer (RHEL 9, Debian 12, Ubuntu 22.04, Fedora 35 and newer) with PulseAudio's or PipeWire's libpulse; nothing else to install. The macOS client runs on macOS 12 and newer. Check a download: \`sha256sum -c --ignore-missing SHA256SUMS\`; its origin: \`gh attestation verify <file> -R $GITHUB_REPOSITORY\`. Each archive's MANIFEST lists what it was built from.
