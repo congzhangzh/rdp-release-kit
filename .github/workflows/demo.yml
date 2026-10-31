@@ -112,7 +112,12 @@ jobs:
         run: |
           archive=$(find dist/native -name 'sdl3-freerdp-*-linux-x86_64.tar.xz' 2> /dev/null | head -1)
           [ -z "$archive" ] || export CLIENT_ARCHIVE=$PWD/$archive
-          test/record-demos.sh "${{ matrix.server }}"
+          # a demo takes 4 to 15 minutes; one that hangs (xrdp-gnome-screens
+          # sat 6 h after "page:" in kit run 41224087461 until the job limit
+          # cancelled the round) fails here instead, and continue-on-error
+          # above keeps the new ones from blocking. timeout signals the whole
+          # process group, so podman and the browser go too
+          timeout --kill-after=60 40m test/record-demos.sh "${{ matrix.server }}"
 
       - uses: actions/upload-artifact@v7
         if: always()
