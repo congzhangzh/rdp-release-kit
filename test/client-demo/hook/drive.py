@@ -361,7 +361,7 @@ class Driver:
         yield self.click(2)
         # the password comes from the keyring: no dialog asks for it
         wid, cx, cy = yield from self.session()
-        yield 10   # (Windows: the same session again, the video still playing)
+        yield 10   # (Windows: the same session again, Notepad still open)
         yield self.move(cx, cy, 0.8)
         yield 5.0
         say("log:", a.log.get("1.0", "end").strip().replace("\n", " | ")[-600:])

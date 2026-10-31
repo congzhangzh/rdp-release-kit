@@ -76,7 +76,12 @@ try {
     Copy-Item "$here\hook\*.py" "$desk\$name\lib\freerdp-tk\"
     Hands type ".\$name\freerdp-tk.cmd"; Hands key Return
     if (UntilMark "phase1-done" 300) {
-        # freerdp-tk quits; started again, it lists the saved connection
+        # freerdp-tk quits; started again, it lists the saved connection. The session it left
+        # (disconnected, not signed out) still plays the video and draws the Aquarium in
+        # software: closed now, or freerdp-tk's "/version" check of the client (5 s) timed
+        # out on the busy runner and it refused the client (run 41180196907)
+        Get-Process firefox -IncludeUserName -ErrorAction SilentlyContinue | Where-Object { $_.UserName -like "*\$User" } |
+            Stop-Process -Force -ErrorAction SilentlyContinue
         for ($i = 0; $i -lt 40 -and (Get-Process pythonw -ErrorAction SilentlyContinue); $i++) { Start-Sleep -Milliseconds 250 }
         Start-Sleep -Seconds 1.5
         Hands front "^PowerShell$"
