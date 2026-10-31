@@ -71,8 +71,21 @@ try {
     Hands type "dir"; Hands key Return
     Start-Sleep -Seconds 1.5
     Hands type "Expand-Archive $name.zip ."; Hands key Return
-    for ($i = 0; $i -lt 120 -and -not (Test-Path "$desk\$name\freerdp-tk.cmd"); $i++) { Start-Sleep -Milliseconds 500 }
-    Start-Sleep -Seconds 2
+    # unpacked when the launcher, freerdp-tk's package and Python are there and the folder
+    # stops growing (a zip's order varies: the round's own zip had freerdp-tk.cmd before
+    # lib\, and the hook's copy failed, run 41184572213)
+    $dir = "$desk\$name"
+    $need = "$dir\freerdp-tk.cmd", "$dir\lib\freerdp-tk\freerdp_tk\__main__.py", "$dir\python\pythonw.exe"
+    $last = -1
+    for ($i = 0; $i -lt 240; $i++) {
+        Start-Sleep -Milliseconds 500
+        if (@($need | Where-Object { -not (Test-Path $_) }).Count) { continue }
+        $n = @(Get-ChildItem $dir -Recurse -File -ErrorAction SilentlyContinue).Count
+        if ($n -eq $last) { break }
+        $last = $n
+    }
+    Say "unpacked: $last files"
+    Start-Sleep -Seconds 1
     Copy-Item "$here\hook\*.py" "$desk\$name\lib\freerdp-tk\"
     Hands type ".\$name\freerdp-tk.cmd"; Hands key Return
     if (UntilMark "phase1-done" 300) {
