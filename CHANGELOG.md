@@ -51,6 +51,11 @@ toolchain) gets an entry here in the same commit.
   speed 9, which the Windows host uses for screens, is unchanged. Two per-block clears are
   trimmed, bit-exact, in the decoder too. libavm now asks an ARM64 Windows CPU what it has
   when built with mingw, so the Windows ARM64 client gets its run-time CPU check back.
+- **freerdp-web `20261030.6`** (`dd551139d`): Session settings' Video is a list of codecs
+  in an order (聪哥's idea): *Least data*, *Least CPU* and *Custom* (drag and drop, or a
+  row's arrows) next to Automatic, which still sends a bare `/gfx`. RDP cannot send an
+  order (the server confirms the best capability set it knows), so the page keeps the
+  list's order by leaving out a codec the server would take before one placed above it.
 
 - **A new product: the Windows host** (聪哥: a Windows backend, "go ahead to do them all").
   `freerdp-host-<version>-windows-x86_64.zip`: FreeRDP's shadow server
