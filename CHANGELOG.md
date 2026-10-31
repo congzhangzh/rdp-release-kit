@@ -56,6 +56,9 @@ toolchain) gets an entry here in the same commit.
   row's arrows) next to Automatic, which still sends a bare `/gfx`. RDP cannot send an
   order (the server confirms the best capability set it knows), so the page keeps the
   list's order by leaving out a codec the server would take before one placed above it.
+- **freerdp-web `20261030.7`**: only its page test changes, which still chose the AV1 4:2:0
+  that 20261030.6 replaced and so stopped `site.yml` before 20261030.6 went live (site run
+  41164816290; the live site stayed on 20261031.1). It chooses Least data now.
 - **libavm `20261030.4`** (`caea56916`): the encoder's realtime speed 10 at the middle
   point 聪哥 chose between speed and quality: against the full RD search +4.8 % BD-rate
   (was +11.6 %) for about 11 % more encoding time (1440p in the AVM release's CI: x86
