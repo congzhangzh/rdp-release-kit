@@ -375,6 +375,10 @@ foreach ($tls in @(), @("/tls:enforce:1.2"), @("/tls:enforce:1.3")) {
         Select-Object -Last 1 | ForEach-Object { $_.Matches[0].Value }
     "rdp: TLS $name -> $(if ($said) { $said } else { "exit $($r.ExitCode)" })" | Tee-Object -FilePath "$Out\where.txt" -Append
 }
+# where Windows' SChannel gave up on TLS 1.3 (freerdp-59's ask): its System log's events,
+# e.g. 36888 "fatal alert 80, internal error state N" (a report)
+Get-WinEvent -FilterHashtable @{ LogName = "System"; ProviderName = "Schannel" } -MaxEvents 20 -ErrorAction SilentlyContinue |
+    Format-List TimeCreated, Id, Message | Out-File "$Out\schannel-events.txt"
 function SignOut {   # the test user's Remote Desktop session, and what it left running
     Get-Process notepad, firefox -IncludeUserName -ErrorAction SilentlyContinue | Where-Object { $_.UserName -like "*\$user" } |
         Stop-Process -Force -ErrorAction SilentlyContinue
