@@ -182,17 +182,21 @@ class Driver:
 
     def tab(self, text):
         """The notebook and the middle of the tab named text."""
+        def at(nb, x):   # the tab at x, or None past the last tab (Tk says "", index() raises)
+            try:
+                i = nb.index(f"@{x},8")
+            except tk.TclError:
+                return None
+            return None if i == "" else i
+
         for nb in walk(self.root):
             if nb.winfo_class() != "TNotebook":
                 continue
             for x in range(2, nb.winfo_width(), 4):
-                try:
-                    i = nb.index(f"@{x},8")
-                except tk.TclError:
-                    continue
-                if i != "" and nb.tab(i, "text") == text:
+                i = at(nb, x)
+                if i is not None and nb.tab(i, "text") == text:
                     start = x
-                    while x < nb.winfo_width() and nb.index(f"@{x},8") == i:
+                    while x < nb.winfo_width() and at(nb, x) == i:
                         x += 2
                     return nb, (start + x) // 2
         raise LookupError(f"no tab {text}")
