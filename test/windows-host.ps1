@@ -104,6 +104,34 @@ Get-Service Audiosrv, AudioEndpointBuilder -ErrorAction SilentlyContinue | Selec
 Get-CimInstance Win32_SoundDevice -ErrorAction SilentlyContinue | Select-Object Name, Status | Format-Table | Out-File -Append "$Out\where.txt"
 Get-PnpDevice -Class AudioEndpoint -ErrorAction SilentlyContinue | Select-Object FriendlyName, Status | Format-Table |
     Out-File -Append "$Out\where.txt"
+# A runner has no sound card: then Scream, a virtual one (github.com/duncanthrax/scream,
+# MS-PL, release 4.0, pinned by its hash), installed as CI audio setups install it: its
+# signer trusted first, so Windows installs the driver without asking. With it there is a
+# playback device: the session's sound plays somewhere, and WASAPI loopback can record it
+# (the freerdp-tk demo's video; the shadow server's sound, later). And the audio service,
+# which Windows Server leaves stopped.
+if (-not (Get-PnpDevice -Class AudioEndpoint -Status OK -ErrorAction SilentlyContinue)) {
+    $scream = "$env:TEMP\scream"
+    try {
+        Invoke-WebRequest "https://github.com/duncanthrax/scream/releases/download/4.0/Scream4.0.zip" -OutFile "$scream.zip"
+        if ((Get-FileHash "$scream.zip" -Algorithm SHA256).Hash -ne "FA33E25F9A46C61E4E0CD83362C51C3D2A45C6FE4091AAD7507E240E40F1A520") {
+            throw "Scream4.0.zip: not the pinned file"
+        }
+        Expand-Archive "$scream.zip" $scream -Force
+        $signer = (Get-AuthenticodeSignature "$scream\Install\driver\x64\scream.cat").SignerCertificate
+        $store = New-Object System.Security.Cryptography.X509Certificates.X509Store "TrustedPublisher", "LocalMachine"
+        $store.Open("ReadWrite"); $store.Add($signer); $store.Close()
+        Push-Location "$scream\Install\driver\x64"
+        & ..\..\helpers\devcon-x64.exe install Scream.inf "*Scream" 2>&1 | Out-File -Append "$Out\where.txt"
+        Pop-Location
+    } catch { "Scream: $($_.Exception.Message)" | Out-File -Append "$Out\where.txt" }
+}
+Set-Service Audiosrv -StartupType Automatic -ErrorAction SilentlyContinue
+Start-Service Audiosrv -ErrorAction SilentlyContinue
+Start-Sleep -Seconds 3
+"== sound, now" | Out-File -Append "$Out\where.txt"
+Get-PnpDevice -Class AudioEndpoint -ErrorAction SilentlyContinue | Select-Object FriendlyName, Status | Format-Table |
+    Out-File -Append "$Out\where.txt"
 # New-LocalUser: net user asks Y/N on stdin for a password over 14 characters
 try {
     New-LocalUser -Name $user -Password (ConvertTo-SecureString $pass -AsPlainText -Force) -PasswordNeverExpires | Out-Null
