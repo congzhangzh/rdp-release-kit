@@ -119,8 +119,8 @@ caption() {
         gnome) echo "gnome-remote-desktop with GNOME Shell on Wayland, headless, on Debian 13: the same visit, with GNOME Console started from the search. $credits" ;;
         xrdp-gnome) echo "rdp-release-kit's xrdp with GNOME on Wayland, Fedora 45: sesman starts a GNOME session and xrdp sends it in AV1, decoded by the browser. The same visit, the terminal started from the search, then Firefox on the server with web video and WebGL, with sound. $credits" ;;
         xrdp-kde) echo "rdp-release-kit's xrdp with KDE Plasma on Wayland (KWin 6.8, Arch): sesman starts Plasma, KWin renders in software (no GPU) and xrdp sends it in AV1, decoded by the browser. The same visit, Konsole started from the launcher, then Firefox on the server with web video and WebGL, with sound. $credits" ;;
-        client-release) echo "freerdp-tk, the connection window that comes with the kit's native clients, on a Linux desktop (Debian 13): the Linux client unpacked from the kit's release, freerdp-tk started from it (it takes the release's own FreeRDP, though Debian's is installed too), a connection filled in and saved, the password kept in the system keyring. The kit's FreeRDP connects in AV1 to rdp-release-kit's xrdp with GNOME on Wayland (Fedora 45); then freerdp-tk is started again and a double-click on the saved connection logs in, the password from the keyring." ;;
-        client-uvx) echo "freerdp-tk from PyPI with plain uvx on a Linux desktop (Debian 13) whose Python has no Tk: freerdp-tk starts again with uv's own Python, which has it. With Debian's FreeRDP 3 client: the same connection, saved with its password in the system keyring, to rdp-release-kit's xrdp with GNOME on Wayland (Fedora 45). Debian's client has no AV1, so xrdp sends H.264." ;;
+        client-release) echo "freerdp-tk, the connection window that comes with the kit's native clients, on a Linux desktop (Debian 13): the Linux client unpacked from the kit's release, freerdp-tk started from it (it takes the release's own FreeRDP, though Debian's is installed too), a connection filled in and saved, the password kept in the system keyring. The kit's FreeRDP connects in AV1 to rdp-release-kit's xrdp with GNOME on Wayland (Fedora 45): a terminal, then Firefox there with web video and WebGL, with sound; then freerdp-tk is started again and a double-click on the saved connection logs in, the password from the keyring $credits" ;;
+        client-uvx) echo "freerdp-tk from PyPI with plain uvx on a Linux desktop (Debian 13) whose Python has no Tk: freerdp-tk starts again with uv's own Python, which has it. With Debian's FreeRDP 3 client: the same connection, saved with its password in the system keyring, to rdp-release-kit's xrdp with GNOME on Wayland (Fedora 45): a terminal, then Firefox there with web video and WebGL, with sound. Debian's client has no AV1, so xrdp sends H.264 $credits" ;;
         xrdp-gnome-screens) echo "The page's All screens on a computer with two screens, side by side: rdp-release-kit's xrdp with GNOME on Wayland, Fedora 45. Separate screens gives GNOME a monitor for each screen, the page's screen the primary, where the terminal stays; Super+Shift+Right moves it to the other screen, and closing the second screen's window brings one screen back." ;;
     esac
 }
@@ -139,10 +139,14 @@ keep_logs() {
 # demo has no sound
 record() {
     local peak
-    # freerdp-tk: no sound to check (the client container plays none)
+    # freerdp-tk: its sound (the client container's PulseAudio, recorded with the
+    # display) is reported, not yet required
     if [[ $1 == client-* ]]; then
         SERVER=xrdp-gnome CLIENT_DEMO=${1#client-} CLIENT_ARCHIVE=$CLIENT DEMO_VIDEO=$2 \
-            "$KIT/test/wasm-session.sh" "$IN/client" "$IN/rdp-gateway.sh" "$3" > "$OUT/$1.log" 2>&1
+            "$KIT/test/wasm-session.sh" "$IN/client" "$IN/rdp-gateway.sh" "$3" > "$OUT/$1.log" 2>&1 || return 1
+        peak=$(ffmpeg -hide_banner -i "$2" -map 0:a -af volumedetect -f null - 2>&1 |
+            sed -n 's/.*max_volume: \(-*[0-9.]*\) dB/\1/p')
+        echo "NOTE  freerdp-tk's sound: peak ${peak:-none} dB" >> "$OUT/$1.log"
         return
     fi
     if [ "$1" = xrdp-gnome-screens ]; then

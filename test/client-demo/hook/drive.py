@@ -294,15 +294,20 @@ class Driver:
             yield self.key("Return")
             yield 22.0
         else:
-            # in GNOME: the search, the Text Editor, a line
+            # in GNOME: the search, a terminal, a line, then webdemo there: Firefox with
+            # Big Buck Bunny next to the WebGL Aquarium, its sound through the session
             yield self.key("super")
             yield 2.0
-            yield self.type("text editor", 110)
+            yield self.type("terminal", 110)
             yield 2.0
             yield self.key("Return")
             yield 5.0
-            yield self.type("Typed in GNOME through freerdp-tk.", 80)
-            yield 3.0
+            yield self.type("echo Typed in GNOME through freerdp-tk.", 80)
+            yield self.key("Return")
+            yield 1.5
+            yield self.type("webdemo", 110)
+            yield self.key("Return")
+            yield 22.0
         # back to freerdp-tk: disconnect, then quit it
         tkwin = self.io.find("^FreeRDP$")
         if tkwin:

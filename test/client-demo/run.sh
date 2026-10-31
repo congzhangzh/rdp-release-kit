@@ -44,9 +44,16 @@ xterm -T Terminal -geometry 96x16+60+700 -fa 'DejaVu Sans Mono' -fs 12 -bg '#1d1
     -e bash --norc > /dev/null 2>&1 &
 for _ in $(seq 50); do xdotool search --name '^Terminal$' > /dev/null 2>&1 && break; sleep 0.1; done
 sleep 1
-ffmpeg -hide_banner -loglevel error -y -f x11grab -draw_mouse 1 -framerate 30 -video_size 1920x1080 -i :1 \
-    -c:v libx264 -preset veryfast -crf 16 -pix_fmt yuv420p /out/raw.mp4 &
-REC=$!
+# the display, and the client's sound: PulseAudio here has no card, so it plays into
+# its null sink, whose monitor is the default source; without it, the picture alone
+rec() {
+    ffmpeg -hide_banner -loglevel error -y -f x11grab -draw_mouse 1 -framerate 30 -video_size 1920x1080 -i :1 \
+        "$@" -c:v libx264 -preset veryfast -crf 16 -pix_fmt yuv420p /out/raw.mp4 &
+    REC=$!
+}
+rec -f pulse -i default -c:a aac -b:a 160k
+sleep 2
+kill -0 $REC 2> /dev/null || { echo "run.sh: no sound to record, the picture alone" >&2; rec; }
 # the terminal has the focus (and a moment to take it: the first key went missing)
 term() { xdotool search --name '^Terminal$' windowactivate --sync > /dev/null 2>&1; sleep 0.5; }
 typed() { term; xdotool type --delay 75 "$1"; sleep 0.3; xdotool key Return; }

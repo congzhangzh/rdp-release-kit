@@ -84,6 +84,17 @@ toolchain) gets an entry here in the same commit.
   (`hook/wininput.py`). ffmpeg records the screen (gdigrab), `winrec.py` the speakers
   (WASAPI loopback; a runner without a sound device gives a silent video), muxed at the
   measured offset. It joins Get a client's freerdp-tk videos (demo.json's `clients`).
+- **Sound on the Windows runner**: it has no sound card, so `test/windows-host.ps1`
+  installs Scream (a virtual one, github.com/duncanthrax/scream 4.0, MS-PL, pinned by its
+  SHA-256; its signer trusted first, so Windows installs it without asking, as CI audio
+  setups do) and starts the audio service; `where.txt` reports the devices before and
+  after. With a playback device, WASAPI loopback can record the freerdp-tk video's sound
+  (and, once FreeRDP's Windows shadow server captures sound, test it).
+- **The Linux freerdp-tk videos play the web video and WebGL too, with sound**: in GNOME a
+  terminal, a line, then `webdemo` (Firefox with Big Buck Bunny next to the WebGL
+  Aquarium), as the page's demos do. `test/client-demo/run.sh` records the client's sound
+  with the display (PulseAudio's null sink monitor; the picture alone if there is none);
+  `record-demos.sh` reports its peak.
 
 - **A new product: the Windows host** (聪哥: a Windows backend, "go ahead to do them all").
   `freerdp-host-<version>-windows-x86_64.zip`: FreeRDP's shadow server
