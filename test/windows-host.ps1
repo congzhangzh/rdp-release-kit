@@ -470,14 +470,41 @@ Check "native: the frames came in AV1" (($codecs -join " ") -match "RDPGFX_CODEC
 # which the client sends to the server
 Add-Type -Namespace Kit -Name Keys -MemberDefinition @'
 [DllImport("user32.dll")] public static extern bool SetForegroundWindow(System.IntPtr h);
+[DllImport("user32.dll")] public static extern bool BringWindowToTop(System.IntPtr h);
+[DllImport("user32.dll")] public static extern System.IntPtr GetForegroundWindow();
+[DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(System.IntPtr h, System.IntPtr pid);
+[DllImport("user32.dll")] public static extern bool AttachThreadInput(uint a, uint b, bool attach);
+[DllImport("kernel32.dll")] public static extern uint GetCurrentThreadId();
 [DllImport("user32.dll")] public static extern void keybd_event(byte vk, byte scan, uint flags, System.UIntPtr extra);
 '@
+# the client's window to the front, for sure: Windows' foreground lock refused it once and the
+# keys went elsewhere (run 41208207833, second attempt: no key press in the server's log).
+# An Alt press, then this thread joined to the front window's input queue, up to five times.
+function Focus($hwnd) {
+    for ($i = 0; $i -lt 5; $i++) {
+        [Kit.Keys]::keybd_event(0x12, 0, 0, [UIntPtr]::Zero); [Kit.Keys]::keybd_event(0x12, 0, 2, [UIntPtr]::Zero)
+        $mine = [Kit.Keys]::GetCurrentThreadId()
+        $theirs = [Kit.Keys]::GetWindowThreadProcessId([Kit.Keys]::GetForegroundWindow(), [IntPtr]::Zero)
+        $joined = $theirs -and $theirs -ne $mine -and [Kit.Keys]::AttachThreadInput($mine, $theirs, $true)
+        [void][Kit.Keys]::BringWindowToTop($hwnd); [void][Kit.Keys]::SetForegroundWindow($hwnd)
+        if ($joined) { [void][Kit.Keys]::AttachThreadInput($mine, $theirs, $false) }
+        Start-Sleep -Milliseconds 500
+        if ([Kit.Keys]::GetForegroundWindow() -eq $hwnd) { return $true }
+    }
+    return $false
+}
+# Delete presses the server took (its input log at DEBUG: Delete is an extended key, a key down
+# with flags=0x0100; Ctrl and Alt are 0x0000, but so are the key events the focus change sends,
+# so only Delete tells that the typed keys arrived)
+function DeleteDowns { ([regex]::Matches((ServerLog), "shadow_input_keyboard_event\]: \[use\] flags=0x0100")).Count }
 $session.Refresh()
-if ($session.MainWindowHandle -ne [IntPtr]::Zero) {
-    [Kit.Keys]::keybd_event(0x12, 0, 0, [UIntPtr]::Zero)   # Alt, so the focus may move
-    [Kit.Keys]::keybd_event(0x12, 0, 2, [UIntPtr]::Zero)
-    [void][Kit.Keys]::SetForegroundWindow($session.MainWindowHandle)
-    Start-Sleep -Milliseconds 500
+if ($session.MainWindowHandle -eq [IntPtr]::Zero) {
+    Check "Ctrl+Alt+Del: the client has a window to type into" $false
+} elseif (-not (Focus $session.MainWindowHandle)) {
+    # the harness, not the product: say so, as for the sound
+    "SKIP  Ctrl+Alt+Del: the test could not bring the client's window to the front" | Tee-Object -FilePath "$Out\checks.txt" -Append
+} else {
+    $deletes = DeleteDowns
     [Kit.Keys]::keybd_event(0x11, 0x1D, 0, [UIntPtr]::Zero)
     [Kit.Keys]::keybd_event(0x12, 0x38, 0, [UIntPtr]::Zero)
     [Kit.Keys]::keybd_event(0x2E, 0x53, 1, [UIntPtr]::Zero)
@@ -486,6 +513,10 @@ if ($session.MainWindowHandle -ne [IntPtr]::Zero) {
     [Kit.Keys]::keybd_event(0x11, 0x1D, 2, [UIntPtr]::Zero)
     Start-Sleep -Seconds 8
     $svcLog = Get-Content "$logs\service.log" -Raw -ErrorAction SilentlyContinue
+    # three steps, so a failure says where: the keys reached the server, the server asked the
+    # service, the service sent it (SendSAS returns nothing: "sent" is as far as it can tell)
+    Check "Ctrl+Alt+Del: the keys reached the server" ((DeleteDowns) -gt $deletes) "$((DeleteDowns) - $deletes) Delete presses"
+    Check "Ctrl+Alt+Del: the server asked the service" ((ServerLog) -match "asked freerdp-shadow-service for the secure attention sequence")
     Check "Ctrl+Alt+Del: the service sent the secure attention sequence" ($svcLog -match "secure attention sequence sent")
     Check "Ctrl+Alt+Del: the server followed to Winlogon" ((ServerLog) -match "follows the input desktop from \w+ to Winlogon")
     Check "Ctrl+Alt+Del: the session holds" (-not $session.HasExited)
@@ -493,8 +524,6 @@ if ($session.MainWindowHandle -ne [IntPtr]::Zero) {
     [Kit.Keys]::keybd_event(0x1B, 0x01, 0, [UIntPtr]::Zero)   # Esc: leave the Ctrl+Alt+Del screen
     [Kit.Keys]::keybd_event(0x1B, 0x01, 2, [UIntPtr]::Zero)
     Start-Sleep -Seconds 5
-} else {
-    Check "Ctrl+Alt+Del: the client has a window to type into" $false
 }
 
 $before = ([regex]::Matches((ServerLog), "to Winlogon")).Count
