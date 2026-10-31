@@ -375,6 +375,9 @@ await load();
 await caption("FreeRDP Web: github.com/congzhangzh/freerdp-web");
 await sleep(3500);
 await send("Page.stopScreencast");
+// Windows: Firefox, still playing the video and drawing the Aquarium in software, would
+// starve the encode below (run 41172690875: 39 minutes, unfinished); it is not needed now
+if (WINDOWS_ANY) spawnSync("taskkill", ["/IM", "firefox.exe", "/F"], { stdio: "ignore" });
 
 // the frames, each as long as it was on screen, into an MP4
 const list = shots.map((s, i) => `file '${s.file}'\nduration ${((shots[i + 1]?.t ?? s.t + 1) - s.t).toFixed(3)}`).join("\n")
@@ -388,7 +391,7 @@ if (audio) {
 }
 const ff = spawnSync("ffmpeg", ["-y", "-loglevel", "error", "-f", "concat", "-safe", "0", "-i", join(frames, "list.txt"),
   ...sound, "-map", "0:v", ...(audio ? ["-map", "1:a", "-c:a", "aac", "-b:a", "160k"] : []),
-  "-vf", `fps=30,scale=${W}:${H}:flags=lanczos,format=yuv420p`, "-c:v", "libx264", "-crf", "22", "-preset", "slow",
+  "-vf", `fps=30,scale=${W}:${H}:flags=lanczos,format=yuv420p`, "-c:v", "libx264", "-crf", "22", "-preset", WINDOWS_ANY ? "veryfast" : "slow",   // Windows: windows-host.ps1 encodes it again
   "-movflags", "+faststart", video], { stdio: "inherit" });
 console.log(`demo: ${shots.length} frames, ${(shots.at(-1).t - shots[0].t).toFixed(1)} s, ` +
   `sound ${audio ? Math.round(audio.length * 0.75 / 1024) + " KB" : "none"} -> ${video} (ffmpeg ${ff.status})`);
