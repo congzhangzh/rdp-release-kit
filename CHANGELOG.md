@@ -99,7 +99,10 @@ toolchain) gets an entry here in the same commit.
   xrdp's `configure.ac` offers it (avm-6e's encoder, FreeRDP's FRDP_2 / AV2 codec id), then
   checks configure's summary; `NO_AV2=1` (a release marked `no-av2`) leaves it out.
   Fedora's build image gets `gcc-c++` (libavm's CMake project declares C++). Today's xrdp
-  pin has no `--enable-av2`, so its packages are as before until the pin moves.
+  pin has no `--enable-av2`, so its packages are as before until the pin moves. Even then
+  AV2 is the server's to turn on, as everywhere: the package's `gfx.toml` keeps
+  `order = [ "AV1", "H.264", "RFX" ]`, and `"AV2"` put first there (as its comment says)
+  makes xrdp offer it; every FreeRDP client of the kit, the page's included, takes it.
 - **The demos' Firefox skips its terms-of-use dialog** (`test/demo/user.js`): newer Firefox,
   the Windows runner's, opened on "Welcome to Firefox" in front of the video and the Aquarium.
 - **Windows' own Remote Desktop takes TLS 1.2 from our clients, not 1.3** (run 41176456545:
