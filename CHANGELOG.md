@@ -20,10 +20,11 @@ toolchain) gets an entry here in the same commit.
   the cause. Tested before the pick: ctest 211/211, kit round 41199723802, xrdp sway e2e 57/57.
 - **`freerdp_host` `20261031.8`** (`be82c8dc0`, freerdp-59's, from integration-shadow-win):
   `.6` plus FreeRDP#13958, the keys a client leaves held are let go when it leaves or sends a
-  Synchronize (a client dropped mid-shortcut left Win or Alt down on the console; the web
-  demos' Win+R and Win+D did exactly that to the freerdp-tk demo after them). The host README
-  drops its known-issue paragraph. The Windows test's freerdp-tk demo logs which keys were
-  still held ("held: none").
+  Synchronize (a client dropped mid-shortcut left Win or Alt down on the console; shown on the
+  X11 shadow server, before and after). The host README drops its known-issue paragraph. The
+  Windows test checks that no key is still held after its web demos; it never caught one with
+  `.6` either (the freerdp-tk demo's failures were a toast, see below), so on Windows it only
+  shows that `.8` doesn't regress.
 - **`avm` `20261031.2`** (`b132a0a6`, avm-6e's): two encoder thread races fixed (tile-packing
   counters, TMVP bands); bit-exact with `20261031.1` at 1 and 4 threads. The first race is why
   `20261031.1`'s ARM bench stream differed from x86. avm-release-kit's new thread-safety gate
