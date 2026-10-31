@@ -120,7 +120,7 @@ jobs:
           Get-ChildItem dl/wasm/web/index.html
 
       - name: The Windows host, with the native and the web client
-        timeout-minutes: 20
+        timeout-minutes: 45
         shell: pwsh
         run: >
           ./test/windows-host.ps1 (Get-ChildItem host -Directory | Select-Object -First 1).FullName

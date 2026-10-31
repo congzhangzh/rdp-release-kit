@@ -118,12 +118,23 @@ if (-not (Get-PnpDevice -Class AudioEndpoint -Status OK -ErrorAction SilentlyCon
             throw "Scream4.0.zip: not the pinned file"
         }
         Expand-Archive "$scream.zip" $scream -Force
+        # its signer trusted as a root and as a publisher: as a publisher alone, Windows
+        # still asks whether to install it (its certificate chains to no trusted root),
+        # in a dialog nobody here can answer (run 41164824167 hung on it)
         $signer = (Get-AuthenticodeSignature "$scream\Install\driver\x64\scream.cat").SignerCertificate
-        $store = New-Object System.Security.Cryptography.X509Certificates.X509Store "TrustedPublisher", "LocalMachine"
-        $store.Open("ReadWrite"); $store.Add($signer); $store.Close()
-        Push-Location "$scream\Install\driver\x64"
-        & ..\..\helpers\devcon-x64.exe install Scream.inf "*Scream" 2>&1 | Out-File -Append "$Out\where.txt"
-        Pop-Location
+        "Scream's signer: $($signer.Subject)" | Out-File -Append "$Out\where.txt"
+        foreach ($name in "Root", "TrustedPublisher") {
+            $store = New-Object System.Security.Cryptography.X509Certificates.X509Store $name, "LocalMachine"
+            $store.Open("ReadWrite"); $store.Add($signer); $store.Close()
+        }
+        # and two minutes at most: if Windows asks anyway, the test goes on without sound
+        $devcon = Start-Process -FilePath "$scream\Install\helpers\devcon-x64.exe" -PassThru -NoNewWindow `
+            -WorkingDirectory "$scream\Install\driver\x64" -ArgumentList "install", "Scream.inf", "*Scream" `
+            -RedirectStandardOutput "$Out\scream.log" -RedirectStandardError "$Out\scream.err"
+        if (-not $devcon.WaitForExit(120000)) {
+            Stop-Process -Id $devcon.Id -Force -ErrorAction SilentlyContinue
+            "Scream: devcon did not finish in 2 minutes (a dialog?), stopped: no sound card" | Out-File -Append "$Out\where.txt"
+        } else { "Scream: devcon exit $($devcon.ExitCode)" | Out-File -Append "$Out\where.txt" }
     } catch { "Scream: $($_.Exception.Message)" | Out-File -Append "$Out\where.txt" }
 }
 Set-Service Audiosrv -StartupType Automatic -ErrorAction SilentlyContinue
