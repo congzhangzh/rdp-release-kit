@@ -93,6 +93,9 @@ toolchain) gets an entry here in the same commit.
   (`hook/wininput.py`). ffmpeg records the screen (gdigrab), `winrec.py` the speakers
   (WASAPI loopback; a runner without a sound device gives a silent video), muxed at the
   measured offset. It joins Get a client's freerdp-tk videos (demo.json's `clients`).
+- **freerdp-web `20261031.1`**: Get a server shows Windows' own Remote Desktop (nothing to
+  install) before the shadow server, and install.json's `av2` (written when the xrdp
+  packages have AV2) as an AV2 part with its line.
 - **`freerdp` `20261031.1`** (`b646cb806`, freerdp-59's pick): `20261030.6` plus one
   commit, update-bitmap-padded-width: a legacy bitmap wider than its rectangle is accepted
   again; only a rectangle wider than its bitmap (memory) is refused. With 20261030.6, every
