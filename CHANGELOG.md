@@ -96,6 +96,13 @@ toolchain) gets an entry here in the same commit.
 - **freerdp-web `20261031.1`**: Get a server shows Windows' own Remote Desktop (nothing to
   install) before the shadow server, and install.json's `av2` (written when the xrdp
   packages have AV2) as an AV2 part with its line.
+- **`freerdp` `20261031.3`** (`99a0bd94c`, freerdp-59's): `20261031.1` plus
+  tls13-nla-fallback, with 聪哥's go. Windows Server 2025's own Remote Desktop accepts a TLS
+  1.3 handshake, then answers the first CredSSP message with a fatal internal_error alert
+  (TLS 1.2 works; run 41176456545's probe). When 1.3 was negotiated, no maximum was set
+  and that authenticated alert comes, the client connects once more with TLS 1.2 and says
+  so in its log. `/tls:enforce:1.3` still fails, as asked. The Windows run's no-`/tls`
+  probe proves it; the demos keep `/tls:enforce:1.2` until it does.
 - **`freerdp` `20261031.1`** (`b646cb806`, freerdp-59's pick): `20261030.6` plus one
   commit, update-bitmap-padded-width: a legacy bitmap wider than its rectangle is accepted
   again; only a rectangle wider than its bitmap (memory) is refused. With 20261030.6, every
