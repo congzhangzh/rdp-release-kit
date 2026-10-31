@@ -13,6 +13,10 @@ toolchain) gets an entry here in the same commit.
 
 ## 2026-10-31
 
+- **`avm` `20261031.2`** (`b132a0a6`, avm-6e's): two encoder thread races fixed (tile-packing
+  counters, TMVP bands); bit-exact with `20261031.1` at 1 and 4 threads. The first race is why
+  `20261031.1`'s ARM bench stream differed from x86. avm-release-kit's new thread-safety gate
+  (TSan): 14/14 on this pick, 12/14 failing on `20261031.1`.
 - **Upstream, TLS 1.3 to Windows' own Remote Desktop**: FreeRDP#13944 (the retry with TLS
   1.2) is closed, since the cause is LibreSSL's ClientHello; it is reported to LibreSSL as
   libressl/portable#1452 (a bug report, no code). `freerdp` `20261031.3` keeps the retry
