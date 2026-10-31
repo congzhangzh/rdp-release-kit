@@ -93,6 +93,14 @@ toolchain) gets an entry here in the same commit.
   (`hook/wininput.py`). ffmpeg records the screen (gdigrab), `winrec.py` the speakers
   (WASAPI loopback; a runner without a sound device gives a silent video), muxed at the
   measured offset. It joins Get a client's freerdp-tk videos (demo.json's `clients`).
+- **The native login test types, without GFX** (`test/xrdp-session.sh`): freerdp-59 found
+  that FreeRDP master 343f23134 (#13884) refuses xrdp's legacy bitmap updates, whose bitmap
+  is padded to a multiple of 4 pixels while the rectangle keeps its width, and drops the
+  session; the kit's clients since `freerdp` `20261030.6` have it. The tests missed it: with
+  GFX nothing is legacy, and the sway login (`/bpp:24`, legacy) never changed the screen. Now
+  the Xorg session is joined again with `/bpp:24` and typed in, and so is sway: the client
+  must stay connected with no "Invalid BITMAP_DATA". It fails on the 20261030.6 client and is
+  meant to pass on the fixed one (freerdp-59's update-bitmap-padded-width).
 - **`xrdp` `20261030.1`** (`4986f5c7`, avm-6e's pick of integration-wlup-all): the kit's
   xrdp (release-20261028.1's stack) plus the AV2 encoder (libavm), so the packages are built
   with `--enable-av2`. In avm-6e's runs: make check 295/295, AV2 end to end 17/17 (4:2:0 and

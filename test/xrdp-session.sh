@@ -60,10 +60,10 @@ echo "== install"
 if command -v apt-get > /dev/null; then
     export DEBIAN_FRONTEND=noninteractive
     apt-get update -qq > /dev/null
-    apt-get install -y -qq /pkgs/*.deb xterm xvfb imagemagick libpulse0 xz-utils \
+    apt-get install -y -qq /pkgs/*.deb xterm xvfb imagemagick xdotool libpulse0 xz-utils \
         procps > /out/install.log 2>&1
 else
-    dnf -y -q install /pkgs/*.rpm xterm xorg-x11-server-Xvfb ImageMagick pulseaudio-libs \
+    dnf -y -q install /pkgs/*.rpm xterm xorg-x11-server-Xvfb ImageMagick xdotool pulseaudio-libs \
         xorg-x11-xinit xz procps-ng > /out/install.log 2>&1
 fi
 check "the packages install" '[ -x /usr/sbin/xrdp ] && [ -x /usr/sbin/xrdp-sesman ]'
@@ -130,6 +130,28 @@ check "the session runs its xterm" 'pgrep -u tester xterm > /dev/null'
 check "the client shows more than one colour" \
     '[ "$(convert /out/screen.png -format "%k" info: 2> /dev/null)" -gt 1 ]'
 
+# Without GFX, xrdp sends legacy bitmap updates, each bitmap padded to a multiple of 4
+# pixels while its rectangle keeps its own width. FreeRDP master 343f23134 (#13884)
+# refused that and dropped the session ("Invalid BITMAP_DATA", fixed by
+# update-bitmap-padded-width), which these tests missed: with GFX nothing is legacy,
+# and a screen that does not change sends nothing narrow. So: the same session again,
+# GFX off, and typing in its xterm, whose characters and cursor make narrow updates
+# typed: types into the client's window on :9 (no window manager there: focus it first)
+typed() {
+    DISPLAY=:9 xdotool search --name "^FreeRDP" windowfocus --sync > /dev/null 2>&1
+    DISPLAY=:9 xdotool type --delay 150 "$1"
+}
+echo "== legacy bitmaps (/bpp:24 without /gfx, as xrdp's sway e2e)"
+kill $CLIENT 2> /dev/null; sleep 2
+DISPLAY=:9 "$client" /v:127.0.0.1 /u:tester /p:kit-test-pw /cert:ignore /size:1024x768 /bpp:24 \
+    > /out/client-bitmap.log 2>&1 &
+CLIENT=$!
+sleep 12
+typed "echo narrow bitmap updates"
+sleep 8
+check "without GFX (legacy bitmaps, padded by xrdp) the client stays connected while typing" \
+    'kill -0 $CLIENT && ! grep -q "Invalid BITMAP_DATA" /out/client-bitmap.log'
+
 # The Wayland session (wlup): sway, headless, for a second user,
 # picked with autorun; /bpp:24, because at 32 xrdp sends planar, which
 # FreeRDP cannot resize
@@ -160,9 +182,12 @@ elif ls /usr/lib*/xrdp/libwlup.so > /dev/null 2>&1; then
     DISPLAY=:9 "$client" /v:127.0.0.1 /u:wayuser /p:kit-test-pw /cert:ignore /size:1024x768 \
         /bpp:24 > /out/client-wayland.log 2>&1 &
     CLIENT=$!
-    sleep 20
+    sleep 14
+    typed "echo narrow"   # /bpp:24 without GFX: legacy bitmaps, as above
+    sleep 6
     DISPLAY=:9 import -window root /out/screen-wayland.png 2> /dev/null
-    check "the Wayland client is still connected" 'kill -0 $CLIENT'
+    check "the Wayland client is still connected (after typing; legacy bitmaps)" \
+        'kill -0 $CLIENT && ! grep -q "Invalid BITMAP_DATA" /out/client-wayland.log'
     check "sesman started sway for wayuser" 'pgrep -u wayuser -x sway > /dev/null'
     check "wlup captures sway's output at the client's 1024x768" \
         'grep -q "wlup: capture buffer 1024x768" /var/log/xrdp.log'
