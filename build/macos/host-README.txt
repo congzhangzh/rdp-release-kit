@@ -38,7 +38,8 @@ Remove it with
 Connect
 -------
 
-The login is the macOS account running it (your own). Keep the server on 127.0.0.1 as
+The login is the macOS account running it (your own), checked by macOS (PAM) over TLS
+security (/sec:tls in the plist; keep it there). Keep the server on 127.0.0.1 as
 above and reach it through SSH (System Settings > General > Sharing > Remote Login):
 
   ssh -L 13389:127.0.0.1:3389 <user>@<this Mac>

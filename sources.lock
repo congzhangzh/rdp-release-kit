@@ -51,7 +51,7 @@ freerdp_host 20261031.8 git+https://github.com/congzhangzh/FreeRDP.git          
 # being written: freerdp-d0's feature-shadow-mac (ScreenCaptureKit capture,
 # Quartz input) on the fork, built here to see that it compiles; a release of
 # integration-shadow-mac (with AV2 and the shadow sound fixes) replaces it
-freerdp_mac_host dev.760da467 git+https://github.com/congzhangzh/FreeRDP.git                                  760da4678bcf42f3a73a9ab43ab4d43c7add43db
+freerdp_mac_host dev.1038d75e git+https://github.com/congzhangzh/FreeRDP.git                                  1038d75ed76126ab66ac464cfa0964cfde42681f
 sdl3        3.4.18   https://github.com/libsdl-org/SDL/releases/download/release-3.4.18/SDL3-3.4.18.tar.gz        9c75cf16330322c217dedd2e0609f1124f1b54b8633e763467b4684d0f4334a3
 sdl3_ttf    3.2.2    https://github.com/libsdl-org/SDL_ttf/releases/download/release-3.2.2/SDL3_ttf-3.2.2.tar.gz   63547d58d0185c833213885b635a2c0548201cc8f301e6587c0be1a67e1e045d
 freetype    2.15.0   https://download.savannah.gnu.org/releases/freetype/freetype-2.15.0.tar.xz                   93cd47eb719c325107f2d3cf087d06299e944c3b48a40b55537302304dea1dd5
