@@ -25,5 +25,8 @@
   ],
   "windows-host": [
     "windows-host"
+  ],
+  "windows-rdp": [
+    "windows-rdp"
   ]
 }

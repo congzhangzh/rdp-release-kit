@@ -350,25 +350,88 @@ Add-Type -Namespace Kit -Name Esc -MemberDefinition '[DllImport("user32.dll")] p
 (New-Object -ComObject Shell.Application).MinimizeAll()
 Check "demo: a video of the web client on this host" ((Test-Path "$Out\windows-host.mp4") -and (Test-Path "$Out\windows-host.jpg")) `
     "$(if (Test-Path "$Out\windows-host.mp4") { '{0:N1} MB' -f ((Get-Item "$Out\windows-host.mp4").Length / 1MB) })"
+# the shadow server's sound: what this PC plays (WASAPI loopback, the Scream card above),
+# sent over rdpsnd; the video's last 30 s show the web video, so they must be heard, as
+# record-demos.sh requires of the Linux demos (above -50 dB; silence is about -91)
+$hostPeak = $null
+if (Test-Path "$demo\raw.mp4") {
+    $vd = (& ffmpeg -hide_banner -sseof -30 -i "$demo\raw.mp4" -map 0:a -af volumedetect -f null - 2>&1) -join "`n"
+    if ($vd -match "max_volume: (-?[0-9.]+) dB") { $hostPeak = [double]$Matches[1] }
+}
+$capture = ([regex]::Matches((ServerLog), "audio: [^\r\n]*") | ForEach-Object Value | Select-Object -Unique) -join " | "
+Check "sound: the shadow server captures what this PC plays" ((ServerLog) -match "audio: capturing what the default render endpoint plays") $capture
+Check "sound: the web client hears the Windows PC (rdpsnd)" ($null -ne $hostPeak -and $hostPeak -gt -50) `
+    "peak $(if ($null -ne $hostPeak) { "$hostPeak dB" } else { 'none' })"
 
-# the second video: freerdp-tk from the client's zip, to Windows' own Remote Desktop here
+# Windows' own Remote Desktop on this PC, for the next two videos (FreeRDP Web, then
+# freerdp-tk, each in a session of its own for the test user at 127.0.0.2): allowed for
+# the user, its sound (the session's Remote Audio needs the audio service, started
+# above), and the user's profile made now, so no video shows Windows' first sign-in
+Set-ItemProperty "HKLM:\System\CurrentControlSet\Control\Terminal Server" fDenyTSConnections 0
+Add-LocalGroupMember -Group "Remote Desktop Users" -Member $user -ErrorAction SilentlyContinue
+$cred = New-Object PSCredential $user, (ConvertTo-SecureString $pass -AsPlainText -Force)
+Start-Process cmd -Credential $cred -LoadUserProfile -ArgumentList "/c", "exit" -Wait -WindowStyle Hidden
+Check "rdp: Windows' own Remote Desktop listens on 3389, the user's profile is made" ((Listening 3389) -and (Test-Path "C:\Users\$user"))
+function SignOut {   # the test user's Remote Desktop session, and what it left running
+    Get-Process notepad, firefox -IncludeUserName -ErrorAction SilentlyContinue | Where-Object { $_.UserName -like "*\$user" } |
+        Stop-Process -Force -ErrorAction SilentlyContinue
+    (quser 2>$null) -match "^\s*>?$user\s" | ForEach-Object {
+        $id = ($_ -split "\s+" | Where-Object { $_ -match "^\d+$" })[0]; if ($id) { logoff $id } }
+    Start-Sleep -Seconds 3
+}
+
+# the second video: FreeRDP Web to Windows' own Remote Desktop, through a websockify of
+# its own (127.0.0.1:3391 to 127.0.0.2:3389); its sound comes through the session
+if ($site) {
+    $rdemo = "$Out\demo-rdp"
+    New-Item -ItemType Directory -Force -Path $rdemo | Out-Null
+    $rgw = Start-Process -FilePath python -PassThru -NoNewWindow -RedirectStandardOutput "$rdemo\websockify.log" `
+        -RedirectStandardError "$rdemo\websockify.err" -ArgumentList "-m", "websockify", "127.0.0.1:3391", "127.0.0.2:3389"
+    for ($i = 0; $i -lt 20 -and -not (Listening 3391); $i++) { Start-Sleep -Seconds 1 }
+    $env:SERVER = "windows-rdp"
+    & node "$KitTest\wasm-demo.mjs" "http://127.0.0.1:8080/index.html" "127.0.0.1:3391" $user $pass $rdemo "$rdemo\raw.mp4" 2>&1 |
+        Tee-Object "$rdemo\driver.log"
+    Remove-Item Env:\SERVER
+    $peak = "none"
+    if (Test-Path "$rdemo\raw.mp4") {
+        $len = [double](& ffprobe -v error -show_entries format=duration -of csv=p=0 "$rdemo\raw.mp4")
+        & ffmpeg -v error -y -i "$rdemo\raw.mp4" -vf "scale=1280:720:flags=lanczos,format=yuv420p" -c:v libx264 -crf 28 `
+            -preset slow -c:a aac -b:a 96k -movflags +faststart "$Out\windows-rdp.mp4"
+        & ffmpeg -v error -y -ss ("{0:F1}" -f ($len * 0.7)) -i "$rdemo\raw.mp4" -frames:v 1 `
+            -vf "scale=1280:720:flags=lanczos" -q:v 4 "$Out\windows-rdp.jpg"
+        # the last 30 s show the web video: its sound, as record-demos.sh measures it
+        $vd = (& ffmpeg -hide_banner -sseof -30 -i "$rdemo\raw.mp4" -map 0:a -af volumedetect -f null - 2>&1) -join "`n"
+        if ($vd -match "max_volume: (-?[0-9.]+) dB") { $peak = "$($Matches[1]) dB" }
+    }
+    Stop $rgw
+    SignOut
+    Check "demo: FreeRDP Web to Windows' own Remote Desktop, a video" ((Test-Path "$Out\windows-rdp.mp4") -and (Test-Path "$Out\windows-rdp.jpg")) `
+        "$(if (Test-Path "$Out\windows-rdp.mp4") { '{0:N1} MB' -f ((Get-Item "$Out\windows-rdp.mp4").Length / 1MB) }); sound peak $peak"
+    (New-Object -ComObject Shell.Application).MinimizeAll()
+}
+
+# the third video: freerdp-tk from the client's zip, to Windows' own Remote Desktop here
 if ($ClientZip -and $site) {
     & "$KitTest\client-demo\windows.ps1" $ClientZip $user $pass $Out 2>&1 | Tee-Object "$Out\tk-demo.log"
     $sound = (Get-Content "$Out\tk-demo\winrec.log" -Raw -ErrorAction SilentlyContinue) -replace "\s+", " "
     Check "demo: freerdp-tk to Windows' own Remote Desktop, a video" ((Test-Path "$Out\freerdp-tk-windows.mp4") -and (Test-Path "$Out\freerdp-tk-windows.jpg")) `
         "$(if (Test-Path "$Out\freerdp-tk-windows.mp4") { '{0:N1} MB' -f ((Get-Item "$Out\freerdp-tk-windows.mp4").Length / 1MB) }); $sound"
+    SignOut
     (New-Object -ComObject Shell.Application).MinimizeAll()
 }
 Stop $site
 Stop $gw; Stop $http
 
 # the native client: an AV1 session, Ctrl+Alt+Del, the lock screen
-$session = Client @("/p:$pass", "/gfx:AV1:on", "/size:1280x720") "session" 0 -Window
+$session = Client @("/p:$pass", "/gfx:AV1:on", "/size:1280x720", "/sound") "session" 0 -Window
 Start-Sleep -Seconds 15
 Shot "desktop"
 Check "native: an AV1 session holds 15 s" (-not $session.HasExited)
 $codecs = Codecs "session"
 Check "native: the frames came in AV1" (($codecs -join " ") -match "RDPGFX_CODECID_AV1") ($codecs -join ", ")
+# its sound channel (a report: the desktop plays nothing now, so no samples need come)
+"native rdpsnd: " + ((Select-String -Path "$Out\session.wlog" -Pattern "rdpsnd" -ErrorAction SilentlyContinue |
+    Select-Object -First 12 | ForEach-Object { $_.Line }) -join " | ") | Out-File -Append "$Out\notes.txt"
 
 # Ctrl+Alt+Del typed into the client's window: three ordinary keys there,
 # which the client sends to the server

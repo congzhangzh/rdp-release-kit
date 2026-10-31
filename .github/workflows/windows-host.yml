@@ -140,6 +140,8 @@ jobs:
           path: |
             out/windows-host.mp4
             out/windows-host.jpg
+            out/windows-rdp.mp4
+            out/windows-rdp.jpg
             out/freerdp-tk-windows.mp4
             out/freerdp-tk-windows.jpg
           if-no-files-found: error

@@ -33,10 +33,16 @@ const XRDP_GNOME = process.env.SERVER === "xrdp-gnome";
 const XRDP_KDE = process.env.SERVER === "xrdp-kde";   // KDE Plasma through the xrdp preview, in AV1
 const GNOME = process.env.SERVER === "gnome" || XRDP_GNOME;
 // windows: the Windows host (FreeRDP's shadow server) on a Windows runner, the
-// gateway websockify on the same PC (test/windows-host.ps1); CHROME=<binary>
+// gateway websockify on the same PC (test/windows-host.ps1); CHROME=<binary>.
+// windows-rdp: Windows Server's own Remote Desktop on that PC (a session of its own
+// for the test user, at 127.0.0.2), the same gateway; it sends sound, the shadow
+// server does not yet. Both work Windows alike (WINDOWS_ANY): Win+R, then webdemo.
 const WINDOWS = process.env.SERVER === "windows";
+const WINDOWS_RDP = process.env.SERVER === "windows-rdp";
+const WINDOWS_ANY = WINDOWS || WINDOWS_RDP;
 const LABEL = process.env.DEMO_LABEL ||
   (WINDOWS ? "FreeRDP shadow server on Windows, AV1"
+    : WINDOWS_RDP ? "Windows Server 2025's own Remote Desktop"
     : XRDP_GNOME ? "xrdp preview + GNOME 51 Wayland, AV1"
     : XRDP_KDE ? "xrdp preview + KDE Plasma 6 Wayland, AV1"
     : GNOME ? "gnome-remote-desktop + GNOME Wayland" : "xrdp + Xfce");
@@ -220,7 +226,7 @@ await sleep(600);
 await caption("FreeRDP Web: an RDP client that runs in the browser");
 await sleep(2600);
 await moveTo(...Object.values(await center("#route .hops")), 900);
-await caption(WINDOWS ? "Your RDP server stays on 127.0.0.1. The page reaches it through a gateway."
+await caption(WINDOWS_ANY ? "Your RDP server stays on 127.0.0.1. The page reaches it through a gateway."
   : "Your RDP server stays on 127.0.0.1. The page reaches it through SSH.");
 await sleep(3200);
 await moveTo(...Object.values(await center("#copyCmd")), 800);
@@ -251,8 +257,9 @@ const audioStart = await ev("window.__demoRecord ? window.__demoRecord() : 0"); 
 let rx = 0;
 for (let i = 0; i < 80 && rx < 300000; i++) { await sleep(500); rx = await ev("window.freerdpNet?.rx ?? 0"); }
 await caption(WINDOWS ? "This Windows PC's own screen, shared by FreeRDP's shadow server, in AV1"
+  : WINDOWS_RDP ? "Windows Server's own Remote Desktop: a session of its own, in the browser"
   : "The remote Linux desktop, over WebSocket and SSH");
-await sleep(7000);   // the desktop starts, then its terminal
+await sleep(WINDOWS_RDP ? 12000 : 7000);   // the desktop starts (Windows: the user's sign-in), then its terminal
 // newer pages offer, a few seconds after the login, to keep the password in
 // the passkey vault: answered as a user would, so it does not cover the desktop
 for (let i = 0; i < 30; i++) {
@@ -280,7 +287,7 @@ if (GNOME) {   // GNOME starts in the overview: typing searches, Enter starts th
   // typing goes to the overview's search; Fedora's terminal is Ptyxis, Debian's Console
   await typeRemote(XRDP_GNOME ? "terminal\n" : "console\n");
   await sleep(4000);
-} else if (WINDOWS) {   // Win+R opens Run: a name and Enter start the program at once
+} else if (WINDOWS_ANY) {   // Win+R opens Run: a name and Enter start the program at once
   await ev("document.getElementById('canvas').focus(), true");
   await caption("Windows: Win+R, a name, Enter");
   await sleep(1200);
@@ -302,7 +309,7 @@ if (GNOME) {   // GNOME starts in the overview: typing searches, Enter starts th
 }
 await caption("Keyboard and mouse go to the remote desktop");
 await sleep(600);
-if (WINDOWS) {
+if (WINDOWS_ANY) {
   await typeRemote("hello from the browser through freerdp web\n");   // key(): lower case only
   await sleep(2400);
 } else {
@@ -326,17 +333,19 @@ writeFileSync(join(out, "page.log"),
   (await ev("document.getElementById('log')?.textContent ?? ''")) + "\n--- console ---\n" + logs.join("\n"));
 
 // 6. web video with sound and WebGL, in Firefox on the server, started by typing "webdemo"
-// (Windows: "webdemo" from Run, test/windows-host.ps1 puts it there; the shadow server
-// sends no sound, so the captions claim none)
-if (WINDOWS) {
-  await caption("Web video and WebGL: Firefox on the Windows PC");
+// (Windows: "webdemo" from Run, test/windows-host.ps1 puts it there; the shadow server's
+// sound is what the PC plays, WASAPI loopback; Windows' own Remote Desktop sends its own)
+if (WINDOWS_ANY) {
+  await caption(WINDOWS_RDP ? "Web video with sound, and WebGL: Firefox in the Windows session"
+    : "Web video with sound, and WebGL: Firefox on the Windows PC");
   await chordRemote("r");
   await sleep(1500);
   await typeRemote("webdemo\n");
   await sleep(14000);
   await caption("Big Buck Bunny, © Blender Foundation, CC BY 3.0 · WebGL Aquarium, © Google, BSD");
   await sleep(8000);
-  await caption("Drawn on the Windows PC, streamed to this browser in AV1");
+  await caption(WINDOWS_RDP ? "Drawn by Windows Server, streamed to this browser, sound included"
+    : "Drawn on the Windows PC, streamed to this browser in AV1, sound included");
   await sleep(6000);
 } else {
   await caption("Web video with sound, and WebGL: Firefox on the server");

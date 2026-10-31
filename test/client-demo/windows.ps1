@@ -23,17 +23,9 @@ New-Item -ItemType Directory -Force -Path $work | Out-Null
 function Say($what) { "$(Get-Date -Format HH:mm:ss) $what" | Tee-Object -FilePath "$work\run.log" -Append }
 function Hands { & python "$here\hook\wininput.py" @args 2>&1 | ForEach-Object { Say "wininput: $_" } }
 
-# Windows' own Remote Desktop for the user: allowed, and its sound (the session's
-# Remote Audio needs the audio service, which Windows Server leaves stopped)
-Set-ItemProperty "HKLM:\System\CurrentControlSet\Control\Terminal Server" fDenyTSConnections 0
-Add-LocalGroupMember -Group "Remote Desktop Users" -Member $User -ErrorAction SilentlyContinue
-Set-Service Audiosrv -StartupType Automatic -ErrorAction SilentlyContinue
-Start-Service Audiosrv -ErrorAction SilentlyContinue
-Say "Audiosrv: $((Get-Service Audiosrv).Status)"
-# the user's profile made now, so the demo's sign-in is not Windows' first-sign-in setup
-$cred = New-Object PSCredential $User, (ConvertTo-SecureString $Pass -AsPlainText -Force)
-Start-Process cmd -Credential $cred -LoadUserProfile -ArgumentList "/c", "exit" -Wait -WindowStyle Hidden
-Say "profile: $(Test-Path "C:\Users\$User")"
+# (windows-host.ps1 has opened Windows' own Remote Desktop to the user, started the
+# audio service and made the user's profile)
+Say "Audiosrv: $((Get-Service Audiosrv).Status); profile: $(Test-Path "C:\Users\$User")"
 & python -m pip install --quiet soundcard numpy 2>&1 | Out-File "$work\pip.log"
 
 # the user's folder with the zip, and a PowerShell window there

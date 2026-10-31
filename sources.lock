@@ -23,14 +23,16 @@
 # browser
 freerdp     20261030.6 git+https://github.com/congzhangzh/FreeRDP.git                                        3814e44b9a1bd611641a940f14cc87869726f930
 # FreeRDP for the Windows host (freerdp-shadow-cli, freerdp-shadow-service),
-# not for the clients: our release-20261030.4, picked from the fork's
-# integration-shadow-win, FreeRDP master 472f1901f (2026-10-30) plus our pull
+# not for the clients: our release-20261030.7, picked from the fork's
+# integration-shadow-win, FreeRDP master 2a508c725 (2026-10-31) plus our pull
 # requests for the Windows shadow server: two build fixes (#13931, #13932),
 # DXGI capture that follows the secure desktop (#13933), the service with
 # Ctrl+Alt+Del (#13934) and a Unix-socket listener on Windows (#13935); .2: a
 # client gets the whole screen at once on a desktop that does not change; .4:
-# AV2 too (FreeRDP#13925's 5 commits, the shadow server's AV2 among them)
-freerdp_host 20261030.4 git+https://github.com/congzhangzh/FreeRDP.git                                       7ee083d799cf5b5b06bff19a559e4a8b3df220d4
+# AV2 too (FreeRDP#13925's 5 commits, the shadow server's AV2 among them); .7:
+# master with #13931 and #13932 merged, and sound (freerdp-59's: WASAPI loopback
+# of the default playback device, Opus or PCM to the client)
+freerdp_host 20261030.7 git+https://github.com/congzhangzh/FreeRDP.git                                       f21401f506142d14a126e0467998789baf76f107
 sdl3        3.4.18   https://github.com/libsdl-org/SDL/releases/download/release-3.4.18/SDL3-3.4.18.tar.gz        9c75cf16330322c217dedd2e0609f1124f1b54b8633e763467b4684d0f4334a3
 sdl3_ttf    3.2.2    https://github.com/libsdl-org/SDL_ttf/releases/download/release-3.2.2/SDL3_ttf-3.2.2.tar.gz   63547d58d0185c833213885b635a2c0548201cc8f301e6587c0be1a67e1e045d
 freetype    2.15.0   https://download.savannah.gnu.org/releases/freetype/freetype-2.15.0.tar.xz                   93cd47eb719c325107f2d3cf087d06299e944c3b48a40b55537302304dea1dd5

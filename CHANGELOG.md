@@ -84,6 +84,20 @@ toolchain) gets an entry here in the same commit.
   (`hook/wininput.py`). ffmpeg records the screen (gdigrab), `winrec.py` the speakers
   (WASAPI loopback; a runner without a sound device gives a silent video), muxed at the
   measured offset. It joins Get a client's freerdp-tk videos (demo.json's `clients`).
+- **FreeRDP Web to Windows' own Remote Desktop, a video** (聪哥: "freerdp-tk and
+  freerdp-web to the Windows server"). `test/windows-host.ps1` opens Windows Server's own
+  Remote Desktop to the test user (Remote Desktop Users, its profile made first), and the
+  web client reaches it through a websockify of its own (127.0.0.1:3391 to 127.0.0.2:3389):
+  a session of its own, Notepad and `webdemo` from Win+R, its sound through the session
+  (the last 30 s' peak reported). `wasm-demo.mjs`: `SERVER=windows-rdp`. It joins the
+  Windows section of Get a server and the intro (`#windows-rdp`). Nothing installed on
+  Windows: Windows' own server, FreeRDP Web in the browser.
+- **`freerdp_host` `20261030.7`** (`f21401f50`, freerdp-59's): the Windows shadow server
+  sends sound, what the PC plays (WASAPI loopback of the default playback device, Opus or
+  PCM to the client); integration-shadow-win rebuilt on master 2a508c725, where #13931 and
+  #13932 are merged. `test/windows-host.ps1` checks the server's word that it captures, and
+  that the web client hears the Windows PC (the shadow host video's last 30 s above
+  -50 dB); the native client asks for `/sound` too.
 - **Sound on the Windows runner**: it has no sound card, so `test/windows-host.ps1`
   installs Scream (a virtual one, github.com/duncanthrax/scream 4.0, MS-PL, pinned by its
   SHA-256; its signer trusted first, so Windows installs it without asking, as CI audio
