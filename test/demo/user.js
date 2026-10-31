@@ -22,3 +22,8 @@ user_pref("browser.newtabpage.activity-stream.feeds.topsites", false);
 user_pref("browser.translations.automaticallyPopup", false);
 user_pref("browser.tabs.warnOnClose", false);
 user_pref("media.autoplay.default", 0);   // the video starts with its sound
+// newer Firefox (the Windows runner's) opens on a "Welcome to Firefox" terms-of-use dialog
+// over the page, in front of the video and the Aquarium (run 41182102583): skipped
+user_pref("termsofuse.bypassNotification", true);
+user_pref("datareporting.policy.dataSubmissionPolicyBypassNotification", true);
+user_pref("browser.preonboarding.enabled", false);

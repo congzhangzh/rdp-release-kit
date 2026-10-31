@@ -93,6 +93,8 @@ toolchain) gets an entry here in the same commit.
   (`hook/wininput.py`). ffmpeg records the screen (gdigrab), `winrec.py` the speakers
   (WASAPI loopback; a runner without a sound device gives a silent video), muxed at the
   measured offset. It joins Get a client's freerdp-tk videos (demo.json's `clients`).
+- **The demos' Firefox skips its terms-of-use dialog** (`test/demo/user.js`): newer Firefox,
+  the Windows runner's, opened on "Welcome to Firefox" in front of the video and the Aquarium.
 - **Windows' own Remote Desktop takes TLS 1.2 from our clients, not 1.3** (run 41176456545:
   the native client's `/auth-only` against Windows Server 2025's own server failed by default
   and with `/tls:enforce:1.3`, and passed with `/tls:enforce:1.2`; the page got "tlsv1 alert
