@@ -47,15 +47,22 @@ says who owns it, what it waits on, and where it lives.
 - **Sound on the Windows runner** can't be tested (no playback device; Scream's driver
   won't install unattended). It's proven by hand on a Windows 11 PC (−12.0 dBFS, 321
   packets in 16 s) and by 聪哥's own test.
-- **The browser demo against the Windows host got no picture with the web client from
-  `freerdp 20261031.3`**: kit runs 41192237422, 41208207833 and its rerun, while
-  41196854812 and 41199723802 passed with `d7f066be3` (now `20261031.7`). The server
-  negotiates AV1, then captures almost nothing; the page decodes 0 frames until the
-  connection drops after 5 minutes ("BIO_read retries exceeded"), and the 20-minute
-  recording then runs into the job's 45-minute limit. 🔎 `.3`'s TLS 1.2 retry commit is
-  the likeliest difference (`.7` dropped it). The second safe point ships `.7`; if the stall
-  comes back with it, look further. To do either way: the demo stops after a minute with no
-  frame, so a stall costs minutes, not the job.
+- **The Windows test's recorder sometimes runs far too long**: in kit run 41208207833 (first
+  attempt) the web demo against the Windows host recorded for 2088 s instead of minutes, and
+  the job hit its 45-minute limit; FreeRDP was fine (the page showed the demo, then a normal
+  Disconnect). The rerun passed that demo. My earlier reading ("client `.3` stalls") was
+  wrong: I had read the first attempt's artifact twice, and "AV1 frames 0" in the page's
+  info panel shows in passing runs too (that counter looks broken). To do: cap the
+  recording's length, and have the demo stop after a minute with no frame.
+- **The SDL3 clients read freed memory for each connection dialog message** (garbled
+  "����ection is being established" in client `.7`'s page log; upstream master d5d230ddd's
+  `auto&` on a popped queue item; `sdlClip::ClipDataCb()` too). Fixed by freerdp-59 as
+  FreeRDP#13961 (ASan: 4/4 use-after-free before, 0/4 after), in integration-latest's parts:
+  the next client pick carries it.
+- **The Windows test's flaky parts** (run 41208207833, second attempt): the page against
+  Windows' own Remote Desktop came up without cross-origin isolation (the service worker's
+  reload); the Ctrl+Alt+Del checks failed once ("the service sent the secure attention
+  sequence"), after passing in every earlier round. Watch whether they come back.
 - **The ARM builder image** sometimes fails on the Rocky/EPEL mirror (`dnf`, 3 tries), and
   then xrdp and the screens tests skip. Rerun the failed jobs.
 - **This machine** is short of memory (about 2 GB free), and Claude Code stops background
