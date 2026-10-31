@@ -47,8 +47,9 @@ toolchain) gets an entry here in the same commit.
   says SKIP there. Rebuilt on master dae0390a4; the 1601 x 901 fix is FreeRDP#13956.
 - **A new product: the macOS host** (聪哥: "make it possible", freerdp-d0's work).
   `freerdp-host-<version>-macos-<arch>.zip`: FreeRDP's shadow server as FreeRDP-Shadow.app
-  (bundle id org.freerdp.shadow, so macOS keeps its Screen & System Audio Recording and
-  Accessibility permissions across updates), a LaunchAgent that starts it in your session at
+  (bundle id org.freerdp.shadow; signed ad hoc, so each update asks for Screen & System
+  Audio Recording and Accessibility again, as freerdp-d0 measured: an ad hoc signature's
+  designated requirement is the build's own hash, a stable one needs a signing identity), a LaunchAgent that starts it in your session at
   login (`/sec:tls`: logins are the Mac's own), and a README. **`freerdp_mac_host`
   `20261031.4`** (`920d496f4`): ScreenCaptureKit capture of every display and of the sound
   the Mac plays, Quartz input, the cursor drawn by the client, capture again after the

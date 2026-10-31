@@ -14,9 +14,9 @@
 # HOST=1 builds the macOS host instead: FreeRDP's shadow server
 # (ScreenCaptureKit capture, AV1 with libaom, AV2 with libavm, the sound the
 # Mac plays) from freerdp_mac_host, our FreeRDP release with the macOS
-# shadow work, as an app: FreeRDP-Shadow.app with a fixed bundle id, so
-# macOS keeps its Screen Recording and Accessibility permissions across
-# updates (TCC grants them to a code identity), a LaunchAgent that starts it
+# shadow work, as an app: FreeRDP-Shadow.app with a fixed bundle id, signed ad
+# hoc (so macOS grants Screen Recording and Accessibility to each build anew: an
+# ad hoc signature's identity is the build's hash), a LaunchAgent that starts it
 # in the user's session at login, and a README
 # (freerdp-host-<version>-macos-<arch>.zip).
 set -Eeuo pipefail
@@ -225,7 +225,8 @@ if [ -n "${HOST:-}" ]; then
         "$KIT/build/macos/host-Info.plist" > "$APP/Contents/Info.plist"
     cp "$KIT/build/macos/org.freerdp.shadow.plist" "$KIT/build/macos/host-README.txt" "$PKG/"
     mv "$PKG/host-README.txt" "$PKG/README.txt"
-    # the bundle id is the code identity TCC remembers (ad hoc, no certificate)
+    # ad hoc: TCC knows this build by its hash, so an update asks again (a stable
+    # identity needs a signing certificate)
     codesign --force --sign - "$PKG/winpr-hash"
     codesign --force --sign - --identifier org.freerdp.shadow "$APP"
     codesign --verify --strict "$APP"
