@@ -23,8 +23,11 @@
 # browser. 20261031.1: .6 plus freerdp-59's update-bitmap-padded-width, which
 # accepts xrdp's legacy bitmaps again (master 343f23134, #13884, dropped them)
 # 20261031.3: and NLA over TLS 1.2 again when a server (Windows Server 2025's own
-# Remote Desktop) refuses it over TLS 1.3 with an internal_error alert
-freerdp     20261031.3 git+https://github.com/congzhangzh/FreeRDP.git                                        99a0bd94cff68f39047040e4c8a2e02d91f81d66
+# Remote Desktop) refuses it over TLS 1.3 with an internal_error alert.
+# dev.d7f066be (being tested, for release-20261031.6): integration-latest rebuilt
+# on master dae0390a4 (the emscripten and SDL parts merged upstream), with the
+# bitmap fix and AV2, without the TLS retry (the LibreSSL patch covers the cause)
+freerdp     dev.d7f066be git+https://github.com/congzhangzh/FreeRDP.git                                       d7f066be3bbca560dd34a2639cdc0d0d8313fd80
 # FreeRDP for the Windows host (freerdp-shadow-cli, freerdp-shadow-service),
 # not for the clients: our release-20261030.7, picked from the fork's
 # integration-shadow-win, FreeRDP master 2a508c725 (2026-10-31) plus our pull
