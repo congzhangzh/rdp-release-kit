@@ -45,6 +45,13 @@ toolchain) gets an entry here in the same commit.
   -12 dBFS captured by the shadow server came out at -12.0 dBFS on the client, 321 packets
   in 16 s (before: 1, then silence). The runner has no sound card, so the kit's test still
   says SKIP there. Rebuilt on master dae0390a4; the 1601 x 901 fix is FreeRDP#13956.
+- **`freerdp_mac_host` `20261031.10`** (`fc2c32540`, freerdp-d0's, from integration-shadow-mac,
+  in place of `20261031.4`): the extended keys reach the Mac: both Command keys (so ⌘C and ⌘V),
+  the arrows, Home/End, PgUp/PgDn, Forward Delete, keypad Enter and right Option/Ctrl
+  (`mac_shadow.c` looked up the Apple key code without KBDEXT; the X11 shadow ORs it in).
+  Also rdpsnd's server no longer pads Opus waves (#13952), and `-sec-nla` turns EXT off too
+  (#13953). Tested on the Mac: it builds with no warnings, and a client connected and saw the
+  screen; the full key run and the sound run are still to do (the Mac's ssh timed out).
 - **A new product: the macOS host** (聪哥: "make it possible", freerdp-d0's work).
   `freerdp-host-<version>-macos-<arch>.zip`: FreeRDP's shadow server as FreeRDP-Shadow.app
   (bundle id org.freerdp.shadow; signed ad hoc, so each update asks for Screen & System

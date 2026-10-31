@@ -47,19 +47,18 @@ freerdp     20261031.7 git+https://github.com/congzhangzh/FreeRDP.git           
 # 20261031.8: the keys a client leaves held are let go when it leaves or sends a
 # Synchronize (#13958; before, a client dropped mid-shortcut left Win/Alt down)
 freerdp_host 20261031.8 git+https://github.com/congzhangzh/FreeRDP.git                                       be82c8dc0e039b7cc28eac23045a162f141a9db6
-# FreeRDP for the macOS host (FreeRDP-Shadow.app, build-macos-client.sh HOST=1),
-# being written: freerdp-d0's feature-shadow-mac (ScreenCaptureKit capture,
-# Quartz input) on the fork, built here to see that it compiles; a release of
-# integration-shadow-mac (with AV2 and the shadow sound fixes) replaces it
-freerdp_mac_host dev.cd7e00d3 git+https://github.com/congzhangzh/FreeRDP.git                                  cd7e00d3e0852047706955972ba807fdeb6d8cbe
 # FreeRDP for the macOS host (FreeRDP-Shadow.app, build-macos-client.sh HOST=1):
 # freerdp-d0's release-20261031.4, picked from the fork's integration-shadow-mac,
 # FreeRDP master dae0390a4 plus the AV2 extension (#13925), the shadow server's
 # rdpsnd fixes (#13943) and feature-shadow-mac: the shadow server built on macOS
 # again, ScreenCaptureKit capture of every display with the sound the Mac plays
 # (Opus), Quartz input, the cursor drawn by the client, capture again after the
-# display sleeps; logins are the Mac's own (PAM, /sec:tls)
-freerdp_mac_host 20261031.4 git+https://github.com/congzhangzh/FreeRDP.git                                  920d496f465c5238e2389682fefe610296a7ac98
+# display sleeps; logins are the Mac's own (PAM, /sec:tls); 20261031.10: the
+# extended keys reach the Mac (arrows, Home/End, PgUp/PgDn, Forward Delete, both
+# Command keys, right Option/Ctrl: KBDEXT was missing from the Apple keycode
+# lookup), rdpsnd's server no longer pads Opus waves (#13952), and -sec-nla also
+# turns EXT off (#13953)
+freerdp_mac_host 20261031.10 git+https://github.com/congzhangzh/FreeRDP.git                                 fc2c32540e682ad08195e7ed4bd8aee969e80a81
 sdl3        3.4.18   https://github.com/libsdl-org/SDL/releases/download/release-3.4.18/SDL3-3.4.18.tar.gz        9c75cf16330322c217dedd2e0609f1124f1b54b8633e763467b4684d0f4334a3
 sdl3_ttf    3.2.2    https://github.com/libsdl-org/SDL_ttf/releases/download/release-3.2.2/SDL3_ttf-3.2.2.tar.gz   63547d58d0185c833213885b635a2c0548201cc8f301e6587c0be1a67e1e045d
 freetype    2.15.0   https://download.savannah.gnu.org/releases/freetype/freetype-2.15.0.tar.xz                   93cd47eb719c325107f2d3cf087d06299e944c3b48a40b55537302304dea1dd5
