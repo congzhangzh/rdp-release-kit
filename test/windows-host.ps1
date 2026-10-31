@@ -48,6 +48,15 @@ function Shot($name) {
         $bmp.Save("$Out\$name.png")
     } catch { "screenshot ${name}: $($_.Exception.Message)" | Out-File -Append "$Out\notes.txt" }
 }
+# memory: free and the biggest processes, at a few points (kit run 41192237422 ran out of
+# memory during the demo: ffmpeg "Cannot allocate memory", the page starved)
+function Memory($when) {
+    $os = Get-CimInstance Win32_OperatingSystem
+    "== memory $when $(Get-Date -Format HH:mm:ss): free {0:N1} of {1:N1} GB" -f ($os.FreePhysicalMemory / 1MB), ($os.TotalVisibleMemorySize / 1MB) |
+        Out-File -Append "$Out\memory.txt"
+    Get-Process | Sort-Object WorkingSet64 -Descending | Select-Object -First 8 Name, Id, @{n = "MB"; e = { [int]($_.WorkingSet64 / 1MB) } } |
+        Format-Table -AutoSize | Out-File -Append "$Out\memory.txt"
+}
 function Listening($p) { [bool](Get-NetTCPConnection -LocalPort $p -State Listen -ErrorAction SilentlyContinue) }
 function Stop($p) {
     if ($p -and -not $p.HasExited) { Stop-Process -Id $p.Id -Force }
@@ -316,11 +325,13 @@ Check "demo: webdemo ready (the media page on 127.0.0.1:8000, Firefox)" ($site -
 if (-not (Get-Command ffmpeg -ErrorAction SilentlyContinue)) {
     & choco install ffmpeg -y --no-progress 2>&1 | Out-File "$demo\choco.log"
 }
+Memory "before the host demo"
 $env:SERVER = "windows"
 $env:DEMO_SOUND = if ($playback) { "1" } else { "" }   # the captions claim sound only with a device
 & node "$KitTest\wasm-demo.mjs" "http://127.0.0.1:8080/index.html" "127.0.0.1:3390" $user $pass $demo "$demo\raw.mp4" 2>&1 |
     Tee-Object "$demo\driver.log"
 Remove-Item Env:\SERVER
+Memory "after the host demo"
 if (Test-Path "$demo\raw.mp4") {
     $len = [double](& ffprobe -v error -show_entries format=duration -of csv=p=0 "$demo\raw.mp4")
     & ffmpeg -v error -y -i "$demo\raw.mp4" -vf "scale=1280:720:flags=lanczos,format=yuv420p" -c:v libx264 -crf 28 `
@@ -395,6 +406,7 @@ if ($site) {
     $rgw = Start-Process -FilePath python -PassThru -NoNewWindow -RedirectStandardOutput "$rdemo\websockify.log" `
         -RedirectStandardError "$rdemo\websockify.err" -ArgumentList "-m", "websockify", "127.0.0.1:3391", "127.0.0.2:3389"
     for ($i = 0; $i -lt 20 -and -not (Listening 3391); $i++) { Start-Sleep -Seconds 1 }
+    Memory "before the Windows Remote Desktop demo"
     $env:SERVER = "windows-rdp"
     & node "$KitTest\wasm-demo.mjs" "http://127.0.0.1:8080/index.html" "127.0.0.1:3391" $user $pass $rdemo "$rdemo\raw.mp4" 2>&1 |
         Tee-Object "$rdemo\driver.log"
