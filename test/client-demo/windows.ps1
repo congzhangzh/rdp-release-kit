@@ -67,6 +67,7 @@ function UntilMark($mark, $seconds) {
 $ok = $false
 try {
     # as a user: look, unpack, start freerdp-tk; the hook goes next to it (as run.sh does)
+    Hands release
     Hands front "^PowerShell$"
     Hands type "dir"; Hands key Return
     Start-Sleep -Seconds 1.5

@@ -187,7 +187,7 @@ class WinInput:
 
 # For test/client-demo/windows.ps1, which types into its PowerShell window as
 # run.sh does with xdotool:
-#   python wininput.py click <x> <y> | type <text> | key <name>... | front <title regex>
+#   python wininput.py click <x> <y> | type <text> | key <name>... | front <title regex> | release
 #                      | place <title regex> <x> <y> <w> <h>
 if __name__ == "__main__":
     import sys
@@ -201,6 +201,18 @@ if __name__ == "__main__":
         io.type(args[0], 75).join()
     elif cmd == "key":
         io.key(*args).join()
+    elif cmd == "release":
+        # modifiers Windows thinks are held: the web demos before this one typed into the
+        # console through the shadow server (Win+R, Win+D), and after them nothing typed here
+        # arrived (kit run 41199723802); each one found is let go
+        held = []
+        for name, vk in (("LShift", 0xA0), ("RShift", 0xA1), ("LCtrl", 0xA2), ("RCtrl", 0xA3),
+                         ("LAlt", 0xA4), ("RAlt", 0xA5), ("LWin", 0x5B), ("RWin", 0x5C)):
+            if user32.GetAsyncKeyState(vk) & 0x8000:
+                held.append(name)
+                scan = user32.MapVirtualKeyW(vk, 0)
+                _send(_scan(scan, up=True, extended=vk in (0xA3, 0xA5, 0x5B, 0x5C)))
+        print("held: " + (", ".join(held) or "none"))
     elif cmd in ("front", "place"):
         hwnd = io.find(args[0])
         if not hwnd:
@@ -208,5 +220,9 @@ if __name__ == "__main__":
         if cmd == "place":
             user32.MoveWindow(hwnd, *map(int, args[1:5]), True)
         io.activate(hwnd)
+        if user32.GetForegroundWindow() != hwnd:   # said, so a lost focus shows in run.log
+            title = ctypes.create_unicode_buffer(200)
+            user32.GetWindowTextW(user32.GetForegroundWindow(), title, 200)
+            print(f"not in front; in front: {title.value!r}")
     else:
         sys.exit(f"wininput: {cmd}?")
