@@ -220,7 +220,13 @@ await send("Emulation.setDeviceMetricsOverride", { width: W, height: H, deviceSc
 // probe: 1.3 fails, "tlsv1 alert internal error"): until a client release fixes it, the
 // demo passes /tls:enforce:1.2 as a user would, in Extra options (the page's ?extra=)
 await send("Page.navigate", { url: WINDOWS_RDP ? url + (url.includes("?") ? "&" : "?") + "extra=" + encodeURIComponent("/tls:enforce:1.2") : url });
-if (!await load()) { console.log("the page did not get ready"); done(1); }
+if (!await load()) {
+  // why: isolation, the page's status line, and its console (kit run 41188821119 said only this)
+  console.log("the page did not get ready: isolated " + await ev("self.crossOriginIsolated") +
+    ", status " + JSON.stringify(await ev("document.getElementById('status')?.textContent ?? null")));
+  console.log(logs.slice(-15).join("\n"));
+  done(1);
+}
 await ev(`document.getElementById('host').value = ${JSON.stringify(gateway)}; true`);
 await record();
 await sleep(600);
