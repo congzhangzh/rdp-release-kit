@@ -94,6 +94,14 @@ $console = (Get-Process -Id $PID).SessionId
 "session of this job: $console" | Tee-Object -FilePath "$Out\where.txt" -Append
 (qwinsta 2>&1) | Out-File -Append "$Out\where.txt"
 Get-CimInstance Win32_OperatingSystem | Select-Object Caption, Version | Format-Table | Out-File -Append "$Out\where.txt"
+# sound, for a later audio backend (a report, not a check): the audio service, the sound
+# devices and the playback endpoints WASAPI loopback would capture
+"== sound" | Out-File -Append "$Out\where.txt"
+Get-Service Audiosrv, AudioEndpointBuilder -ErrorAction SilentlyContinue | Select-Object Name, Status, StartType |
+    Format-Table | Out-File -Append "$Out\where.txt"
+Get-CimInstance Win32_SoundDevice -ErrorAction SilentlyContinue | Select-Object Name, Status | Format-Table | Out-File -Append "$Out\where.txt"
+Get-PnpDevice -Class AudioEndpoint -ErrorAction SilentlyContinue | Select-Object FriendlyName, Status | Format-Table |
+    Out-File -Append "$Out\where.txt"
 # New-LocalUser: net user asks Y/N on stdin for a password over 14 characters
 try {
     New-LocalUser -Name $user -Password (ConvertTo-SecureString $pass -AsPlainText -Force) -PasswordNeverExpires | Out-Null
