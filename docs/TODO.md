@@ -30,6 +30,10 @@ says who owns it, what it waits on, and where it lives.
   released when it leaves and at a Synchronize, unless another client holds them); waits for
   its Windows test (pin 4). Owner: freerdp-59. The kit's test works around it (`wininput.py release`),
   and the host README says how to clear it by hand.
+- **A Windows reproduction of the stuck keys is still owed** (FreeRDP#13958 rests on the
+  code and the X11 A/B). freerdp-59 has scripts on the UTM VM. On the kit's runner it would
+  be: a client presses Win+Alt, then its process is killed (no disconnect PDU), then
+  GetAsyncKeyState(VK_LWIN) in the console session is read, with host `.6` against `.8`.
 - **TLS 1.3 to Windows' own Remote Desktop with LibreSSL**: its ClientHello leaves out
   `psk_key_exchange_modes`, and Schannel aborts. Reported as libressl/portable#1452 (a
   report, no code). The kit patches LibreSSL (`build/patches/libressl/`); drop the patch

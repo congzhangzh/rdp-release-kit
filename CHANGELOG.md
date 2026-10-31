@@ -23,7 +23,7 @@ toolchain) gets an entry here in the same commit.
   Synchronize (a client dropped mid-shortcut left Win or Alt down on the console; shown on the
   X11 shadow server, before and after). The host README drops its known-issue paragraph. The
   Windows test checks that no key is still held after its web demos; it never caught one with
-  `.6` either (the freerdp-tk demo's failures were a toast, see below), so on Windows it only
+  `.6` either (the freerdp-tk demo failed because a Windows toast held the foreground), so on Windows it only
   shows that `.8` doesn't regress.
 - **`avm` `20261031.2`** (`b132a0a6`, avm-6e's): two encoder thread races fixed (tile-packing
   counters, TMVP bands); bit-exact with `20261031.1` at 1 and 4 threads. The first race is why
