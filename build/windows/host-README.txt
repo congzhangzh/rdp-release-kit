@@ -23,13 +23,11 @@ Web), AV1 to the others. Smaller frames for the same picture, for more processor
 time on both sides: this PC encodes with libavm, and FreeRDP Web decodes in the
 page, in software. AV1 only: leave out /gfx-av2.
 
-H.264 goes to the clients without AV1 or AV2 that ask for AVC420 alone (an RDP 8.1
-client); this PC encodes it with Windows' own Media Foundation encoder, no OpenH264
-needed. -gfx-avc444 leaves AVC444 out for now, because its picture turns blocky with
-this FreeRDP. A modern client (Windows' own Remote Desktop client, RDP 10) then gets
-RemoteFX instead: correct, but heavier on a slow link, since FreeRDP's shadow server
-offers such a client no plain AVC420. Once FreeRDP's AVC444 fixes are in, AVC444 comes
-back on. On Windows Server the encoder may need the feature "Media Foundation"
+H.264 goes to the clients without AV1 or AV2 (Windows' own Remote Desktop client, most
+others) as AVC420: this PC encodes it with Windows' own Media Foundation encoder, no
+OpenH264 needed. -gfx-avc444 leaves AVC444 out for now, because its picture turned blocky
+with Media Foundation; the FreeRDP fixes for that are in, and AVC444 comes back once it
+is seen sharp. On Windows Server the encoder may need the feature "Media Foundation"
 (Install-WindowsFeature Server-Media-Foundation), though Server 2025 has it without.
 Graphics-card encoders are not tested yet.
 

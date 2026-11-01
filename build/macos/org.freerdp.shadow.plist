@@ -16,6 +16,9 @@
         <string>/sec:tls</string>
         <string>/gfx-av1</string>
         <string>/gfx-av2</string>
+        <!-- H.264 as AVC420 (FreeRDP 20261101.10 gives RDP 10 clients AVC420): AVC444 sent
+             15-18 times the bytes for the same screen (freerdp-bc's A/B, 2026-11-01) -->
+        <string>-gfx-avc444</string>
     </array>
     <key>RunAtLoad</key>          <true/>
     <key>KeepAlive</key>          <true/>
