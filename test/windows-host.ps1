@@ -249,13 +249,15 @@ Stop $gw; Stop $http
 Stop $server
 
 # H.264 (AVC420) from Windows' own Media Foundation encoder (FreeRDP#13970, no OpenH264):
-# the server started by hand with /gfx-avc420, a client that decodes H.264 through Media
-# Foundation asking for it (the build's test client; the kit's own Windows client has no
-# H.264). The server's log names the encoder, the client's the frames' codec
+# the server started by hand, a client that decodes H.264 through Media Foundation asking
+# for it (the build's test client; the kit's own Windows client has no H.264). The server
+# allows AV1, AVC420 and AVC444 by default (server/shadow/cli/shadow.c) and tries AV1 first,
+# and this client offers AV1 too: so AV1 and AVC444 off (run 41265999593 got AV1). The
+# server's log names the encoder, the client's the frames' codec
 if ($H264Client) {
     $env:WLOG_FILEAPPENDER_OUTPUT_FILE_NAME = "server-h264.wlog"
     $h264server = Start-Process -FilePath "$HostDir\freerdp-shadow-cli.exe" -PassThru -NoNewWindow `
-        -ArgumentList "/bind-address:127.0.0.1", "/port:4493", "/gfx-avc420"
+        -ArgumentList "/bind-address:127.0.0.1", "/port:4493", "/gfx-av1:off", "-gfx-avc444", "/gfx-avc420"
     for ($i = 0; $i -lt 30 -and -not (Listening 4493) -and -not $h264server.HasExited; $i++) { Start-Sleep -Seconds 1 }
     Check "h264: the server listens on 127.0.0.1:4493" (Listening 4493)
     $env:WLOG_FILEAPPENDER_OUTPUT_FILE_NAME = "h264-session.wlog"
@@ -270,6 +272,23 @@ if ($H264Client) {
     Check "h264: the server encodes with Media Foundation" ($null -ne $mf) $(if ($mf) { $mf.Matches[0].Value } else { "no encoder line" })
     Stop $h
     Stop $h264server
+    # AVC444, what Windows' own client asks for: not yet a check (its first run with the
+    # Media Foundation encoder), only noted, so a release does not wait on it
+    $env:WLOG_FILEAPPENDER_OUTPUT_FILE_NAME = "server-avc444.wlog"
+    $h444server = Start-Process -FilePath "$HostDir\freerdp-shadow-cli.exe" -PassThru -NoNewWindow `
+        -ArgumentList "/bind-address:127.0.0.1", "/port:4494", "/gfx-av1:off"
+    for ($i = 0; $i -lt 30 -and -not (Listening 4494) -and -not $h444server.HasExited; $i++) { Start-Sleep -Seconds 1 }
+    $env:WLOG_FILEAPPENDER_OUTPUT_FILE_NAME = "avc444-session.wlog"
+    $h4 = Start-Process -FilePath $H264Client -PassThru `
+        -ArgumentList "/v:127.0.0.1:4494", "/u:$user", "/p:$pass", "/cert:ignore", "/gfx:AVC444", "/size:1280x720"
+    Start-Sleep -Seconds 20
+    Shot "avc444"
+    $c444 = (Codecs "avc444-session") -join ", "
+    $note = "avc444 (not a check yet): session $(if ($h4.HasExited) { "ended, exit $($h4.ExitCode)" } else { 'held 20 s' }); frames: $(if ($c444) { $c444 } else { 'none' })"
+    Write-Output "INFO  $note"
+    $note | Out-File -Append "$Out\notes.txt"
+    Stop $h4
+    Stop $h444server
 } else {
     Write-Output "SKIP  h264: no H.264 test client given"
 }
@@ -573,5 +592,10 @@ Stop $session
 
 & "$HostDir\freerdp-shadow-service.exe" uninstall 2>&1 | Tee-Object -Append "$Out\install.txt"
 Remove-LocalUser -Name $user -ErrorAction SilentlyContinue
+# the AV1 encoder's own numbers (FreeRDP's shadow server logs them every 5 s per client:
+# frames, fps, encode ms avg/max, kbit/s), from every server log of this run, as a record
+Get-ChildItem $Out -Recurse -Include *.wlog, *.log -ErrorAction SilentlyContinue |
+    Select-String -Pattern "AV1 [0-9]+x[0-9]+ (I420|I444): [0-9]+ frames in .*" |
+    ForEach-Object { "$($_.Filename): $($_.Matches[0].Value)" } | Tee-Object "$Out\av1-stats.txt"
 Get-Content "$Out\checks.txt"
 if ($fails) { exit 1 }
