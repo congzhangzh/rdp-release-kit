@@ -16,7 +16,7 @@ start sessions of its own. The picture is encoded in AV1.
 Install the service (in an administrator's PowerShell, in this folder)
 -----------------------------------------------------------------------
 
-  .\freerdp-shadow-service.exe install --allow-sas -- /bind-address:127.0.0.1 /gfx-av1 /gfx-av2
+  .\freerdp-shadow-service.exe install --allow-sas -- /bind-address:127.0.0.1 /gfx-av1 /gfx-av2 -gfx-avc444
 
 AV2 goes to the clients that offer it (the kit's FreeRDP clients and FreeRDP
 Web), AV1 to the others. Smaller frames for the same picture, for more processor
@@ -25,11 +25,12 @@ page, in software. AV1 only: leave out /gfx-av2.
 
 H.264 goes to the clients without AV1 or AV2 (Windows' own Remote Desktop
 client, most others): this PC encodes it with Windows' own Media Foundation
-encoder, no OpenH264 needed. The server allows it by default (AVC420 and AVC444;
--gfx-avc444 leaves AVC444 out). On Windows Server it may need the feature "Media
-Foundation" (Install-WindowsFeature Server-Media-Foundation), though Server 2025
-has the encoder without it. Tested: AVC420 with a FreeRDP client; AVC444 and
-graphics-card encoders not yet.
+encoder, no OpenH264 needed. -gfx-avc444 keeps it to AVC420: the server would
+offer AVC444 by default, and Windows' own client takes it, but FreeRDP's AVC444
+needs an encoder that looks two pictures back, and with this one the picture
+turns blocky. AVC420 stays sharp. On Windows Server the encoder may need the
+feature "Media Foundation" (Install-WindowsFeature Server-Media-Foundation),
+though Server 2025 has it without. Graphics-card encoders are not tested yet.
 
 It starts at once and with Windows, on port 3389. If Windows' own Remote
 Desktop is turned on, it holds 3389 already: add /port:<another>, e.g. 3388. --allow-sas lets the service send

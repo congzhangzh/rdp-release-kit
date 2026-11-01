@@ -13,6 +13,7 @@ toolchain) gets an entry here in the same commit.
 
 ## 2026-11-01
 
+- **The Windows host leaves AVC444 out** (freerdp-71's finding, kit only): its install command (README, release notes) and the test's service now pass `-gfx-avc444`. The shadow server offers AVC444v2 to every RDP 10 client that doesn't refuse H.264 (`shadow_client.c:1001-1013`), so Windows' own Remote Desktop client got AVC444 from the Media Foundation encoder, and the `.13` round's `avc444.png` is blocky in the deeper levels where `h264.png` (AVC420) is sharp. FreeRDP's AVC444 sends luma and chroma pictures in turn, from one encoder: it needs one that predicts from two pictures back (as GNOME Remote Desktop's x264 does); OpenH264 makes every picture a keyframe there (11.6 Mbit/s against 0.42 for AVC420, freerdp-71's measurement). FreeRDP clients still get AV2 or AV1 first. The test's AVC444 pass stays a record.
 - **`freerdp`, `freerdp_host`, `freerdp_mac_host` `20261101.1`** (`d49eb0322`, freerdp-bc's FreeRDP#13971, 聪哥's go): integration-all `20261031.13` plus one WinPR fix. Its Apple key table mapped the right Control key (`kVK_RightControl`) to the right Windows key, so the Mac host dropped it ("no key for scancode 0x011d"); now it is VK_RCONTROL. Verified on the Mac (right Ctrl+A/E typed as expected, 0 dropped keys) and by `TestScancode` (fails without the fix, passes with it). It touches only WinPR's input tables, which every product carries.
 
 ## 2026-10-31

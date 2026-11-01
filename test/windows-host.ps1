@@ -298,7 +298,7 @@ $port = 4489
 $port = 4490
 $logs = "$Out\service"
 & "$HostDir\freerdp-shadow-service.exe" install --log $logs --allow-sas -- `
-    /bind-address:127.0.0.1 /port:$port /gfx-av1 /log-level:DEBUG 2>&1 | Tee-Object "$Out\install.txt"
+    /bind-address:127.0.0.1 /port:$port /gfx-av1 -gfx-avc444 /log-level:DEBUG 2>&1 | Tee-Object "$Out\install.txt"
 Check "service: install" ($LASTEXITCODE -eq 0) "exit $LASTEXITCODE"
 $svc = Get-Service FreeRDPShadow -ErrorAction SilentlyContinue
 Check "service: running" ($svc -and $svc.Status -eq "Running") "$($svc.Status)"
