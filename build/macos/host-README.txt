@@ -29,6 +29,12 @@ FreeRDP Shadow from both lists (the minus button), then allow the new one.
 AV2 is on: the clients that offer it (the kit's FreeRDP clients and FreeRDP Web) get AV2,
 the others AV1. AV1 only: remove <string>/gfx-av2</string> from the plist, and restart.
 
+H.264 goes to the clients without AV1 or AV2 (Windows' own Remote Desktop client, most
+others), encoded by the Mac's own VideoToolbox (in hardware where the Mac has it). A
+modern client gets AVC444 (FreeRDP's shadow server gives an RDP 10 client no plain
+AVC420); without H.264 it would get RemoteFX, much heavier on a slow link. VideoToolbox
+has no AV1 or AV2 encoder: those stay software encodes (libaom, libavm).
+
 Remove it with
 
   launchctl bootout gui/$(id -u)/org.freerdp.shadow
