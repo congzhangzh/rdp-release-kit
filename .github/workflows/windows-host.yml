@@ -132,7 +132,10 @@ jobs:
           Get-ChildItem dl/wasm/web/index.html
 
       - name: The Windows host, with the native and the web client
-        timeout-minutes: 45
+        # 25 to 30 minutes normally; on a slow runner the browser demo on this host records at
+        # under 1 fps (AV1 I444 at 1600x900 next to the video it plays), and two runs since
+        # 20261101.10 hit 45 (kit runs 41306834042, 41313831132)
+        timeout-minutes: 60
         shell: pwsh
         run: >
           ./test/windows-host.ps1 (Get-ChildItem host -Directory | Select-Object -First 1).FullName
