@@ -140,6 +140,21 @@ jobs:
           (Get-ChildItem dl/client/*.zip | Select-Object -First 1).FullName
           (Get-ChildItem dl/h264/*.exe | Select-Object -First 1).FullName
 
+      # A shadow server in the user's own session (not the service) while the screen is
+      # locked and unlocked (freerdp-71's lock-resume.ps1): with the DXGI fix it logs one
+      # "capture paused", no errors, then "capture resumed" and frames again. A record for
+      # now (VERDICT in out/lock-resume/after-summary.txt), never a failure; after the main
+      # test, whose end leaves the screen locked
+      - name: DXGI across a lock and unlock in the user's session (a record)
+        if: always()
+        continue-on-error: true
+        timeout-minutes: 5
+        shell: pwsh
+        run: >
+          ./test/lock-resume.ps1 -HostDir (Get-ChildItem host -Directory | Select-Object -First 1).FullName
+          -Client "$((Get-ChildItem client -Directory | Select-Object -First 1).FullName)\sdl-freerdp.exe"
+          -Out out/lock-resume -Tag after
+
       - uses: actions/upload-artifact@v7
         if: always()
         with:
