@@ -23,6 +23,13 @@ Web), AV1 to the others. Smaller frames for the same picture, for more processor
 time on both sides: this PC encodes with libavm, and FreeRDP Web decodes in the
 page, in software. AV1 only: leave out /gfx-av2.
 
+H.264 for clients without AV1 or AV2 (Windows' own Remote Desktop client, most
+others): add /gfx-avc420. This PC then encodes H.264 with Windows' own Media
+Foundation encoder (no OpenH264 needed); on Windows Server it may need the
+feature "Media Foundation" (Install-WindowsFeature Server-Media-Foundation), though
+Server 2025 has the encoder without it. Tested with a FreeRDP client asking for
+AVC420; AVC444 and graphics-card encoders are not tested yet.
+
 It starts at once and with Windows, on port 3389. If Windows' own Remote
 Desktop is turned on, it holds 3389 already: add /port:<another>, e.g. 3388. --allow-sas lets the service send
 Ctrl+Alt+Del (it sets the policy SoftwareSASGeneration = 1); leave it out

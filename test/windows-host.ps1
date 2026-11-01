@@ -22,7 +22,7 @@
 #    locked (last: this job's desktop stays locked).
 # Everything listens on 127.0.0.1 only. A local Windows user is made for the
 # test (the machine is thrown away afterwards). It fails when a check fails.
-param([string]$HostDir, [string]$ClientDir, [string]$WebDir, [string]$Out, [string]$Media = "", [string]$ClientZip = "")
+param([string]$HostDir, [string]$ClientDir, [string]$WebDir, [string]$Out, [string]$Media = "", [string]$ClientZip = "", [string]$H264Client = "")
 $ErrorActionPreference = "Stop"
 New-Item -ItemType Directory -Force -Path $Out | Out-Null
 $HostDir = (Resolve-Path $HostDir).Path
@@ -247,6 +247,32 @@ if ($about -match "(?m)^\s+avm\s") {
 }
 Stop $gw; Stop $http
 Stop $server
+
+# H.264 (AVC420) from Windows' own Media Foundation encoder (FreeRDP#13970, no OpenH264):
+# the server started by hand with /gfx-avc420, a client that decodes H.264 through Media
+# Foundation asking for it (the build's test client; the kit's own Windows client has no
+# H.264). The server's log names the encoder, the client's the frames' codec
+if ($H264Client) {
+    $env:WLOG_FILEAPPENDER_OUTPUT_FILE_NAME = "server-h264.wlog"
+    $h264server = Start-Process -FilePath "$HostDir\freerdp-shadow-cli.exe" -PassThru -NoNewWindow `
+        -ArgumentList "/bind-address:127.0.0.1", "/port:4493", "/gfx-avc420"
+    for ($i = 0; $i -lt 30 -and -not (Listening 4493) -and -not $h264server.HasExited; $i++) { Start-Sleep -Seconds 1 }
+    Check "h264: the server listens on 127.0.0.1:4493" (Listening 4493)
+    $env:WLOG_FILEAPPENDER_OUTPUT_FILE_NAME = "h264-session.wlog"
+    $h = Start-Process -FilePath $H264Client -PassThru `
+        -ArgumentList "/v:127.0.0.1:4493", "/u:$user", "/p:$pass", "/cert:ignore", "/gfx:AVC420", "/size:1280x720"
+    Start-Sleep -Seconds 20
+    Shot "h264"
+    Check "h264: a session holds 20 s" (-not $h.HasExited)
+    $codecs = Codecs "h264-session"
+    Check "h264: the frames came in AVC420" (($codecs -join " ") -match "RDPGFX_CODECID_AVC420") ($codecs -join ", ")
+    $mf = Select-String -Path "$Out\server-h264.wlog" -Pattern "MediaFoundation H264 encoder: .*" -ErrorAction SilentlyContinue | Select-Object -First 1
+    Check "h264: the server encodes with Media Foundation" ($null -ne $mf) $(if ($mf) { $mf.Matches[0].Value } else { "no encoder line" })
+    Stop $h
+    Stop $h264server
+} else {
+    Write-Output "SKIP  h264: no H.264 test client given"
+}
 $port = 4489
 
 # ---- 2. the service

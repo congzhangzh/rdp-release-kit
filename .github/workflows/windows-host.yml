@@ -51,6 +51,14 @@ jobs:
           path: dist/freerdp-host-*.zip
           if-no-files-found: error
           retention-days: 3
+      # the H.264 test client (not shipped): its own artifact, so the release's
+      # freerdp-host-windows-x86_64 holds only the host
+      - uses: actions/upload-artifact@v7
+        with:
+          name: h264-test-client-windows-x86_64
+          path: dist/h264-test-client-windows-x86_64.exe
+          if-no-files-found: error
+          retention-days: 3
 
       # the media the demo plays (Big Buck Bunny, the WebGL Aquarium), from
       # demo.yml's cache (fetched once on a miss), for the Windows job
@@ -90,6 +98,10 @@ jobs:
         with:
           name: windows-host-demo-media
           path: dl/media
+      - uses: actions/download-artifact@v8
+        with:
+          name: h264-test-client-windows-x86_64
+          path: dl/h264
       # this run's Windows client and web client, or the latest release's
       - if: inputs.from_run
         uses: actions/download-artifact@v8
@@ -126,6 +138,7 @@ jobs:
           ./test/windows-host.ps1 (Get-ChildItem host -Directory | Select-Object -First 1).FullName
           (Get-ChildItem client -Directory | Select-Object -First 1).FullName dl/wasm/web out dl/media
           (Get-ChildItem dl/client/*.zip | Select-Object -First 1).FullName
+          (Get-ChildItem dl/h264/*.exe | Select-Object -First 1).FullName
 
       - uses: actions/upload-artifact@v7
         if: always()

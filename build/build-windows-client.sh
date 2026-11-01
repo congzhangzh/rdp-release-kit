@@ -102,9 +102,16 @@ if [ -n "${HOST:-}" ]; then
     FREERDP=freerdp_host
     cmake_dep aom "${CROSS[@]}" -DENABLE_TESTS=OFF -DENABLE_EXAMPLES=OFF -DENABLE_DOCS=OFF \
         -DENABLE_TOOLS=OFF
-    WHAT=(-DWITH_CLIENT=OFF -DWITH_SERVER=ON -DWITH_SHADOW=ON -DWITH_PROXY=OFF
+    # H.264 (AVC420) from Windows' own Media Foundation encoder (FreeRDP#13970), no
+    # OpenH264; CMake calls it experimental. The SDL3 client built along with it
+    # decodes H.264 through Media Foundation too: it is only the host test's client
+    # (h264-test-client-*.exe), never shipped; the kit's Windows client keeps H.264
+    # off, or it would ask Windows' own Remote Desktop for AVC444 by default
+    WHAT=(-DWITH_CLIENT=ON -DWITH_CLIENT_SDL=ON -DWITH_CLIENT_SDL3=ON -DWITH_CLIENT_SDL2=OFF
+          -DWITH_SERVER=ON -DWITH_SHADOW=ON -DWITH_PROXY=OFF
           -DWITH_PLATFORM_SERVER=OFF -DWITH_SHADOW_WIN_DXGI=ON -DWITH_SHADOW_WIN_SERVICE=ON
-          -DWITH_AOM=ON -DWITH_WINPR_TOOLS=ON -DWITH_GFX_AV2=ON -DWITH_AVM=ON)
+          -DWITH_AOM=ON -DWITH_WINPR_TOOLS=ON -DWITH_GFX_AV2=ON -DWITH_AVM=ON
+          -DWITH_MEDIA_FOUNDATION=ON)
 fi
 
 # FreeRDP: the SDL3 client only, static. Its fonts and icons are compiled
@@ -179,7 +186,12 @@ if [ -n "${HOST:-}" ]; then
     rm -f "$OUT/$NAME.zip"
     (cd "$WORK/pkg" && zip -qr "$OUT/$NAME.zip" "$NAME")
     (cd "$OUT" && sha256sum "$NAME.zip" > "$NAME.zip.sha256")
-    echo "== done: $OUT/$NAME.zip"
+    # the H.264 test client (Media Foundation decoder), for test/windows-host.ps1 only
+    f=$(find "$STAGE" -name "sdl-freerdp.exe" | head -1)
+    [ -n "$f" ] || { echo "HOST=1: no sdl-freerdp.exe (the H.264 test client) in the build" >&2; exit 1; }
+    cp "$f" "$OUT/h264-test-client-windows-$ARCH.exe"
+    /llvm-mingw/bin/llvm-strip --strip-debug "$OUT/h264-test-client-windows-$ARCH.exe"
+    echo "== done: $OUT/$NAME.zip (and $OUT/h264-test-client-windows-$ARCH.exe)"
     exit 0
 fi
 
