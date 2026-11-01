@@ -13,6 +13,7 @@ toolchain) gets an entry here in the same commit.
 
 ## 2026-10-31
 
+- **One FreeRDP: `freerdp`, `freerdp_host` and `freerdp_mac_host` `20261031.11`** (`be0506d8f`, 聪哥: "integration all"): the fork's new `integration-all` is integration-latest (the clients' `.9`) plus every commit of integration-shadow-win (the Windows host's `.8`) and integration-shadow-mac (the Mac host's `.10`) not in it already, 24 cherry-picks with no conflict, all on master dae0390a4. The three products now build the same commit, so a fix in the shadow server or the clients reaches all of them in one pick. The clients gain only server-side code (the shadow server is not in their builds); the hosts gain the clients' fixes in the shared libraries (the padded-bitmap fix #13946, the decoder-only libavm build, the rdpsnd client's dropped wave).
 - **AV2 on by default** (聪哥, 2026-10-31): where both ends have it, sessions use AV2.
   The xrdp packages built with AV2 ship `gfx.toml` with `order = [ "AV2", "AV1", "H.264",
   "RFX" ]`, and the install notes now give the command that puts AV1 first again. The Windows

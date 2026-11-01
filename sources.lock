@@ -31,7 +31,10 @@
 # 20261031.9: and the SDL3 dialog and clipboard queues no longer read a freed
 # item (#13961: garbled connection messages), and a wave that does not decode is
 # dropped while sound plays on (#13957)
-freerdp     20261031.9 git+https://github.com/congzhangzh/FreeRDP.git                                       76b4c2e1fbe543b69c346215edab1a401845897d
+# 20261031.11: one FreeRDP for everything (聪哥: "integration all"): integration-all =
+# integration-latest (.9) + integration-shadow-win (host .8) + integration-shadow-mac
+# (Mac host .10), the same commit for the clients and both hosts
+freerdp     20261031.11 git+https://github.com/congzhangzh/FreeRDP.git                                      be0506d8f0a7eb243ed3aa67539f8a0b0cb39892
 # FreeRDP for the Windows host (freerdp-shadow-cli, freerdp-shadow-service),
 # not for the clients: our release-20261030.7, picked from the fork's
 # integration-shadow-win, FreeRDP master 2a508c725 (2026-10-31) plus our pull
@@ -49,7 +52,8 @@ freerdp     20261031.9 git+https://github.com/congzhangzh/FreeRDP.git           
 # 20261031.6: uninstall puts back the Ctrl+Alt+Del policy as install found it;
 # 20261031.8: the keys a client leaves held are let go when it leaves or sends a
 # Synchronize (#13958; before, a client dropped mid-shortcut left Win/Alt down)
-freerdp_host 20261031.8 git+https://github.com/congzhangzh/FreeRDP.git                                       be82c8dc0e039b7cc28eac23045a162f141a9db6
+# 20261031.11: integration-all, the one FreeRDP the clients and the Mac host build too
+freerdp_host 20261031.11 git+https://github.com/congzhangzh/FreeRDP.git                                      be0506d8f0a7eb243ed3aa67539f8a0b0cb39892
 # FreeRDP for the macOS host (FreeRDP-Shadow.app, build-macos-client.sh HOST=1):
 # freerdp-d0's release-20261031.4, picked from the fork's integration-shadow-mac,
 # FreeRDP master dae0390a4 plus the AV2 extension (#13925), the shadow server's
@@ -60,8 +64,9 @@ freerdp_host 20261031.8 git+https://github.com/congzhangzh/FreeRDP.git          
 # extended keys reach the Mac (arrows, Home/End, PgUp/PgDn, Forward Delete, both
 # Command keys, right Option/Ctrl: KBDEXT was missing from the Apple keycode
 # lookup), rdpsnd's server no longer pads Opus waves (#13952), and -sec-nla also
-# turns EXT off (#13953)
-freerdp_mac_host 20261031.10 git+https://github.com/congzhangzh/FreeRDP.git                                 fc2c32540e682ad08195e7ed4bd8aee969e80a81
+# turns EXT off (#13953); 20261031.11: integration-all, the one FreeRDP the clients and
+# the Windows host build too
+freerdp_mac_host 20261031.11 git+https://github.com/congzhangzh/FreeRDP.git                                 be0506d8f0a7eb243ed3aa67539f8a0b0cb39892
 sdl3        3.4.18   https://github.com/libsdl-org/SDL/releases/download/release-3.4.18/SDL3-3.4.18.tar.gz        9c75cf16330322c217dedd2e0609f1124f1b54b8633e763467b4684d0f4334a3
 sdl3_ttf    3.2.2    https://github.com/libsdl-org/SDL_ttf/releases/download/release-3.2.2/SDL3_ttf-3.2.2.tar.gz   63547d58d0185c833213885b635a2c0548201cc8f301e6587c0be1a67e1e045d
 freetype    2.15.0   https://download.savannah.gnu.org/releases/freetype/freetype-2.15.0.tar.xz                   93cd47eb719c325107f2d3cf087d06299e944c3b48a40b55537302304dea1dd5
