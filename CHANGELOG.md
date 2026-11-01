@@ -20,6 +20,8 @@ toolchain) gets an entry here in the same commit.
   Clients that don't offer AV2 still get AV1 (or H.264). The web tests expect AV2 from xrdp
   where its packages have it. The Windows test keeps its own AV1 sessions, and the page's
   presets are unchanged (a freerdp-web change).
+  The GNOME and KDE test images now set the same order (AV2 first where their xrdp has it):
+  the GNOME image still checked for AV1 first and did not build (kit run 41254428284).
 - **`freerdp` `20261031.9`** (`76b4c2e1f`, freerdp-59's, from integration-latest): `.7` plus
   two fixes. The SDL3 clients' connection dialog and clipboard read a freed queue item for
   every message (FreeRDP#13961; master d5d230ddd turned a copy into `auto&` before `pop()`), so

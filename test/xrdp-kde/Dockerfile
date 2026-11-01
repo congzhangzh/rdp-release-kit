@@ -72,12 +72,15 @@ RUN mkdir -p /etc/systemd/system/user-.slice.d /etc/systemd/user.conf.d \
     && printf '[Slice]\nTasksMax=infinity\n' > /etc/systemd/system/user-.slice.d/10-tasks.conf \
     && printf '[Manager]\nDefaultTasksMax=infinity\n' > /etc/systemd/user.conf.d/10-tasks.conf
 # a KDE login, the one xrdp starts (code=32: sesman's [KDE], startplasma.sh),
-# AV1 first; xrdp's keys (synthetic); sshd for the gateway
+# AV2 first where this xrdp has it (--enable-av2 in its binary), else AV1, as the
+# packages ship it and test/wasm-session.sh expects; xrdp's keys (synthetic); sshd
 RUN printf '\n[KDE]\nname=KDE\nlib=libwlup.so\nusername=ask\npassword=ask\nport=-1\ncode=32\nbackend=kwin\n' \
         >> /etc/xrdp/xrdp.ini \
     && sed -i 's/^autorun=.*/autorun=KDE/' /etc/xrdp/xrdp.ini \
-    && sed -i 's/^order = .*/order = [ "AV1", "H.264", "RFX" ]/' /etc/xrdp/gfx.toml \
-    && grep -q '^order = \[ "AV1", "H.264", "RFX" \]' /etc/xrdp/gfx.toml \
+    && if grep -a -q -- "--enable-av2" /usr/sbin/xrdp; then want='"AV2", "AV1", "H.264", "RFX"'; \
+       else want='"AV1", "H.264", "RFX"'; fi \
+    && sed -i "s/^order = .*/order = [ $want ]/" /etc/xrdp/gfx.toml \
+    && grep -q -F "order = [ $want ]" /etc/xrdp/gfx.toml \
     && openssl req -x509 -newkey rsa:2048 -nodes -days 3650 -subj /CN=rdp-kde \
         -keyout /etc/xrdp/key.pem -out /etc/xrdp/cert.pem 2> /dev/null \
     && xrdp-keygen xrdp /etc/xrdp/rsakeys.ini > /dev/null \
