@@ -272,8 +272,9 @@ if ($H264Client) {
     Check "h264: the server encodes with Media Foundation" ($null -ne $mf) $(if ($mf) { $mf.Matches[0].Value } else { "no encoder line" })
     Stop $h
     Stop $h264server
-    # AVC444, what Windows' own client asks for: not yet a check (its first run with the
-    # Media Foundation encoder), only noted, so a release does not wait on it
+    # AVC444, what Windows' own client asks for: not yet a check, only noted (and avc444.png
+    # kept), so a release does not wait on it. Its picture was blocky in the deeper levels until
+    # FreeRDP 20261101.5 (AVC444v2 from a changed region put its chroma in the wrong columns)
     $env:WLOG_FILEAPPENDER_OUTPUT_FILE_NAME = "server-avc444.wlog"
     $h444server = Start-Process -FilePath "$HostDir\freerdp-shadow-cli.exe" -PassThru -NoNewWindow `
         -ArgumentList "/bind-address:127.0.0.1", "/port:4494", "/gfx-av1:off"
