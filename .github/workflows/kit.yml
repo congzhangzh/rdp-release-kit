@@ -71,7 +71,10 @@ jobs:
           CCACHE_MAXSIZE: 1G
         run: ./build.sh dist
 
+      # 2 to 3 minutes normally; on the ARM runner it once sat 50 minutes without a line
+      # (kit run 41275301734): a hang fails here, and gets a rerun, instead of holding the round
       - name: Smoke test on the supported distributions
+        timeout-minutes: 15
         run: test/smoke.sh dist/*.tar.xz
 
       - uses: actions/upload-artifact@v7
