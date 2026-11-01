@@ -158,6 +158,17 @@ function Codecs([string]$Log) {
     Select-String -Path "$Out\$Log.wlog" -Pattern "Got GFX (RDPGFX_CODECID_\w+)" -ErrorAction SilentlyContinue |
         ForEach-Object { $_.Matches[0].Groups[1].Value } | Group-Object | ForEach-Object { "$($_.Name) x$($_.Count)" }
 }
+# the bytes per codec of a session, from the client's TRACE line for each GFX surface command
+# (rdpgfx_main.c: "RecvWireToSurface1Pdu: … codecId: <codec> … bitmapDataLength: <N>"); with
+# WLOG_FILTER=com.freerdp.channels.rdpgfx.client:TRACE on that client only
+function GfxBytes([string]$Log, [int]$Seconds) {
+    Select-String -Path "$Out\$Log.wlog" -Pattern "RecvWireToSurface1Pdu: .* codecId: (RDPGFX_CODECID_\w+) .* bitmapDataLength: (\d+)" -ErrorAction SilentlyContinue |
+        ForEach-Object { [pscustomobject]@{ Codec = $_.Matches[0].Groups[1].Value; Bytes = [long]$_.Matches[0].Groups[2].Value } } |
+        Group-Object Codec | ForEach-Object {
+            $sum = ($_.Group | Measure-Object Bytes -Sum).Sum
+            "{0} x{1}, {2} bytes, {3:N0} bytes/s over {4} s" -f $_.Name, $_.Count, $sum, ($sum / $Seconds), $Seconds
+        }
+}
 
 # ---- 1. by hand, as the user
 $sam = "$Out\SAM"
@@ -261,11 +272,13 @@ if ($H264Client) {
     for ($i = 0; $i -lt 30 -and -not (Listening 4493) -and -not $h264server.HasExited; $i++) { Start-Sleep -Seconds 1 }
     Check "h264: the server listens on 127.0.0.1:4493" (Listening 4493)
     $env:WLOG_FILEAPPENDER_OUTPUT_FILE_NAME = "h264-session.wlog"
+    $env:WLOG_FILTER = "com.freerdp.channels.rdpgfx.client:TRACE"
     $h = Start-Process -FilePath $H264Client -PassThru `
         -ArgumentList "/v:127.0.0.1:4493", "/u:$user", "/p:$pass", "/cert:ignore", "/gfx:AVC420", "/size:1280x720"
     Start-Sleep -Seconds 20
     Shot "h264"
     Check "h264: a session holds 20 s" (-not $h.HasExited)
+    Remove-Item Env:WLOG_FILTER -ErrorAction SilentlyContinue
     $codecs = Codecs "h264-session"
     Check "h264: the frames came in AVC420" (($codecs -join " ") -match "RDPGFX_CODECID_AVC420") ($codecs -join ", ")
     $mf = Select-String -Path "$Out\server-h264.wlog" -Pattern "MediaFoundation H264 encoder: .*" -ErrorAction SilentlyContinue | Select-Object -First 1
@@ -280,11 +293,16 @@ if ($H264Client) {
         -ArgumentList "/bind-address:127.0.0.1", "/port:4494", "/gfx-av1:off"
     for ($i = 0; $i -lt 30 -and -not (Listening 4494) -and -not $h444server.HasExited; $i++) { Start-Sleep -Seconds 1 }
     $env:WLOG_FILEAPPENDER_OUTPUT_FILE_NAME = "avc444-session.wlog"
+    $env:WLOG_FILTER = "com.freerdp.channels.rdpgfx.client:TRACE"
     $h4 = Start-Process -FilePath $H264Client -PassThru `
         -ArgumentList "/v:127.0.0.1:4494", "/u:$user", "/p:$pass", "/cert:ignore", "/gfx:AVC444", "/size:1280x720"
     Start-Sleep -Seconds 20
     Shot "avc444"
+    Remove-Item Env:WLOG_FILTER -ErrorAction SilentlyContinue
     $c444 = (Codecs "avc444-session") -join ", "
+    # bytes per codec, a record (no check): AVC420 and AVC444 of this FreeRDP, to compare releases
+    foreach ($b in @(GfxBytes "h264-session" 20)) { "INFO  h264 bytes: $b" | Tee-Object -Append "$Out\notes.txt" }
+    foreach ($b in @(GfxBytes "avc444-session" 20)) { "INFO  avc444 bytes: $b" | Tee-Object -Append "$Out\notes.txt" }
     $note = "avc444 (not a check yet): session $(if ($h4.HasExited) { "ended, exit $($h4.ExitCode)" } else { 'held 20 s' }); frames: $(if ($c444) { $c444 } else { 'none' })"
     Write-Output "INFO  $note"
     $note | Out-File -Append "$Out\notes.txt"
