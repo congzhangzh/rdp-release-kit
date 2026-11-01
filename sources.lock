@@ -37,7 +37,8 @@
 # 20261031.12: and the Windows host's H.264 (AVC420) from Media Foundation (#13970)
 # 20261031.13: and libaom tuned for realtime screen content (cpu-used 10, screen tools,
 # row-mt, up to 4 threads; it ran at its slowest before), with the shadow's AV1 statistics
-freerdp     20261031.13 git+https://github.com/congzhangzh/FreeRDP.git                                      1411e75244f7663d8a2e9eef87b4d7964a9a5ba0
+# 20261101.1: and the Mac's right Control key reaches the Mac host (#13971)
+freerdp     20261101.1  git+https://github.com/congzhangzh/FreeRDP.git                                      d49eb0322e8a2fb673e910c6ecdb96bf2430269b
 # FreeRDP for the Windows host (freerdp-shadow-cli, freerdp-shadow-service),
 # not for the clients: our release-20261030.7, picked from the fork's
 # integration-shadow-win, FreeRDP master 2a508c725 (2026-10-31) plus our pull
@@ -56,7 +57,7 @@ freerdp     20261031.13 git+https://github.com/congzhangzh/FreeRDP.git          
 # 20261031.8: the keys a client leaves held are let go when it leaves or sends a
 # Synchronize (#13958; before, a client dropped mid-shortcut left Win/Alt down)
 # 20261031.11: integration-all, the one FreeRDP the clients and the Mac host build too
-freerdp_host 20261031.13 git+https://github.com/congzhangzh/FreeRDP.git                                      1411e75244f7663d8a2e9eef87b4d7964a9a5ba0
+freerdp_host 20261101.1  git+https://github.com/congzhangzh/FreeRDP.git                                      d49eb0322e8a2fb673e910c6ecdb96bf2430269b
 # FreeRDP for the macOS host (FreeRDP-Shadow.app, build-macos-client.sh HOST=1):
 # freerdp-d0's release-20261031.4, picked from the fork's integration-shadow-mac,
 # FreeRDP master dae0390a4 plus the AV2 extension (#13925), the shadow server's
@@ -69,7 +70,7 @@ freerdp_host 20261031.13 git+https://github.com/congzhangzh/FreeRDP.git         
 # lookup), rdpsnd's server no longer pads Opus waves (#13952), and -sec-nla also
 # turns EXT off (#13953); 20261031.11: integration-all, the one FreeRDP the clients and
 # the Windows host build too
-freerdp_mac_host 20261031.13 git+https://github.com/congzhangzh/FreeRDP.git                                 1411e75244f7663d8a2e9eef87b4d7964a9a5ba0
+freerdp_mac_host 20261101.1  git+https://github.com/congzhangzh/FreeRDP.git                                 d49eb0322e8a2fb673e910c6ecdb96bf2430269b
 sdl3        3.4.18   https://github.com/libsdl-org/SDL/releases/download/release-3.4.18/SDL3-3.4.18.tar.gz        9c75cf16330322c217dedd2e0609f1124f1b54b8633e763467b4684d0f4334a3
 sdl3_ttf    3.2.2    https://github.com/libsdl-org/SDL_ttf/releases/download/release-3.2.2/SDL3_ttf-3.2.2.tar.gz   63547d58d0185c833213885b635a2c0548201cc8f301e6587c0be1a67e1e045d
 freetype    2.15.0   https://download.savannah.gnu.org/releases/freetype/freetype-2.15.0.tar.xz                   93cd47eb719c325107f2d3cf087d06299e944c3b48a40b55537302304dea1dd5

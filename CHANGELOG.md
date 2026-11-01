@@ -11,6 +11,10 @@ from right now, and what our own changes to a source fix:
 Every change that alters what is built (a pin, a build option, a patch, a
 toolchain) gets an entry here in the same commit.
 
+## 2026-11-01
+
+- **`freerdp`, `freerdp_host`, `freerdp_mac_host` `20261101.1`** (`d49eb0322`, freerdp-bc's FreeRDP#13971, 聪哥's go): integration-all `20261031.13` plus one WinPR fix. Its Apple key table mapped the right Control key (`kVK_RightControl`) to the right Windows key, so the Mac host dropped it ("no key for scancode 0x011d"); now it is VK_RCONTROL. Verified on the Mac (right Ctrl+A/E typed as expected, 0 dropped keys) and by `TestScancode` (fails without the fix, passes with it). It touches only WinPR's input tables, which every product carries.
+
 ## 2026-10-31
 
 - **AV1 encodes in realtime: `freerdp`, `freerdp_host`, `freerdp_mac_host` `20261031.13`** (`1411e7524`, freerdp-7a's av1-encoder-tune, 聪哥's plan): `.12` plus two commits. FreeRDP's av1.c made no `aom_codec_control` calls, so libaom ran at cpu-used 0 (its slowest), on one thread, without its screen-content tools. It now runs at cpu-used 10 with `AOM_CONTENT_SCREEN`, row-mt and up to 4 threads: freerdp-7a's bench on Linux (8 cores) 2.4-2.7x faster at 1080p and 5.5-10.5x at 900p/720p, text +12 dB at fewer bits; a 20 s X11 shadow session at 1600x900 I444 made 642 frames (the 32 fps cap) where master made 240, on less CPU. The shadow server logs the encoder's numbers every 5 s per client; `test/windows-host.ps1` keeps them in `av1-stats.txt`. Only the hosts encode AV1 (libaom); the clients decode with dav1d, unchanged.
