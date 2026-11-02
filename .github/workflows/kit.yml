@@ -765,7 +765,7 @@ jobs:
   # download (docs/RELEASE.md, "Products and channels")
   release:
     if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
-    needs: [build, windows, macos, mac-host, xrdp, mutter, wasm, demo, windows-host]
+    needs: [build, windows, macos, mac-host, mac-host-test, xrdp, mutter, wasm, demo, windows-host]
     runs-on: ubuntu-24.04
     # one at a time across commits: each counts N from the releases before it,
     # so two pushes close together get .1 and .2, not both .1 (the second
@@ -812,6 +812,13 @@ jobs:
         with:
           name: demo-release
           path: dist/demo
+      # the macOS host's demo, recorded by mac-host-test (screencapture -V on a GitHub macOS
+      # runner: our client showing the Mac's own screen); best effort while that job is new
+      - uses: actions/download-artifact@v8
+        continue-on-error: true
+        with:
+          name: mac-host-test
+          path: dist/mac-host-test
 
       - name: The files
         run: |
@@ -826,6 +833,17 @@ jobs:
               | .videos += [$w + {title: "FreeRDP shadow server + Windows Server 2025, AV1"},
                             $r + {title: "Windows Server 2025'"'"'s own Remote Desktop"}]' \
               dist/demo/demo.json > dist/demo/demo.json.new && mv dist/demo/demo.json.new dist/demo/demo.json
+          # the macOS host (mac-host-test's recording), when that job made one
+          if [ -s dist/mac-host-test/mac-host.mov ]; then
+            command -v ffmpeg > /dev/null || { sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg > /dev/null; }
+            ffmpeg -loglevel error -y -i dist/mac-host-test/mac-host.mov -c:v libx264 -pix_fmt yuv420p \
+                -movflags +faststart -an dist/demo/mac-host.mp4
+            ffmpeg -loglevel error -y -ss 8 -i dist/demo/mac-host.mp4 -frames:v 1 dist/demo/mac-host.jpg
+            jq '{title: "FreeRDP shadow server + macOS, AV1",
+                 src: "demo/mac-host.mp4", poster: "demo/mac-host.jpg",
+                 caption: "The kit'"'"'s macOS host (FreeRDP-Shadow.app, ScreenCaptureKit) on a GitHub macOS runner, and the kit'"'"'s macOS client connected to it on the same Mac, so the client shows the screen it is part of; apps open and close; the picture in AV1. The runner has no sound card, so no sound here."} as $m
+                | .mac = [$m] | .videos += [$m]' dist/demo/demo.json > dist/demo/demo.json.new && mv dist/demo/demo.json.new dist/demo/demo.json
+          fi
           # freerdp-tk on Windows (test/client-demo/windows.ps1), with the other freerdp-tk
           # videos on Get a client, when the run made it
           if [ -s dist/demo/freerdp-tk-windows.mp4 ]; then
