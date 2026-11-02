@@ -28,10 +28,10 @@ motion() {  # something on screen changes during a session
 }
 
 { sw_vers; uname -m; } > "$OUT/system.txt" 2>&1
-# the arguments of build/macos/org.freerdp.shadow.plist (no /gfx-av2 for now), plus -auth and a test port
+# the arguments of build/macos/org.freerdp.shadow.plist, plus -auth and a test port
 export WLOG_LEVEL=DEBUG WLOG_APPENDER=FILE WLOG_FILEAPPENDER_OUTPUT_FILE_PATH="$OUT"
 WLOG_FILEAPPENDER_OUTPUT_FILE_NAME=server.wlog "$SERVER" /bind-address:127.0.0.1 /port:4489 \
-    /sec:tls /gfx-av1 -gfx-avc444 -auth > "$OUT/server.out" 2>&1 &
+    /sec:tls /gfx-av1 /gfx-av2 -gfx-avc444 -auth > "$OUT/server.out" 2>&1 &
 SRV=$!
 for i in $(seq 1 30); do listening 4489 && break; sleep 1; done
 listening 4489 && ok=1 || ok=0
@@ -67,13 +67,13 @@ alive() { kill -0 $SRV 2> /dev/null; }
 alive && ok=1 || ok=0
 check "the host is still running after the AV1 session" $ok
 if alive; then
-    # a client that offers AV2 (the kit's own, by default) gets AV1 while the host has no
-    # /gfx-av2; with it, the host crashed (kit run 41370598608)
-    session av2-client AV1
+    # a client that offers AV2 (the kit's own, by default) gets AV2; before FreeRDP
+    # 20261101.20's 8 MiB client thread stack, that crashed the host (kit run 41370598608)
+    session av2 AV2
     alive && ok=1 || ok=0
-    check "the host is still running after an AV2-capable client" $ok
+    check "the host is still running after the AV2 session" $ok
 else
-    echo "SKIP  av2-client: the host is gone"
+    echo "SKIP  av2: the host is gone"
 fi
 # macOS's own crash reports of the server, if any
 mkdir -p "$OUT/crash"

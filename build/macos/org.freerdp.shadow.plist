@@ -15,9 +15,7 @@
              check a SAM file instead (-sec-nla does not turn that off) -->
         <string>/sec:tls</string>
         <string>/gfx-av1</string>
-        <!-- no /gfx-av2 for now: an AV2 session crashes the server (libavm overflows the
-             client thread's 512 KB macOS stack, kit mac-capture-probe run 41370598608);
-             back once FreeRDP gives that thread a larger stack -->
+        <string>/gfx-av2</string>
         <!-- H.264 as AVC420 (FreeRDP 20261101.10 gives RDP 10 clients AVC420): AVC444 sent
              15-18 times the bytes for the same screen (freerdp-bc's A/B, 2026-11-01) -->
         <string>-gfx-avc444</string>
