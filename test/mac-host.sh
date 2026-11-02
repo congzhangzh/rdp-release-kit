@@ -50,8 +50,11 @@ session() {  # session <name> <codec expected> [client options...]
     check "$name: the session holds 20 s" $held
     n=$(grep -c "Got GFX RDPGFX_CODECID_$want\b" "$OUT/$name.wlog" 2> /dev/null || true)
     all=$(grep -ohE "Got GFX RDPGFX_CODECID_[A-Z0-9_]+" "$OUT/$name.wlog" 2> /dev/null | sort | uniq -c | tr '\n' ' ')
-    [ "${n:-0}" -ge 30 ] && ok=1 || ok=0
-    check "$name: at least 30 frames in $want" $ok "${all:-none}"
+    # AV2 is libavm, AV2's reference encoder: about 1 frame a second on the runner's 3 cores
+    # at 1024x768 (kit run 41393786845: 20 in 20 s), AV1 25-30
+    min=30; [ "$want" = AV2 ] && min=10
+    [ "${n:-0}" -ge $min ] && ok=1 || ok=0
+    check "$name: at least $min frames in $want" $ok "${all:-none}"
     # no frames: where the server's threads wait (the host has frozen after a client's
     # Synchronize, kit runs 41366524328 to 41372917597); macOS's own sampler, 3 s
     if [ $ok = 0 ] && kill -0 $SRV 2> /dev/null; then
