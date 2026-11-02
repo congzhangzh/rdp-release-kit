@@ -52,6 +52,11 @@ session() {  # session <name> <codec expected> [client options...]
     all=$(grep -ohE "Got GFX RDPGFX_CODECID_[A-Z0-9_]+" "$OUT/$name.wlog" 2> /dev/null | sort | uniq -c | tr '\n' ' ')
     [ "${n:-0}" -ge 30 ] && ok=1 || ok=0
     check "$name: at least 30 frames in $want" $ok "${all:-none}"
+    # no frames: where the server's threads wait (the host has frozen after a client's
+    # Synchronize, kit runs 41366524328 to 41372917597); macOS's own sampler, 3 s
+    if [ $ok = 0 ] && kill -0 $SRV 2> /dev/null; then
+        sample $SRV 3 -file "$OUT/$name-server-sample.txt" > /dev/null 2>&1 || true
+    fi
     sleep 3
 }
 # AV1 with AV2 off on the client (it offers both by default, and the server takes AV2 first;
