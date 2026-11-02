@@ -26,8 +26,9 @@ After an update, macOS asks for both permissions again: the app is signed withou
 developer certificate (ad hoc), so macOS knows it only by its exact build. Remove
 FreeRDP Shadow from both lists (the minus button), then allow the new one.
 
-AV2 is on: the clients that offer it (the kit's FreeRDP clients and FreeRDP Web) get AV2,
-the others AV1. AV1 only: remove <string>/gfx-av2</string> from the plist, and restart.
+AV2 is off for now: an AV2 session crashes this server (a stack-size bug in FreeRDP's
+shadow server on macOS, being fixed), so the clients get AV1. Don't add /gfx-av2 to the
+plist until a kit release says it is fixed.
 
 H.264 goes to the clients without AV1 or AV2 (Windows' own Remote Desktop client, most
 others), encoded by the Mac's own VideoToolbox (in hardware where the Mac has it), as
