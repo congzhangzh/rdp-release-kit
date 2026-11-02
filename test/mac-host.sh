@@ -40,6 +40,12 @@ check "the host listens on 127.0.0.1:4489" $ok
 session() {  # session <name> <codec expected> [client options...]
     name=$1; want=$2; shift 2
     motion
+    # the demo video: macOS's own screen recorder, 15 s of this session (the client showing
+    # this Mac's screen); the first session only
+    if [ "$name" = av1 ]; then
+        ( sleep 3; screencapture -x -V 15 "$OUT/mac-host.mov" ) > "$OUT/mac-host-video.log" 2>&1 &
+        REC=$!
+    fi
     WLOG_FILEAPPENDER_OUTPUT_FILE_NAME="$name.wlog" "$CLIENT" /v:127.0.0.1:4489 /u:probe /p:probe \
         /cert:ignore /sec:tls /size:1280x720 "$@" > "$OUT/$name.out" 2>&1 &
     c=$!
@@ -66,6 +72,16 @@ session() {  # session <name> <codec expected> [client options...]
 # /gfx:AV1 alone still advertised FRDP_2, kit run 41366524328); AV2 last, since that run's AV2
 # session took the server down (its log ends at the caps confirm 0x20000)
 session av1 AV1 /gfx:AV2:off
+wait $REC 2> /dev/null || true
+if [ -s "$OUT/mac-host.mov" ]; then
+    check "the demo video was recorded" 1 "$(du -h "$OUT/mac-host.mov" | cut -f1)"
+    if command -v ffmpeg > /dev/null; then
+        ffmpeg -loglevel error -y -i "$OUT/mac-host.mov" -c:v libx264 -pix_fmt yuv420p -movflags +faststart \
+            -an "$OUT/mac-host.mp4" && ffmpeg -loglevel error -y -ss 7 -i "$OUT/mac-host.mp4" -frames:v 1 "$OUT/mac-host.jpg"
+    fi
+else
+    echo "SKIP  the demo video: screencapture -V made nothing ($(tail -1 "$OUT/mac-host-video.log" 2> /dev/null))"
+fi
 alive() { kill -0 $SRV 2> /dev/null; }
 alive && ok=1 || ok=0
 check "the host is still running after the AV1 session" $ok
