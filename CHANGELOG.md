@@ -11,6 +11,9 @@ from right now, and what our own changes to a source fix:
 Every change that alters what is built (a pin, a build option, a patch, a
 toolchain) gets an entry here in the same commit.
 
+## 2026-11-02
+
+- **`freerdp`, `freerdp_host`, `freerdp_mac_host` `20261102.1`** (`9b32d8883`, freerdp-d2's fix on neon-rgb-to-yuv420, FreeRDP#13983): `20261101.20` plus three commits. The x86 SSE4.1 `RGBToYUV420` (BGRX/BGRA: the H.264 AVC420 encode and AVC444's main view) never wrote U and V for an odd last column or an odd last row; those chroma samples kept whatever the buffer held, so at an odd frame size (e.g. 1601x901) the right or bottom edge came out in a wrong colour. The edges now go to the generic routine, as NEON's do. The test now checks the edges of every implementation: on x86 it failed at 1x1 and 15x3 before the fix and passes after; TestPrimitives and the H.264, planar, progressive and RemoteFX codec tests pass (freerdp-d2, Linux). The Windows and Mac host tests run at even sizes (1600x900, 1024x768), so this round doesn't exercise the edge itself.
 ## 2026-11-01
 
 - **`freerdp`, `freerdp_host`, `freerdp_mac_host` `20261101.20`** (`e95e6755d`, freerdp-d2's 63da26ad1 on shadow-client-thread-stack, 聪哥's go): `20261101.19` plus an 8 MiB stack for the shadow server's client thread, which encodes inline. With the platform's default (512 KB on macOS), libavm's AV2 encoder overflowed it: the Mac host died at the start of every AV2 session (SIGBUS in `___chkstk_darwin` ← `av2_pack_bitstream`, two macOS crash reports, kit mac-capture-probe run 41370598608). freerdp-d2 reproduced it on Linux with a 512 KiB thread stack (3 of 3 crashed, fault 524,480 bytes below the stack top in the recursive partition search) and the fix held (3 of 3). On Windows the flag makes it a reservation, committed as used. The Mac host's LaunchAgent takes `/gfx-av2` again, and mac-host-test's AV2-capable client expects AV2.
