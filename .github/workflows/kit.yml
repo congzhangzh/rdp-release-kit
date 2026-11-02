@@ -171,7 +171,7 @@ jobs:
 
   # The macOS host: FreeRDP's shadow server as FreeRDP-Shadow.app (build-macos-client.sh
   # with HOST=1, freerdp_mac_host), as mac-host.yml builds it on its branch. Built and
-  # packaged, not tested: a CI Mac cannot grant a new app Screen Recording (TCC)
+  # packaged here; mac-host-test below runs it
   mac-host:
     needs: [releases]
     if: needs.releases.outputs.scope == 'all'
@@ -223,6 +223,42 @@ jobs:
           path: dist/freerdp-host-*.zip
           if-no-files-found: error
           retention-days: 3
+
+  # The macOS host tested like the Windows one: this round's FreeRDP-Shadow.app shares a
+  # GitHub macOS runner's own screen, this round's macOS client connects (test/mac-host.sh:
+  # an AV1 and an AV2 session). The runner grants Screen Recording to /bin/bash; the host runs
+  # with -auth, since the runner account's password can't be set (kit branch
+  # mac-capture-probe, run 41366210580: 348 AV1 frames). New, so it doesn't block a release yet
+  mac-host-test:
+    needs: [macos, mac-host]
+    runs-on: macos-15
+    continue-on-error: true
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        with:
+          name: freerdp-host-macos-arm64
+          path: dl/host
+      - uses: actions/download-artifact@v8
+        with:
+          name: sdl3-freerdp-macos-arm64
+          path: dl/client
+      - name: Unpack
+        run: |
+          cd dl/host && ditto -x -k freerdp-host-*.zip . && cd ../client && tar -xf sdl3-freerdp-*.tar.xz
+          cd .. && xattr -dr com.apple.quarantine . || true
+          ls -d host/*/ client/*/
+      - name: The macOS host, with the macOS client
+        run: >
+          test/mac-host.sh "$(ls -d dl/host/freerdp-host-*-macos-arm64)"
+          "$(ls -d dl/client/sdl3-freerdp-*-macos-arm64)" out
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: mac-host-test
+          path: out
+          retention-days: 7
 
   # The distribution lists, and which builds this push needs (build/changes.sh):
   # "web" when it only moves the freerdp_web pin, else "all" (a pull request
