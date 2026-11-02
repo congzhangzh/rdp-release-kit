@@ -100,6 +100,10 @@ says who owns it, what it waits on, and where it lives.
 - FreeRDP: #13924 (/gfx:AV1), #13925 (AV2), #13931–#13935 (the Windows host),
   #13943 (rdpsnd), #13946 (padded bitmaps), #13952 (rdpsnd padding), #13954 (Windows
   sound), #13956 (monitor bounds 1601×901).
+- FreeRDP, closed without merging: #13953 (-sec-nla turns extended NLA off too), closed by
+  akallabeth on 2026-11-02 with no comment. Master has nothing replacing it, so integration-all
+  keeps it as an integration-only patch (part shadow-pam-help, c5ad9c986; in the Mac host since
+  20261031.10). Whether to ask upstream why is 聪哥's call.
 - freerdp-tk: congzhangzh/freerdp-tk#5 (the client version check: an unknown version is
   tried, not refused).
 - LibreSSL: libressl/portable#1452.
