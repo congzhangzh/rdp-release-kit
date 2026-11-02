@@ -888,7 +888,8 @@ jobs:
           base="https://github.com/$GITHUB_REPOSITORY/releases/download/$tag"
           # shellcheck disable=SC2046 # one argument per client archive
           build/xrdp-install-notes.sh --json upload "$base" |
-            jq --arg r "$tag" --arg u "https://github.com/$GITHUB_REPOSITORY/releases/tag/$tag" --arg b "$base" --arg h "$host" '
+            jq --arg r "$tag" --arg u "https://github.com/$GITHUB_REPOSITORY/releases/tag/$tag" --arg b "$base" --arg h "$host" \
+               --arg ma "$(cd upload && ls freerdp-host-*-macos-arm64.zip)" --arg mx "$(cd upload && ls freerdp-host-*-macos-x86_64.zip)" '
               def platform: capture("-(?<os>linux|windows|macos)-(?<arch>[a-z0-9_]+)\\.") |
                 ({linux: "Linux", windows: "Windows", macos: "macOS"}[.os]) + " " +
                 (if .os == "macos" then {arm64: "Apple Silicon", x86_64: "Intel"}[.arch]
@@ -898,7 +899,12 @@ jobs:
               # the Windows host: share a Windows PC'"'"'s own screen (the page shows it with the servers)
               {windows: {file: $h, url: ($b + "/" + $h),
                 command: ("Invoke-WebRequest " + $b + "/" + $h + " -OutFile freerdp-host.zip; Expand-Archive freerdp-host.zip; Set-Location freerdp-host\\freerdp-host-*; .\\freerdp-shadow-service.exe install --allow-sas -- /bind-address:127.0.0.1 /gfx-av1 /gfx-av2 -gfx-avc444"),
-                remove: ".\\freerdp-shadow-service.exe uninstall"}}' \
+                remove: ".\\freerdp-shadow-service.exe uninstall"}} +
+              # the macOS host: share a Mac'"'"'s own screen, one entry per architecture (build/macos/host-README.txt)
+              {mac: [[$ma, "Apple Silicon"], [$mx, "Intel"]] | map(.[0] as $f | {platform: .[1], file: $f, url: ($b + "/" + $f),
+                command: ("curl -LO " + $b + "/" + $f + " && ditto -x -k " + $f + " . && cd " + ($f | rtrimstr(".zip")) + " && cp -R FreeRDP-Shadow.app /Applications/ && xattr -dr com.apple.quarantine /Applications/FreeRDP-Shadow.app && cp org.freerdp.shadow.plist ~/Library/LaunchAgents/ && launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/org.freerdp.shadow.plist"),
+                then: "Then allow FreeRDP Shadow in System Settings > Privacy & Security, under Screen Recording and Accessibility, and run: launchctl kickstart -k gui/$(id -u)/org.freerdp.shadow",
+                remove: "launchctl bootout gui/$(id -u)/org.freerdp.shadow; rm ~/Library/LaunchAgents/org.freerdp.shadow.plist; rm -rf /Applications/FreeRDP-Shadow.app"})}' \
               --args $(cd upload && ls sdl3-freerdp-*-linux-*.tar.xz sdl3-freerdp-*-windows-*.zip sdl3-freerdp-*-macos-*.tar.xz) \
             > upload/install.json
           (cd upload && sha256sum install.json >> SHA256SUMS)
