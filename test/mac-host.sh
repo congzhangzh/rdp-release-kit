@@ -54,8 +54,24 @@ session() {  # session <name> <codec expected> [client options...]
     check "$name: at least 30 frames in $want" $ok "${all:-none}"
     sleep 3
 }
-session av1 AV1 /gfx:AV1
-session av2 AV2
+# AV1 with AV2 off on the client (it offers both by default, and the server takes AV2 first;
+# /gfx:AV1 alone still advertised FRDP_2, kit run 41366524328); AV2 last, since that run's AV2
+# session took the server down (its log ends at the caps confirm 0x20000)
+session av1 AV1 /gfx:AV2:off
+alive() { kill -0 $SRV 2> /dev/null; }
+alive && ok=1 || ok=0
+check "the host is still running after the AV1 session" $ok
+if alive; then
+    session av2 AV2
+    alive && ok=1 || ok=0
+    check "the host is still running after the AV2 session" $ok
+else
+    echo "SKIP  av2: the host is gone"
+fi
+# macOS's own crash reports of the server, if any
+mkdir -p "$OUT/crash"
+cp "$HOME"/Library/Logs/DiagnosticReports/freerdp-shadow-cli* "$OUT/crash/" 2> /dev/null || true
+ls "$OUT/crash"
 
 kill $SRV 2> /dev/null; sleep 1
 grep -ohE "AV[12] [0-9]+x[0-9]+ (I420|I444): [0-9]+ frames in .*" "$OUT/server.wlog" > "$OUT/encoder-stats.txt" 2> /dev/null || true
