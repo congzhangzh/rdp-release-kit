@@ -6,6 +6,9 @@
 #
 # Sources are downloaded once into ~/.cache/rdp-release-kit/sources;
 # compiled objects are kept by ccache in ~/.cache/rdp-release-kit/ccache.
+# HOST=1 builds the Linux host instead (freerdp-host-<version>-linux-<arch>.tar.xz:
+# FreeRDP's shadow server for GNOME and X11 desktops, build/build-sdl3-client.sh),
+# in the same image with the host's headers on top (build/linux/host.Dockerfile).
 # SRC_<name>=<dir> builds a source from a local checkout (see
 # build/overrides.sh; not for releases).
 set -euo pipefail
@@ -23,7 +26,7 @@ IMAGE=rdp-release-kit-build
 owner() { case "$ENGINE" in *docker) echo "$(id -u):$(id -g)" ;; esac; }
 # the build tree stays on the host: logs survive a failure, and a rebuild
 # can reuse it
-WORK=${WORK:-$HOME/.cache/rdp-release-kit/work-$(uname -m)}
+WORK=${WORK:-$HOME/.cache/rdp-release-kit/work-$(uname -m)${HOST:+-host}}
 mkdir -p "$WORK"
 # the compiler cache, shared by every run on this machine; CCACHE=off
 # builds without it
@@ -48,9 +51,14 @@ if [ -n "${LTO:-}" ]; then
 fi
 
 "$ENGINE" build -q -t "$IMAGE" -f "$KIT/build/Dockerfile" "$KIT/build" > /dev/null
+if [ -n "${HOST:-}" ]; then
+    "$ENGINE" build -q -t "$IMAGE-host" --build-arg BASE="$IMAGE" \
+        -f "$KIT/build/linux/host.Dockerfile" "$KIT/build/linux" > /dev/null
+    IMAGE=$IMAGE-host
+fi
 # the single quotes are for the container's shell
 # shellcheck disable=SC2016
 "$ENGINE" run --rm -v "$KIT":/kit:ro -v "$SOURCES":/sources -v "$OUT":/out -v "$WORK":/work \
-    "${CACHE[@]}" "${OVERRIDE[@]}" -e OWNER="$(owner)" "$IMAGE" \
+    "${CACHE[@]}" "${OVERRIDE[@]}" -e OWNER="$(owner)" -e HOST="${HOST:-}" "$IMAGE" \
     bash -c '/kit/build/build-sdl3-client.sh /kit /sources /out; rc=$?;
              [ -z "$OWNER" ] || chown -R "$OWNER" /out /work ${CCACHE_DIR:-}; exit $rc'

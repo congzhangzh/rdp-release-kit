@@ -27,6 +27,7 @@ WATCH=(
 	"aom         https://aomedia.googlesource.com/aom              ^v[0-9]+\.[0-9]+\.[0-9]+$             v"
 	"zlib        https://github.com/madler/zlib.git               ^v[0-9]+\.[0-9]+(\.[0-9]+)*$          v"
 	"jansson     https://github.com/akheron/jansson.git           ^v[0-9]+\.[0-9]+(\.[0-9]+)?$          v"
+	"libei       https://gitlab.freedesktop.org/libinput/libei.git ^[0-9]+\.[0-9]+\.[0-9]+$             ''"
 	"libressl    https://github.com/libressl/portable.git         ^v[0-9]+\.[0-9]+\.[0-9]+$             v"
 	"llvm_mingw  https://github.com/mstorsjo/llvm-mingw.git       ^[0-9]{8}$                           ''"
 	# ours: release tags have no prefix since 2026-10-25, v<version> before

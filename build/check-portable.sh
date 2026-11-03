@@ -2,9 +2,11 @@
 # Checks that a binary runs on any distribution with the build's glibc or
 # newer:
 #
-#   check-portable.sh <binary> [max glibc version, default 2.34]
+#   check-portable.sh <binary> [max glibc version, default 2.34] [more host libraries]
 #
-# - it needs nothing from the host but glibc, libgcc_s and libpulse
+# - it needs nothing from the host but glibc, libgcc_s and libpulse, and the
+#   libraries named in the third argument (an ERE alternation, e.g.
+#   'libpam\.so\.0|libX11\.so\.6': the Linux host's)
 # - no symbol it uses comes from a newer glibc than the maximum
 # - it exports no FreeRDP, WinPR, SDL or OpenSSL symbols that could clash
 #   with a shared copy loaded by something else
@@ -12,7 +14,7 @@ set -euo pipefail
 
 BIN=$1
 MAX_GLIBC=${2:-2.34}
-ALLOWED='^(libc\.so\.6|libm\.so\.6|libpthread\.so\.0|libdl\.so\.2|librt\.so\.1|ld-linux-[a-z0-9_-]+\.so\.[0-9]|libgcc_s\.so\.1|libpulse\.so\.0)$'
+ALLOWED="^(libc\\.so\\.6|libm\\.so\\.6|libpthread\\.so\\.0|libdl\\.so\\.2|librt\\.so\\.1|ld-linux-[a-z0-9_-]+\\.so\\.[0-9]|libgcc_s\\.so\\.1|libpulse\\.so\\.0${3:+|$3})\$"
 fail=0
 
 needed=$(readelf -d "$BIN" | sed -n 's/.*(NEEDED).*\[\(.*\)\]/\1/p')

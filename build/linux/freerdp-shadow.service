@@ -1,0 +1,30 @@
+# FreeRDP's shadow server in the user's own desktop session, on 127.0.0.1 only
+# (README.txt: reach it over SSH). A systemd user unit: copy it to
+# ~/.config/systemd/user/ with the server unpacked in ~/.local/opt/freerdp-host.
+[Unit]
+Description=FreeRDP shadow server: this desktop over RDP, on 127.0.0.1
+Documentation=https://github.com/congzhangzh/rdp-release-kit
+# the desktop's session: GNOME starts graphical-session.target, with the
+# session's bus and displays in the user manager's environment
+After=graphical-session.target
+PartOf=graphical-session.target
+
+[Service]
+# Mutter (GNOME, on Wayland or X11) when the session has it, else X11
+# ($DISPLAY); /subsystem:x11 forces X11. TLS security: the login is the
+# session owner's own account, checked by the system's PAM; with NLA the
+# server would check a SAM file instead.
+# AV2 goes to the clients that offer it, AV1 to the others.
+ExecStart=%h/.local/opt/freerdp-host/bin/freerdp-shadow-cli /bind-address:127.0.0.1 /port:3389 /sec:tls /gfx-av1 /gfx-av2
+# started again after a crash; the user stopping the sharing from GNOME's
+# screen-sharing indicator ends it with 0, so it stays stopped
+Restart=on-failure
+RestartSec=5
+# its log, journalctl --user -u freerdp-shadow, with what it shares and who
+# logs in (INFO): through syslog, line by line (the console appender's stdout
+# is a pipe here and holds its lines in a buffer; WinPR's journald appender is
+# not built: FreeRDP's CMake sets WINPR_HAVE_JOURNALD_H too late for config.h)
+Environment=WLOG_APPENDER=syslog WLOG_LEVEL=INFO
+
+[Install]
+WantedBy=graphical-session.target

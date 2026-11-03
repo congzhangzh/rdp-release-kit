@@ -7,6 +7,17 @@
 # static library into /work/deps, and FreeRDP's SDL3 client is linked against
 # them. The result is <output dir>/sdl3-freerdp-<version>-linux-<arch>.tar.xz
 # with the client, the licences of everything inside it and a manifest.
+#
+# HOST=1 builds the Linux host instead: FreeRDP's shadow server
+# (freerdp-shadow-cli) from freerdp_linux_host, with two subsystems, Mutter
+# (GNOME, X11 or Wayland: Mutter's ScreenCast and RemoteDesktop APIs, PipeWire,
+# libei) and X11 (any other X11 desktop); the server takes, at start, the first
+# that finds a monitor. AV1 with libaom, AV2 with libavm, Opus sound; logins
+# through PAM. FreeRDP and every codec are linked statically; from the host it
+# needs glibc, libgcc_s, PAM, libsystemd, PipeWire and the X11 libraries a
+# desktop has (build/check-portable.sh checks that list). The result is
+# <output dir>/freerdp-host-<version>-linux-<arch>.tar.xz, with a systemd user
+# unit and a README (build/linux/).
 set -Eeuo pipefail
 
 KIT=$1
@@ -55,6 +66,113 @@ if ! built dav1d; then
         > "$WORK/log/dav1d.log" 2>&1
     meson install -C "$WORK/build/dav1d" >> "$WORK/log/dav1d.log" 2>&1
     stamp dav1d
+fi
+
+# --- HOST=1: the shadow server, its package; then done
+if [ -n "${HOST:-}" ]; then
+    # libaom, the AV1 encoder (its decoder stays: FreeRDP's av1.c includes
+    # aom_decoder.h whenever libaom is there; dav1d still decodes), as the
+    # Windows and macOS hosts build it
+    cmake_dep aom -DENABLE_TESTS=OFF -DENABLE_EXAMPLES=OFF -DENABLE_DOCS=OFF -DENABLE_TOOLS=OFF
+    # libei, the Mutter subsystem's input (RemoteDesktop.ConnectToEIS): the
+    # client library alone, static, since AlmaLinux 9 has none and a desktop
+    # without GNOME 45 or newer may not have it either
+    if ! built libei; then
+        src=$(unpack libei)
+        rm -rf "$WORK/build/libei"
+        meson setup "$WORK/build/libei" "$src" --prefix="$DEPS" --libdir=lib --buildtype=release \
+            --default-library=static -Dlibei=enabled -Dlibeis=disabled -Dliboeffis=disabled \
+            -Dtests=disabled > "$WORK/log/libei.log" 2>&1
+        meson install -C "$WORK/build/libei" >> "$WORK/log/libei.log" 2>&1
+        stamp libei
+    fi
+
+    FREERDP=freerdp_linux_host
+    if overridden "$FREERDP"; then
+        echo "== $FREERDP (local)"
+    else
+        echo "== $FREERDP ${VERSION[$FREERDP]}"
+    fi
+    src=$(unpack "$FREERDP")
+    rm -rf "$STAGE"
+    overridden "$FREERDP" || rm -rf "$WORK/build/$FREERDP"
+    DEV=()
+    if overridden "$FREERDP"; then
+        if [ "${LTO:-}" = off ]; then
+            DEV=(-DCMAKE_INTERPROCEDURAL_OPTIMIZATION=OFF)
+        else
+            DEV=(-UCMAKE_INTERPROCEDURAL_OPTIMIZATION)
+        fi
+    fi
+    # pkg-config sees /deps first, then the host's PipeWire and libsystemd
+    # (sd-bus); every other library FreeRDP could pick up from the image is
+    # turned off below. The deprecated 3.x API is left out, as on Windows.
+    configure "$WORK/build/$FREERDP" \
+        env PKG_CONFIG_LIBDIR="$DEPS/lib/pkgconfig:/usr/lib64/pkgconfig:/usr/share/pkgconfig" \
+        cmake -G Ninja -S "$src" -B "$WORK/build/$FREERDP" -DCMAKE_BUILD_TYPE=Release "${LAUNCHER[@]}" \
+        -DCMAKE_INSTALL_PREFIX=/opt/freerdp -DCMAKE_PREFIX_PATH=$DEPS \
+        -DCMAKE_SKIP_RPATH=ON -DBUILD_SHARED_LIBS=OFF -DBUILD_TESTING=OFF \
+        -DCMAKE_EXE_LINKER_FLAGS="-static-libstdc++" \
+        -DOPENSSL_ROOT_DIR=$DEPS -DOPENSSL_USE_STATIC_LIBS=ON \
+        -DWITH_CLIENT=OFF -DWITH_CLIENT_COMMON=OFF -DWITH_CLIENT_CHANNELS=OFF \
+        -DWITH_SERVER=ON -DWITH_SHADOW=ON -DWITH_SHADOW_X11=ON -DWITH_SHADOW_MUTTER=ON \
+        -DWITH_PROXY=OFF -DWITH_PLATFORM_SERVER=OFF -DWITH_SAMPLE=OFF -DWITH_WINPR_TOOLS=ON \
+        -DWITH_X11=ON -DWITH_WAYLAND=OFF -DWITH_XCURSOR=OFF -DWITH_XRANDR=OFF \
+        -DWITH_PULSE=OFF -DWITH_ALSA=OFF -DWITH_OSS=OFF -DWITH_CUPS=OFF -DWITH_PCSC=OFF \
+        -DWITH_KRB5=OFF -DWITH_FUSE=OFF -DWITH_FFMPEG=OFF -DWITH_SWSCALE=OFF -DWITH_SOXR=OFF \
+        -DWITH_OPENH264=OFF -DWITH_GFX_AV1=ON -DWITH_AOM=ON -DWITH_DAV1D=ON -DWITH_OPUS=ON \
+        -DWITH_GFX_AV2=ON -DWITH_AVM=ON -DWITH_SIMD=ON \
+        -DWITH_SYSTEMD=OFF -DWITH_UNICODE_BUILTIN=ON -DWITH_INTERNAL_MD4=ON \
+        -DWITH_INTERNAL_RC4=ON -DWITH_SSO_MIB=OFF -DCHANNEL_URBDRC=OFF \
+        -DWITHOUT_WINPR_3x_DEPRECATED=ON -DWITHOUT_FREERDP_3x_DEPRECATED=ON \
+        -DWITH_MANPAGES=OFF "${DEV[@]}" > "$WORK/log/freerdp.log" 2>&1
+    # what the host must have found: both subsystems' libraries and the encoders
+    for found in PIPEWIRE SYSTEMD LIBEI PC_AOM PC_AVM; do
+        grep -q "^${found}_FOUND:INTERNAL=1" "$WORK/build/$FREERDP/CMakeCache.txt" ||
+            { echo "HOST=1: $found not found (log/freerdp.log)" >&2; exit 1; }
+    done
+    grep -q -E '^PAM_LIBRARY:FILEPATH=/' "$WORK/build/$FREERDP/CMakeCache.txt" ||
+        { echo "HOST=1: PAM not found (log/freerdp.log)" >&2; exit 1; }
+    cmake --build "$WORK/build/$FREERDP" >> "$WORK/log/freerdp.log" 2>&1
+    DESTDIR=$STAGE cmake --install "$WORK/build/$FREERDP" >> "$WORK/log/freerdp.log" 2>&1
+    ccache_stats
+
+    ARCH=$(uname -m)
+    NAME=freerdp-host-${VERSION[$FREERDP]}-linux-$ARCH${OVERRIDES:+-local}
+    PKG=$WORK/pkg/$NAME
+    rm -rf "$WORK/pkg"
+    mkdir -p "$PKG/bin" "$PKG/licenses"
+    # what a desktop has: PAM, sd-bus, PipeWire, X11 and its extensions
+    HOST_LIBS='libpam\.so\.0|libsystemd\.so\.0|libpipewire-0\.3\.so\.0|libX11\.so\.6|libXext\.so\.6|libXdamage\.so\.1|libXfixes\.so\.3|libXinerama\.so\.1|libXtst\.so\.6'
+    for tool in freerdp-shadow-cli winpr-hash; do
+        f=$(find "$STAGE" -type f -name "$tool*" -perm -u+x | head -1)
+        [ -n "$f" ] || { echo "HOST=1: no $tool in the build" >&2; exit 1; }
+        cp "$f" "$PKG/bin/$tool"
+        strip --strip-debug "$PKG/bin/$tool"
+        "$KIT/build/check-portable.sh" "$PKG/bin/$tool" 2.34 "$HOST_LIBS"
+    done
+    cp "$KIT/build/linux/freerdp-shadow.service" "$PKG/"
+    cp "$KIT/build/linux/host-README.txt" "$PKG/README.txt"
+    licenses "$PKG/licenses" "$FREERDP" openssl opus dav1d aom avm libei zlib jansson
+    {
+        echo "FreeRDP's shadow server for Linux ${VERSION[$FREERDP]}, $ARCH, built $(date -u +%F)"
+        # shellcheck source=/dev/null
+        echo "build environment: $(. /etc/os-release && echo "$PRETTY_NAME"), $(ldd --version | head -1)"
+        override_manifest
+        [ "${DEV[0]:-}" != -DCMAKE_INTERPROCEDURAL_OPTIMIZATION=OFF ] || echo "LTO off (local build)"
+        echo
+        echo "sources (sources.lock):"
+        for name in "$FREERDP" openssl opus dav1d aom avm libei zlib jansson; do
+            printf '  %-18s %-10s %s\n' "$name" "${VERSION[$name]}" "${SHA[$name]}"
+        done
+        echo
+        echo "from the host (readelf -d bin/freerdp-shadow-cli):"
+        readelf -d "$PKG/bin/freerdp-shadow-cli" | sed -n 's/.*(NEEDED).*\[\(.*\)\]/  \1/p'
+    } > "$PKG/MANIFEST"
+    XZ_OPT=${OVERRIDES:+-1} tar -C "$WORK/pkg" -cJf "$OUT/$NAME.tar.xz" "$NAME"
+    (cd "$OUT" && sha256sum "$NAME.tar.xz" > "$NAME.tar.xz.sha256")
+    echo "== done: $OUT/$NAME.tar.xz"
+    exit 0
 fi
 
 cmake_dep freetype -DFT_DISABLE_ZLIB=ON -DFT_DISABLE_BZIP2=ON -DFT_DISABLE_PNG=ON \

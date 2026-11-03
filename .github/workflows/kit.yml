@@ -300,6 +300,101 @@ jobs:
           path: out
           retention-days: 7
 
+  # The Linux host: FreeRDP's shadow server for GNOME (Mutter, Wayland or X11) and
+  # other X11 desktops in one binary (build.sh with HOST=1, freerdp_linux_host),
+  # x86_64 for now. New: built and tested below, nothing waits for it yet, and it is
+  # not in the release
+  linux-host:
+    needs: [releases]
+    if: needs.releases.outputs.scope == 'all'
+    runs-on: ubuntu-24.04
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Cache sources
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/rdp-release-kit/sources
+          key: sources-${{ hashFiles('sources.lock') }}
+
+      # the client's objects too: the dependencies are compiled the same way
+      - name: Cache compiled objects
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/rdp-release-kit/ccache
+          key: ccache-linux-host-${{ runner.arch }}-${{ github.sha }}
+          restore-keys: |
+            ccache-linux-host-${{ runner.arch }}-
+            ccache-linux-${{ runner.arch }}-
+
+      - name: Build
+        env:
+          CCACHE_MAXSIZE: 1G
+          HOST: "1"
+        run: ./build.sh dist
+
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: linux-host-log
+          path: ~/.cache/rdp-release-kit/work-x86_64-host/log
+          retention-days: 7
+      - uses: actions/upload-artifact@v7
+        with:
+          name: freerdp-host-linux-x86_64
+          path: dist/freerdp-host-*
+          if-no-files-found: error
+          retention-days: 3
+
+  # The Linux host on two desktops, with this round's Linux client (test/linux-host.sh):
+  # gnome, GNOME Shell 50 headless with systemd as PID 1, the server as the package's
+  # user unit (Mutter by default, /subsystem, AV1 and AV2 frames, idle CPU, keys, the
+  # owner's login only, the sharing stopped in GNOME ends it with 0); xorg, Xfce on
+  # Xvfb with /subsystem:x11. Both in a rootful podman container, as the screens job
+  # runs its systemd ones (AppArmor off: its profiles attach to the container's
+  # programs too). New, so it doesn't block anything yet
+  linux-host-test:
+    needs: [build, linux-host]
+    strategy:
+      fail-fast: false
+      matrix:
+        desktop: [gnome, xorg]
+    runs-on: ubuntu-24.04
+    continue-on-error: true
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        with:
+          name: freerdp-host-linux-x86_64
+          path: dl/host
+      - uses: actions/download-artifact@v8
+        with:
+          name: sdl3-freerdp-ubuntu-24.04
+          path: dl/client
+      - name: Tools
+        run: |
+          printf '#!/bin/sh\nexec sudo podman "$@"\n' | sudo tee /usr/local/bin/podman-root > /dev/null
+          sudo chmod 755 /usr/local/bin/podman-root
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+          sudo aa-teardown > /dev/null && echo "AppArmor profiles unloaded"
+          sudo systemctl restart docker
+          podman --version
+      - name: The Linux host on ${{ matrix.desktop }}
+        env:
+          PODMAN: /usr/local/bin/podman-root
+          RUN_OPTS: --security-opt apparmor=unconfined
+        run: >
+          test/linux-host.sh ${{ matrix.desktop }} "$(ls dl/host/freerdp-host-*-linux-x86_64.tar.xz)"
+          "$(ls dl/client/sdl3-freerdp-*-linux-x86_64.tar.xz)" out
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: linux-host-test-${{ matrix.desktop }}
+          path: out
+          retention-days: 7
+
   # The distribution lists, and which builds this push needs (build/changes.sh):
   # "web" when it only moves the freerdp_web pin, else "all" (a pull request
   # and a run by hand: always all)

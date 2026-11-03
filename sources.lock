@@ -100,6 +100,12 @@ freerdp_host 20261103.2   git+https://github.com/congzhangzh/FreeRDP.git        
 # turns EXT off (#13953); 20261031.11: integration-all, the one FreeRDP the clients and
 # the Windows host build too
 freerdp_mac_host 20261103.2   git+https://github.com/congzhangzh/FreeRDP.git                                 79d692b4022320751136c3b309b6599dd6ef909b
+# FreeRDP for the Linux host (freerdp-shadow-cli, build.sh HOST=1): the same
+# release-20261103.2 of integration-all, whose shadow server builds the Mutter
+# subsystem (GNOME, X11 or Wayland: Mutter's ScreenCast and RemoteDesktop APIs,
+# freerdp-ce's FreeRDP#14006 with its no-spin and end-on-Stop fixes) and the X11
+# one together and takes the first that finds a monitor (c6d03209e)
+freerdp_linux_host 20261103.2 git+https://github.com/congzhangzh/FreeRDP.git                               79d692b4022320751136c3b309b6599dd6ef909b
 sdl3        3.4.18   https://github.com/libsdl-org/SDL/releases/download/release-3.4.18/SDL3-3.4.18.tar.gz        9c75cf16330322c217dedd2e0609f1124f1b54b8633e763467b4684d0f4334a3
 sdl3_ttf    3.2.2    https://github.com/libsdl-org/SDL_ttf/releases/download/release-3.2.2/SDL3_ttf-3.2.2.tar.gz   63547d58d0185c833213885b635a2c0548201cc8f301e6587c0be1a67e1e045d
 freetype    2.15.0   https://download.savannah.gnu.org/releases/freetype/freetype-2.15.0.tar.xz                   93cd47eb719c325107f2d3cf087d06299e944c3b48a40b55537302304dea1dd5
@@ -119,6 +125,9 @@ aom         3.15.2   https://storage.googleapis.com/aom-releases/libaom-3.15.2.t
 avm         20261031.2 git+https://github.com/congzhangzh/avm.git                                            b132a0a6647dc97e2e917fb9bae6f6c4335bfb54
 zlib        1.3.2    https://github.com/madler/zlib/releases/download/v1.3.2/zlib-1.3.2.tar.gz                    bb329a0a2cd0274d05519d61c667c062e06990d72e125ee2dfa8de64f0119d16
 jansson     2.15.1   https://github.com/akheron/jansson/releases/download/v2.15.1/jansson-2.15.1.tar.gz           0c7114dc0b2d22a670724a1f95922029d7077c19dbf79a584cb8084d2f267f2f
+# libei, the Linux host's input through GNOME's RemoteDesktop (ConnectToEIS):
+# its client library, static (AlmaLinux 9 has none), by its release tag's commit
+libei       1.6.0    git+https://gitlab.freedesktop.org/libinput/libei.git                                   8a46bf3d4b6af7f25a61be53386cf618218114ef
 # xrdp, for the server packages (Xorg and Wayland sessions): our release,
 # not an upstream one. A ripe commit of the fork's integration-wlup-all,
 # picked as release-<YYYYMMDD>.<N>: xrdp devel plus our branches on their
