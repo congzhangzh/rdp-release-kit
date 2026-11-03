@@ -71,7 +71,11 @@ const chrome = spawn(process.env.CHROME || "google-chrome", ["--headless=new", "
   "--mute-audio",   // the session's sound stays in the recording, off this computer's speakers
   "--enable-unsafe-swiftshader", "about:blank"], { stdio: "ignore" });
 const done = code => {
-  chrome.once("exit", () => { rmSync(profile, { recursive: true, force: true }); process.exit(code); });
+  // Chrome may still be writing its profile as it exits (macOS, kit run 41627099963: ENOTEMPTY)
+  chrome.once("exit", () => {
+    try { rmSync(profile, { recursive: true, force: true, maxRetries: 5, retryDelay: 300 }); } catch {}
+    process.exit(code);
+  });
   chrome.kill();
 };
 

@@ -19,6 +19,9 @@ set -u
 HOSTDIR=$1; CLIENTDIR=$2; OUT=$3; WEBDIR=${4:-}; MEDIA=${5:-}
 KIT_TEST=$(cd "$(dirname "$0")" && pwd)
 mkdir -p "$OUT"
+# absolute: wasm-demo.mjs writes its frame list with these paths, and ffmpeg's concat reads
+# them relative to the list (kit run 41627099963: "Impossible to open out/web/demo-frames/out/...")
+OUT=$(cd "$OUT" && pwd)
 SERVER="$HOSTDIR/FreeRDP-Shadow.app/Contents/MacOS/freerdp-shadow-cli"
 CLIENT="$CLIENTDIR/bin/sdl-freerdp"
 fails=0
@@ -151,9 +154,13 @@ else
     fi
     [ -s "$OUT/mac-host-web.mp4" ] && [ -s "$OUT/mac-host-web.jpg" ] && ok=1 || ok=0
     check "web demo: a video of FreeRDP Web on this Mac" $ok "$(du -h "$OUT/mac-host-web.mp4" 2> /dev/null | cut -f1)"
-    # the page's Info panel at the end (wasm-demo.mjs prints its Video and AV1 lines)
-    grep -qE "AV1 frames|AV1 decoder" "$OUT/web/driver.log" 2> /dev/null && ok=1 || ok=0
-    check "web demo: the page decoded AV1" $ok "$(grep -E "Video|AV1 frames" "$OUT/web/driver.log" 2> /dev/null | tr '\n' ' ' | cut -c1-120)"
+    # what the server encoded for the page (its 5-second AV1 statistics lines); the page's Info
+    # panel said "0 total" in kit run 41627099963 while the picture came, so it is only noted
+    n=$(grep -ohE "AV1 [0-9]+x[0-9]+ I4[24][04]: [0-9]+ frames" "$OUT/server-web.wlog" 2> /dev/null |
+        awk '{ s += $4 } END { print s + 0 }')
+    [ "$n" -ge 30 ] && ok=1 || ok=0
+    check "web demo: the server sent the page AV1" $ok "$n frames encoded"
+    grep -E "Video codecs|AV1 frames" "$OUT/web/driver.log" > "$OUT/web/info-at-end.txt" 2> /dev/null || true
     rm -rf "$W"
 fi
 # macOS's own crash reports of the server, if any
