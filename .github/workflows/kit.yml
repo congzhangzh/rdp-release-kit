@@ -933,3 +933,12 @@ jobs:
           The demo videos (\`xrdp-original-*.mp4\` with xrdp's upstream release as Debian 13 ships it, \`xrdp-gnome*.mp4\`, \`xrdp-kde.mp4\` with this release's xrdp, \`grd-gnome.mp4\`, \`demo.json\`) are this build's web client and xrdp, recorded on throwaway servers: everything shown is synthetic. Big Buck Bunny © Blender Foundation, CC BY 3.0; WebGL Aquarium © Google, BSD."
           notes=$(build/release-notes.sh "$summary" linux windows macos web xrdp windows_host)$'\n\n'"<!-- kit-key: $key -->"
           LATEST=1 build/publish-prerelease.sh "$tag" "$title" "$notes" upload/*
+      # the release page keeps the kit's releases and the newest 3 per-round pre-releases of
+      # each kind; the rest go, their unique files archived first (build/prune-prereleases.sh).
+      # Never fails the release: a hiccup here only leaves a few more for the next round
+      - name: Prune old pre-releases
+        continue-on-error: true
+        timeout-minutes: 20
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: build/prune-prereleases.sh 3
