@@ -409,7 +409,15 @@ await clickOn("#tbInfo");
 await caption("Info: codecs, frame rate, bandwidth, sound");
 await sleep(4500);
 const infoText = await ev("document.getElementById('infoTable').innerText");
-console.log("info at the end:\n" + infoText.split("\n").filter(l => /Video|Audio|AV1 frames|AV1 decoder|Network in/.test(l)).join("\n"));
+console.log("info at the end:\n" + infoText.split("\n").filter(l => /Video|Audio|AV1 frames|AV1 decoder|H\.264|Network in/.test(l)).join("\n"));
+// what the page's decode counters saw, and each H.264 decoder's state: "none" on every one
+// means FreeRDP opened it but no H.264 key frame ever came (the picture came another way,
+// e.g. Progressive or Planar); the Info panel adds its "H.264 frames" row only after a frame
+console.log("decode stats: " + await ev(`(() => { try {
+  const M = typeof Module !== "undefined" ? Module : globalThis.Module;
+  const h264 = [...(M?.freerdpH264?.decoders?.values() ?? [])].map(d => d.decoder ? d.decoder.state : "none");
+  return JSON.stringify({ stats: globalThis.freerdpDecodeStats ?? null, h264 });
+} catch (e) { return "unavailable: " + e.message; } })()`));
 await clickOn("#tbInfo");
 const audio = audioStart ? await ev("window.__demoStop ? window.__demoStop() : ''") : "";
 await caption("Disconnect ends the session. Then stop the gateway with Ctrl-C.");
