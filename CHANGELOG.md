@@ -13,6 +13,7 @@ toolchain) gets an entry here in the same commit.
 
 ## 2026-11-03
 
+- **`freerdp`, `freerdp_host`, `freerdp_mac_host` `20261102.4`: the rebuild on master `9f9d97e81` again** (it was `.3`, held back when the Windows test lost Ctrl+Alt+Del; freerdp-d2 showed the code involved was unchanged, and the test's race is fixed since kit 20261103.2). Upstream merged #13934 (the Windows shadow service), #13948 (the macOS backend), #13974 (the AV1 tuning) and more; new in it: #13925's review, #13954 rebased, the DXGI cleanup (b2f2f33ac), and freerdp-ce's Linux GNOME shadow backend (upstream PRs #14005, the /monitors errno fix, and #14006) with two fixes on top: 907e1522d no busy loop while clients are connected (WinPR has no auto-reset events; 101 % CPU idle before, 2 % after) and 59330d93d the server ends with 0 when the user stops the sharing. The Mutter backend stays off in these builds; its own product comes next.
 - **Ctrl+Alt+Del in the Windows test: back to back again**: the gaps between the keys (yesterday's change) made it fail both tries (kit run 41559774950: the server's key events went from 1,926 to 89,157, the echo of the injected keys through the console flipping Ctrl and Alt before Delete). The settle check, the second try and the noted key count stay.
 ## 2026-11-02
 
