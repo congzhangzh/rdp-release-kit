@@ -11,6 +11,9 @@ from right now, and what our own changes to a source fix:
 Every change that alters what is built (a pin, a build option, a patch, a
 toolchain) gets an entry here in the same commit.
 
+## 2026-11-03
+
+- **Ctrl+Alt+Del in the Windows test: back to back again**: the gaps between the keys (yesterday's change) made it fail both tries (kit run 41559774950: the server's key events went from 1,926 to 89,157, the echo of the injected keys through the console flipping Ctrl and Alt before Delete). The settle check, the second try and the noted key count stay.
 ## 2026-11-02
 
 - **The Windows test types Ctrl+Alt+Del with care** (kit only): kit run 41549326887 failed it because Delete reached the server before Ctrl and Alt and was typed (freerdp-d2: the code involved was byte-identical to the passing release). The test now checks the client is the foreground window after a settle, leaves 150 ms between the keys, tries once more if the server didn't take it (a product fault fails twice), and notes the server's key events before and after (the echo loop of a typed key through this console).

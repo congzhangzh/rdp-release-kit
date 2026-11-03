@@ -591,10 +591,12 @@ if ($session.MainWindowHandle -eq [IntPtr]::Zero) {
     function TypeSas {
         Start-Sleep -Seconds 1
         if ([Kit.Keys]::GetForegroundWindow() -ne $session.MainWindowHandle) { [void](Focus $session.MainWindowHandle) }
-        [Kit.Keys]::keybd_event(0x11, 0x1D, 0, [UIntPtr]::Zero); Start-Sleep -Milliseconds 150
-        [Kit.Keys]::keybd_event(0x12, 0x38, 0, [UIntPtr]::Zero); Start-Sleep -Milliseconds 150
-        [Kit.Keys]::keybd_event(0x2E, 0x53, 1, [UIntPtr]::Zero); Start-Sleep -Milliseconds 150
-        [Kit.Keys]::keybd_event(0x2E, 0x53, 3, [UIntPtr]::Zero); Start-Sleep -Milliseconds 100
+        # back to back: with 150 ms between them (kit run 41559774950) the echo of the injected
+        # keys through this console had time to flip Ctrl and Alt, and both tries failed
+        [Kit.Keys]::keybd_event(0x11, 0x1D, 0, [UIntPtr]::Zero)
+        [Kit.Keys]::keybd_event(0x12, 0x38, 0, [UIntPtr]::Zero)
+        [Kit.Keys]::keybd_event(0x2E, 0x53, 1, [UIntPtr]::Zero)
+        [Kit.Keys]::keybd_event(0x2E, 0x53, 3, [UIntPtr]::Zero)
         [Kit.Keys]::keybd_event(0x12, 0x38, 2, [UIntPtr]::Zero)
         [Kit.Keys]::keybd_event(0x11, 0x1D, 2, [UIntPtr]::Zero)
         Start-Sleep -Seconds 8
