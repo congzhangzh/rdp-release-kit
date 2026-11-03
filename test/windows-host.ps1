@@ -581,18 +581,36 @@ if ($session.MainWindowHandle -eq [IntPtr]::Zero) {
     "SKIP  Ctrl+Alt+Del: the test could not bring the client's window to the front" | Tee-Object -FilePath "$Out\checks.txt" -Append
 } else {
     $deletes = DeleteDowns
-    [Kit.Keys]::keybd_event(0x11, 0x1D, 0, [UIntPtr]::Zero)
-    [Kit.Keys]::keybd_event(0x12, 0x38, 0, [UIntPtr]::Zero)
-    [Kit.Keys]::keybd_event(0x2E, 0x53, 1, [UIntPtr]::Zero)
-    [Kit.Keys]::keybd_event(0x2E, 0x53, 3, [UIntPtr]::Zero)
-    [Kit.Keys]::keybd_event(0x12, 0x38, 2, [UIntPtr]::Zero)
-    [Kit.Keys]::keybd_event(0x11, 0x1D, 2, [UIntPtr]::Zero)
-    Start-Sleep -Seconds 8
+    # all the server's key events, to see a loop: the server injects into this console, where
+    # the client has the focus, so a key typed there comes back (kit run 41549326887: 85,630)
+    function KeyEvents { ([regex]::Matches((ServerLog), "shadow_input_keyboard_event\]: ")).Count }
+    $keysBefore = KeyEvents
+    # Ctrl, Alt, then Delete, with time between them: the server takes the secure attention
+    # sequence only if Delete comes while Ctrl and Alt are down; in run 41549326887 Delete
+    # arrived first and was typed (freerdp-d2's reading of the server's log). Focus settled first
+    function TypeSas {
+        Start-Sleep -Seconds 1
+        if ([Kit.Keys]::GetForegroundWindow() -ne $session.MainWindowHandle) { [void](Focus $session.MainWindowHandle) }
+        [Kit.Keys]::keybd_event(0x11, 0x1D, 0, [UIntPtr]::Zero); Start-Sleep -Milliseconds 150
+        [Kit.Keys]::keybd_event(0x12, 0x38, 0, [UIntPtr]::Zero); Start-Sleep -Milliseconds 150
+        [Kit.Keys]::keybd_event(0x2E, 0x53, 1, [UIntPtr]::Zero); Start-Sleep -Milliseconds 150
+        [Kit.Keys]::keybd_event(0x2E, 0x53, 3, [UIntPtr]::Zero); Start-Sleep -Milliseconds 100
+        [Kit.Keys]::keybd_event(0x12, 0x38, 2, [UIntPtr]::Zero)
+        [Kit.Keys]::keybd_event(0x11, 0x1D, 2, [UIntPtr]::Zero)
+        Start-Sleep -Seconds 8
+    }
+    TypeSas
+    $tries = 1
+    if (-not ((ServerLog) -match "asked freerdp-shadow-service for the secure attention sequence")) {
+        # once more, focused again: a fault in the product fails twice, a race in the test doesn't
+        [void](Focus $session.MainWindowHandle); TypeSas; $tries = 2
+    }
+    "Ctrl+Alt+Del: $tries tries; the server's key events: $keysBefore before, $(KeyEvents) after" | Out-File -Append "$Out\notes.txt"
     $svcLog = Get-Content "$logs\service.log" -Raw -ErrorAction SilentlyContinue
     # three steps, so a failure says where: the keys reached the server, the server asked the
     # service, the service sent it (SendSAS returns nothing: "sent" is as far as it can tell)
     Check "Ctrl+Alt+Del: the keys reached the server" ((DeleteDowns) -gt $deletes) "$((DeleteDowns) - $deletes) Delete presses"
-    Check "Ctrl+Alt+Del: the server asked the service" ((ServerLog) -match "asked freerdp-shadow-service for the secure attention sequence")
+    Check "Ctrl+Alt+Del: the server asked the service" ((ServerLog) -match "asked freerdp-shadow-service for the secure attention sequence") "$tries tries"
     Check "Ctrl+Alt+Del: the service sent the secure attention sequence" ($svcLog -match "secure attention sequence sent")
     Check "Ctrl+Alt+Del: the server followed to Winlogon" ((ServerLog) -match "follows the input desktop from \w+ to Winlogon")
     Check "Ctrl+Alt+Del: the session holds" (-not $session.HasExited)
