@@ -13,6 +13,7 @@ toolchain) gets an entry here in the same commit.
 
 ## 2026-11-04
 
+- **The Mac web demo's screen is 16:9**: `test/mac/display-mode.swift` now prefers the largest 16:9 mode up to 1600 wide (1600 x 900 on the runner, as the Windows test's screen), since 1600 x 1200 (kit run 41644958011) is taller than the page's canvas and lost its bottom, the Dock with it.
 - **`avm` `20261103.1`** (`55df12d6d`, avm-release-kit-ea): `20261031.2` plus one plain-C change, `av2_avg_cdf_symbols` in one vectorized pass, bit-exact; the encoder spends 1.8 to 4.1 % fewer cycles on inter frames, and the decoder calls it once per frame. Its release kit: round 41739896575, 15/15, every target bit-exact, tsan clean (avm kit release 20261103.2). This round's check for it: the AV2 sessions (the Windows host and the Mac host tests, the xrdp-gnome demo) and the web client's AV2 decoding.
 
 ## 2026-11-03

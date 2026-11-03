@@ -10,8 +10,11 @@ let display = CGMainDisplayID()
 let options = [kCGDisplayShowDuplicateLowResolutionModes: kCFBooleanTrue] as CFDictionary
 let modes = (CGDisplayCopyAllDisplayModes(display, options) as? [CGDisplayMode]) ?? []
 for m in modes { print("mode \(m.width)x\(m.height) pixels \(m.pixelWidth)x\(m.pixelHeight) usable \(m.isUsableForDesktopGUI())") }
-let best = modes.filter { $0.isUsableForDesktopGUI() && $0.width <= maxWidth && $0.pixelWidth == $0.width }
-    .max { ($0.width * $0.height) < ($1.width * $1.height) }
+// 16:9 first, the page's shape (kit run 41644958011 took 1600 x 1200, 4:3, and the page cut its
+// bottom off); any shape when the display has no 16:9 mode
+let fits = modes.filter { $0.isUsableForDesktopGUI() && $0.width <= maxWidth && $0.pixelWidth == $0.width }
+let wide = fits.filter { $0.width * 9 == $0.height * 16 }
+let best = (wide.isEmpty ? fits : wide).max { ($0.width * $0.height) < ($1.width * $1.height) }
 if let best, let cur = CGDisplayCopyDisplayMode(display), best.width > cur.width {
     var config: CGDisplayConfigRef?
     CGBeginDisplayConfiguration(&config)
