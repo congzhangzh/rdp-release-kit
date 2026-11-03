@@ -815,6 +815,7 @@ jobs:
       contents: write
       id-token: write
       attestations: write
+      actions: read
     steps:
       - uses: actions/checkout@v7
       - uses: actions/download-artifact@v8
@@ -842,23 +843,19 @@ jobs:
           pattern: freerdp-host-macos-*
           path: dist
           merge-multiple: true
-      # the web client on the Windows host, recorded by windows-host.yml: it
-      # joins demo.json as "windows", which the page's Get a server shows
-      - uses: actions/download-artifact@v8
-        with:
-          name: windows-host-demo
-          path: dist/demo
-      - uses: actions/download-artifact@v8
-        with:
-          name: demo-release
-          path: dist/demo
-      # the macOS host's demo, recorded by mac-host-test (screencapture -V on a GitHub macOS
-      # runner: our client showing the Mac's own screen); best effort while that job is new
-      - uses: actions/download-artifact@v8
-        continue-on-error: true
-        with:
-          name: mac-host-test
-          path: dist/mac-host-test
+      # the videos, each from its job's newest attempt: after `gh run rerun --failed` a name
+      # has one artifact per attempt, and download-artifact by name took the first one
+      # (20261103.11 lost the rerun's KDE video); build/newest-artifact.sh takes the newest.
+      # The web client on the Windows host, recorded by windows-host.yml, joins demo.json as
+      # "windows", which the page's Get a server shows; the macOS host's demo, recorded by
+      # mac-host-test (best effort while that job is new), as "mac"
+      - name: The demo videos (newest attempts)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          build/newest-artifact.sh windows-host-demo dist/demo
+          build/newest-artifact.sh demo-release dist/demo
+          build/newest-artifact.sh mac-host-test dist/mac-host-test --optional
 
       - name: The files
         run: |
