@@ -57,6 +57,24 @@ function Memory($when) {
     Get-Process | Sort-Object WorkingSet64 -Descending | Select-Object -First 8 Name, Id, @{n = "MB"; e = { [int]($_.WorkingSet64 / 1MB) } } |
         Format-Table -AutoSize | Out-File -Append "$Out\memory.txt"
 }
+# Defender's view, next to the memory: since freerdp_web 20261103.1 (kit 20261103.10 and .11)
+# both web demos here took about 3 times as long (489 s against 159 s), MsMpEng held 610 MB
+# against 160 MB, and a "New notification" kept the front through the freerdp-tk demo;
+# the Mac and Linux demos kept their times. What Defender found, and where the CPU went
+function Defender($when) {
+    $lines = @("== defender $when $(Get-Date -Format HH:mm:ss)")
+    try {
+        $st = Get-MpComputerStatus
+        $lines += "realtime: $($st.RealTimeProtectionEnabled); signatures: $($st.AntivirusSignatureVersion)"
+        $lines += @(Get-MpThreatDetection | ForEach-Object {
+            "detection: $($_.InitialDetectionTime) threat $($_.ThreatID) action $($_.ActionSuccess) $($_.Resources -join ', ')" })
+        $lines += @(Get-MpThreat | ForEach-Object { "threat: $($_.ThreatName) ($($_.ThreatID))" })
+    } catch { $lines += "Defender: $($_.Exception.Message)" }
+    $lines += @(Get-Process | Sort-Object CPU -Descending | Select-Object -First 6 |
+        ForEach-Object { "cpu: $($_.Name) $([int]$_.CPU) s" })
+    $lines | Out-File -Append "$Out\memory.txt"
+    $lines | ForEach-Object { "DEFENDER $_" }
+}
 function Listening($p) { [bool](Get-NetTCPConnection -LocalPort $p -State Listen -ErrorAction SilentlyContinue) }
 function Stop($p) {
     if ($p -and -not $p.HasExited) { Stop-Process -Id $p.Id -Force }
@@ -394,12 +412,14 @@ if (-not (Get-Command ffmpeg -ErrorAction SilentlyContinue)) {
     & choco install ffmpeg -y --no-progress 2>&1 | Out-File "$demo\choco.log"
 }
 Memory "before the host demo"
+Defender "before the host demo"
 $env:SERVER = "windows"
 $env:DEMO_SOUND = if ($playback) { "1" } else { "" }   # the captions claim sound only with a device
 & node "$KitTest\wasm-demo.mjs" "http://127.0.0.1:8082/index.html" "127.0.0.1:3390" $user $pass $demo "$demo\raw.mp4" 2>&1 |
     Tee-Object "$demo\driver.log"
 Remove-Item Env:\SERVER
 Memory "after the host demo"
+Defender "after the host demo"
 if (Test-Path "$demo\raw.mp4") {
     $len = [double](& ffprobe -v error -show_entries format=duration -of csv=p=0 "$demo\raw.mp4")
     & ffmpeg -v error -y -i "$demo\raw.mp4" -vf "scale=1280:720:flags=lanczos,format=yuv420p" -c:v libx264 -crf 28 `
@@ -475,6 +495,7 @@ if ($site) {
         -RedirectStandardError "$rdemo\websockify.err" -ArgumentList "-m", "websockify", "127.0.0.1:3391", "127.0.0.2:3389"
     for ($i = 0; $i -lt 20 -and -not (Listening 3391); $i++) { Start-Sleep -Seconds 1 }
     Memory "before the Windows Remote Desktop demo"
+    Defender "before the Windows Remote Desktop demo"
     $env:SERVER = "windows-rdp"
     & node "$KitTest\wasm-demo.mjs" "http://127.0.0.1:8082/index.html" "127.0.0.1:3391" $user $pass $rdemo "$rdemo\raw.mp4" 2>&1 |
         Tee-Object "$rdemo\driver.log"
@@ -503,6 +524,7 @@ if ($site) {
 
 # the third video: freerdp-tk from the client's zip, to Windows' own Remote Desktop here
 if ($ClientZip -and $site) {
+    Defender "before the freerdp-tk demo"
     # a failure there is its own check below, not the end of this test (run 41196854812)
     try { & "$KitTest\client-demo\windows.ps1" $ClientZip $user $pass $Out 2>&1 | Tee-Object "$Out\tk-demo.log" }
     catch { "the freerdp-tk demo stopped: $($_.Exception.Message)" | Tee-Object -FilePath "$Out\tk-demo.log" -Append }
