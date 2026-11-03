@@ -113,6 +113,12 @@ elif [ ! -x "$FIREFOX" ] || [ ! -x "$CHROME_BIN" ] || ! command -v ffmpeg > /dev
     echo "SKIP  the web demo: needs Firefox, Chrome, ffmpeg and the media ($(ls -d "$FIREFOX" "$CHROME_BIN" 2>&1 | tr '\n' ' '))"
 else
     kill $SRV 2> /dev/null; sleep 2
+    # a bigger screen first, before the server reads it (test/mac/display-mode.swift): the
+    # largest mode up to 1600 wide, if the runner's display has one
+    swift "$KIT_TEST/mac/display-mode.swift" 1600 > "$OUT/web-display.txt" 2>&1 || true
+    tail -n 2 "$OUT/web-display.txt"
+    size=$(awk '/^now / { print $2 }' "$OUT/web-display.txt"); SW=${size%x*}; SH=${size#*x}
+    case "$SW$SH" in *[!0-9]* | "") SW=1024; SH=768 ;; esac
     WLOG_FILEAPPENDER_OUTPUT_FILE_NAME=server-web.wlog "$SERVER" /bind-address:127.0.0.1 /port:4490 \
         /sec:tls /gfx-av1 -gfx-avc444 -auth > "$OUT/server-web.out" 2>&1 &
     SRV=$!
@@ -126,6 +132,10 @@ else
     cp "$KIT_TEST/demo/media.html" "$W/site/index.html"
     ln -s "$MEDIA/bunny.webm" "$W/site/bunny.webm"; ln -s "$MEDIA/webgl" "$W/site/webgl"
     cp "$KIT_TEST/demo/user.js" "$W/ff/"
+    # Firefox's first start on this Mac, out of the video: macOS checks a new app on its first
+    # launch, and the profile is made (kit run 41630233301: the window came ~20 s late)
+    "$FIREFOX" --headless -no-remote -profile "$W/ff" about:blank > "$OUT/web/firefox-warm.log" 2>&1 &
+    FW=$!; sleep 15; kill $FW 2> /dev/null; sleep 2; pkill -x firefox 2> /dev/null
     python3 -m http.server 8000 --bind 127.0.0.1 --directory "$W/site" > "$OUT/web/media-http.log" 2>&1 &
     MH=$!
     for i in $(seq 1 30); do listening 4490 && listening 3390 && listening 8082 && listening 8000 && break; sleep 1; done
@@ -137,7 +147,7 @@ else
       sleep 1; open -a Calculator; sleep 6; osascript -e 'quit app "Calculator"' ) > /dev/null 2>&1 &
     MOT=$!
     SERVER=mac CHROME="$CHROME_BIN" \
-    DEMO_WEBDEMO_CMD="'$FIREFOX' -no-remote -profile '$W/ff' -width 1000 -height 700 http://127.0.0.1:8000/ > '$OUT/web/firefox.log' 2>&1 &" \
+    DEMO_WEBDEMO_CMD="'$FIREFOX' -no-remote -profile '$W/ff' -width $((SW - 24)) -height $((SH - 120)) http://127.0.0.1:8000/ > '$OUT/web/firefox.log' 2>&1 &" \
         node "$KIT_TEST/wasm-demo.mjs" http://127.0.0.1:8082/index.html 127.0.0.1:3390 probe probe \
         "$OUT/web" "$OUT/web/raw.mp4" > "$OUT/web/driver.log" 2>&1
     echo "web demo driver: exit $?"; tail -n 8 "$OUT/web/driver.log"
