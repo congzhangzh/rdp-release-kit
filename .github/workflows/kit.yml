@@ -225,17 +225,57 @@ jobs:
           retention-days: 3
 
   # The macOS host tested like the Windows one: this round's FreeRDP-Shadow.app shares a
+  # the media the demos play (Big Buck Bunny, the WebGL Aquarium), for the Mac host's web demo:
+  # demo.yml's cache (fetched once on a miss), as windows-host.yml's build job takes it
+  demo-media:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/cache@v6
+        with:
+          path: ~/.cache/rdp-release-kit/demo
+          key: demo-media-${{ hashFiles('test/demo-assets.sh') }}
+      - run: |
+          dir=$(test/demo-assets.sh)
+          mkdir -p dist/demo-media
+          cp "$dir/bunny.webm" dist/demo-media/
+          rsync -a --exclude .git "$dir/webgl" dist/demo-media/
+          du -sh dist/demo-media
+      - uses: actions/upload-artifact@v7
+        with:
+          name: demo-media
+          path: dist/demo-media
+          if-no-files-found: error
+          retention-days: 1
+
   # GitHub macOS runner's own screen, this round's macOS client connects (test/mac-host.sh:
   # an AV1 and an AV2 session). The runner grants Screen Recording to /bin/bash; the host runs
   # with -auth, since the runner account's password can't be set (kit branch
   # mac-capture-probe, run 41366210580: 348 AV1 frames). New, so it doesn't block a release yet
   mac-host-test:
-    needs: [macos, mac-host]
+    needs: [macos, mac-host, wasm-build, demo-media]
     runs-on: macos-15
     continue-on-error: true
-    timeout-minutes: 15
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@v7
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - uses: actions/download-artifact@v8
+        with:
+          name: wasm-build
+          path: dl/wasm
+      - uses: actions/download-artifact@v8
+        with:
+          name: demo-media
+          path: dl/media
+      # the web demo makes its MP4 with ffmpeg (test/wasm-demo.mjs); the image has none
+      - name: ffmpeg
+        env:
+          HOMEBREW_NO_AUTO_UPDATE: 1
+          HOMEBREW_NO_INSTALL_CLEANUP: 1
+        run: command -v ffmpeg || brew install --quiet ffmpeg
       - uses: actions/download-artifact@v8
         with:
           name: freerdp-host-macos-arm64
@@ -252,7 +292,7 @@ jobs:
       - name: The macOS host, with the macOS client
         run: >
           test/mac-host.sh "$(ls -d dl/host/freerdp-host-*-macos-arm64)"
-          "$(ls -d dl/client/sdl3-freerdp-*-macos-arm64)" out
+          "$(ls -d dl/client/sdl3-freerdp-*-macos-arm64)" out "$PWD/dl/wasm/web" "$PWD/dl/media"
       - uses: actions/upload-artifact@v7
         if: always()
         with:
@@ -833,8 +873,16 @@ jobs:
               | .videos += [$w + {title: "FreeRDP shadow server + Windows Server 2025, AV1"},
                             $r + {title: "Windows Server 2025'"'"'s own Remote Desktop"}]' \
               dist/demo/demo.json > dist/demo/demo.json.new && mv dist/demo/demo.json.new dist/demo/demo.json
-          # the macOS host (mac-host-test's recording), when that job made one
-          if [ -s dist/mac-host-test/mac-host.mov ]; then
+          # the macOS host: FreeRDP Web on it, recorded as the Windows host's demo (mac-host-test,
+          # test/mac-host.sh), or else the native client's screen recording
+          if [ -s dist/mac-host-test/mac-host-web.mp4 ]; then
+            cp dist/mac-host-test/mac-host-web.mp4 dist/demo/mac-host.mp4
+            cp dist/mac-host-test/mac-host-web.jpg dist/demo/mac-host.jpg
+            jq '{title: "FreeRDP Web on a macOS host, AV1",
+                 src: "demo/mac-host.mp4", poster: "demo/mac-host.jpg",
+                 caption: "FreeRDP Web in a browser on a GitHub macOS runner, through websockify, to the kit'"'"'s macOS host (FreeRDP-Shadow.app, ScreenCaptureKit) sharing that Mac'"'"'s screen: Firefox there with web video and WebGL; the picture in AV1. The browser runs headless, so the Mac'"'"'s screen shows only its own desktop. Big Buck Bunny © Blender Foundation, CC BY 3.0; WebGL Aquarium © Google, BSD."} as $m
+                | .mac = [$m] | .videos += [$m + {title: "FreeRDP shadow server + macOS, AV1"}]' dist/demo/demo.json > dist/demo/demo.json.new && mv dist/demo/demo.json.new dist/demo/demo.json
+          elif [ -s dist/mac-host-test/mac-host.mov ]; then
             command -v ffmpeg > /dev/null || { sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg > /dev/null; }
             ffmpeg -loglevel error -y -i dist/mac-host-test/mac-host.mov -c:v libx264 -pix_fmt yuv420p \
                 -movflags +faststart -an dist/demo/mac-host.mp4

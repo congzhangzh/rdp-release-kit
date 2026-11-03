@@ -40,8 +40,15 @@ const GNOME = process.env.SERVER === "gnome" || XRDP_GNOME;
 const WINDOWS = process.env.SERVER === "windows";
 const WINDOWS_RDP = process.env.SERVER === "windows-rdp";
 const WINDOWS_ANY = WINDOWS || WINDOWS_RDP;
+// mac: the macOS host (FreeRDP-Shadow.app) on a GitHub macOS runner, the gateway on the same
+// Mac (test/mac-host.sh). It runs with -auth (the runner's password can't be set), and the
+// runner may not let it type, so the visit types nothing there: DEMO_WEBDEMO_CMD opens Firefox
+// on the Mac with the media page, as "webdemo" does elsewhere
+const MAC = process.env.SERVER === "mac";
+const GATEWAY = WINDOWS_ANY || MAC;   // websockify on the server's own machine, no SSH
 const LABEL = process.env.DEMO_LABEL ||
   (WINDOWS ? "FreeRDP shadow server on Windows, AV1"
+    : MAC ? "FreeRDP shadow server on macOS, AV1"
     : WINDOWS_RDP ? "Windows Server 2025's own Remote Desktop"
     : XRDP_GNOME ? "xrdp preview + GNOME 51 Wayland, AV1"
     : XRDP_KDE ? "xrdp preview + KDE Plasma 6 Wayland, AV1"
@@ -240,7 +247,7 @@ await sleep(600);
 await caption("FreeRDP Web: an RDP client that runs in the browser");
 await sleep(2600);
 await moveTo(...Object.values(await center("#route .hops")), 900);
-await caption(WINDOWS_ANY ? "Your RDP server stays on 127.0.0.1. The page reaches it through a gateway."
+await caption(GATEWAY ? "Your RDP server stays on 127.0.0.1. The page reaches it through a gateway."
   : "Your RDP server stays on 127.0.0.1. The page reaches it through SSH.");
 await sleep(3200);
 await moveTo(...Object.values(await center("#copyCmd")), 800);
@@ -271,6 +278,7 @@ const audioStart = await ev("window.__demoRecord ? window.__demoRecord() : 0"); 
 let rx = 0;
 for (let i = 0; i < 80 && rx < 300000; i++) { await sleep(500); rx = await ev("window.freerdpNet?.rx ?? 0"); }
 await caption(WINDOWS ? "This Windows PC's own screen, shared by FreeRDP's shadow server, in AV1"
+  : MAC ? "This Mac's own screen, shared by FreeRDP's shadow server, in AV1"
   : WINDOWS_RDP ? "Windows Server's own Remote Desktop: a session of its own, in the browser"
   : "The remote Linux desktop, over WebSocket and SSH");
 await sleep(WINDOWS_RDP ? 12000 : 7000);   // the desktop starts (Windows: the user's sign-in), then its terminal
@@ -318,12 +326,19 @@ if (GNOME) {   // GNOME starts in the overview: typing searches, Enter starts th
   await sleep(1500);
   await typeRemote("konsole\n");
   await sleep(4000);
+} else if (MAC) {   // nothing typed (see MAC above): the desktop as it is
+  await caption("macOS: the screen as it is, live, through ScreenCaptureKit");
+  await sleep(3500);
 } else {
   await click(Math.round(canvas.x + 300), Math.round(canvas.y + 200));
 }
-await caption("Keyboard and mouse go to the remote desktop");
-await sleep(600);
-if (WINDOWS_ANY) {
+if (!MAC) {
+  await caption("Keyboard and mouse go to the remote desktop");
+  await sleep(600);
+}
+if (MAC) {
+  // nothing to type
+} else if (WINDOWS_ANY) {
   await typeRemote("hello from the browser through freerdp web\n");   // key(): lower case only
   await sleep(2400);
 } else {
@@ -366,6 +381,15 @@ if (WINDOWS_ANY) {
   await caption(WINDOWS_RDP ? "Drawn by Windows Server, streamed to this browser, sound included"
     : `Drawn on the Windows PC, streamed to this browser in AV1${pcSound ? ", sound included" : ""}`);
   await sleep(6000);
+} else if (MAC) {
+  const pcSound = !!process.env.DEMO_SOUND;
+  await caption(pcSound ? "Web video with sound, and WebGL: Firefox on the Mac" : "Web video and WebGL: Firefox on the Mac");
+  if (process.env.DEMO_WEBDEMO_CMD) spawn("sh", ["-c", process.env.DEMO_WEBDEMO_CMD], { stdio: "ignore", detached: true }).unref();
+  await sleep(14000);
+  await caption("Big Buck Bunny, © Blender Foundation, CC BY 3.0 · WebGL Aquarium, © Google, BSD");
+  await sleep(8000);
+  await caption(`Drawn on the Mac, streamed to this browser in AV1${pcSound ? ", sound included" : ""}`);
+  await sleep(6000);
 } else {
   await caption("Web video with sound, and WebGL: Firefox on the server");
   await typeRemote("webdemo\n");
@@ -396,6 +420,7 @@ recordingStopped = true;
 // Windows: Firefox, still playing the video and drawing the Aquarium in software, would
 // starve the encode below (run 41172690875: 39 minutes, unfinished); it is not needed now
 if (WINDOWS_ANY) spawnSync("taskkill", ["/IM", "firefox.exe", "/F"], { stdio: "ignore" });
+if (MAC) spawnSync("pkill", ["-x", "firefox"], { stdio: "ignore" });
 
 // the frames, each as long as it was on screen, into an MP4
 const list = shots.map((s, i) => `file '${s.file}'\nduration ${((shots[i + 1]?.t ?? s.t + 1) - s.t).toFixed(3)}`).join("\n")
@@ -409,7 +434,7 @@ if (audio) {
 }
 const ff = spawnSync("ffmpeg", ["-y", "-loglevel", "error", "-f", "concat", "-safe", "0", "-i", join(frames, "list.txt"),
   ...sound, "-map", "0:v", ...(audio ? ["-map", "1:a", "-c:a", "aac", "-b:a", "160k"] : []),
-  "-vf", `fps=30,scale=${W}:${H}:flags=lanczos,format=yuv420p`, "-c:v", "libx264", "-crf", "22", "-preset", WINDOWS_ANY ? "veryfast" : "slow",   // Windows: windows-host.ps1 encodes it again
+  "-vf", `fps=30,scale=${W}:${H}:flags=lanczos,format=yuv420p`, "-c:v", "libx264", "-crf", "22", "-preset", GATEWAY ? "veryfast" : "slow",   // Windows, Mac: windows-host.ps1, mac-host.sh encode it again
   "-movflags", "+faststart", video], { stdio: "inherit" });
 console.log(`demo: ${shots.length} frames, ${(shots.at(-1).t - shots[0].t).toFixed(1)} s, ` +
   `sound ${audio ? Math.round(audio.length * 0.75 / 1024) + " KB" : "none"} -> ${video} (ffmpeg ${ff.status})`);

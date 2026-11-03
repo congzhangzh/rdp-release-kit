@@ -2,6 +2,10 @@
 # The macOS host (FreeRDP-Shadow.app) on a GitHub macOS runner, with the kit's own macOS
 # client: an AV1 session and an AV2 session against the server as its LaunchAgent starts it.
 #   test/mac-host.sh <host dir (holds FreeRDP-Shadow.app)> <client dir (holds bin/sdl-freerdp)> <out dir>
+#                    [<web client dir (holds index.html)> <demo media dir (test/demo-assets.sh's)>]
+# With the last two, the demo video is made as on the Windows host: FreeRDP Web in headless
+# Chrome (test/wasm-demo.mjs, SERVER=mac), through websockify, so the Mac's screen shows the
+# desktop and Firefox playing the media page, not a client showing itself.
 # What the runner allows, found by the mac-capture-probe branch (2026-11-01):
 #  - Screen Recording is granted to /bin/bash on GitHub's macOS images, so the server can
 #    capture when this script starts it;
@@ -12,7 +16,8 @@
 #    during each session (not Chrome through `open -a`, which hung the job).
 # Bash 3.2 (macOS's own) is enough here.
 set -u
-HOSTDIR=$1; CLIENTDIR=$2; OUT=$3
+HOSTDIR=$1; CLIENTDIR=$2; OUT=$3; WEBDIR=${4:-}; MEDIA=${5:-}
+KIT_TEST=$(cd "$(dirname "$0")" && pwd)
 mkdir -p "$OUT"
 SERVER="$HOSTDIR/FreeRDP-Shadow.app/Contents/MacOS/freerdp-shadow-cli"
 CLIENT="$CLIENTDIR/bin/sdl-freerdp"
@@ -93,6 +98,63 @@ if alive; then
     check "the host is still running after the AV2 session" $ok
 else
     echo "SKIP  av2: the host is gone"
+fi
+# the demo video, the Windows host's way (test/windows-host.ps1): FreeRDP Web in headless
+# Chrome, which no screen shows, to a server of its own with AV1 only (the page takes AV2
+# when offered: libavm, about a frame a second here)
+FIREFOX=/Applications/Firefox.app/Contents/MacOS/firefox
+CHROME_BIN="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+if [ -z "$WEBDIR" ] || [ ! -f "$WEBDIR/index.html" ]; then
+    echo "SKIP  the web demo: no web client given"
+elif [ ! -x "$FIREFOX" ] || [ ! -x "$CHROME_BIN" ] || ! command -v ffmpeg > /dev/null || [ ! -s "$MEDIA/bunny.webm" ]; then
+    echo "SKIP  the web demo: needs Firefox, Chrome, ffmpeg and the media ($(ls -d "$FIREFOX" "$CHROME_BIN" 2>&1 | tr '\n' ' '))"
+else
+    kill $SRV 2> /dev/null; sleep 2
+    WLOG_FILEAPPENDER_OUTPUT_FILE_NAME=server-web.wlog "$SERVER" /bind-address:127.0.0.1 /port:4490 \
+        /sec:tls /gfx-av1 -gfx-avc444 -auth > "$OUT/server-web.out" 2>&1 &
+    SRV=$!
+    W=$(mktemp -d); mkdir -p "$OUT/web" "$W/site" "$W/ff"
+    python3 -m venv "$W/venv" && "$W/venv/bin/pip" install --quiet websockify > "$OUT/web/pip.log" 2>&1
+    "$W/venv/bin/websockify" 127.0.0.1:3390 127.0.0.1:4490 > "$OUT/web/websockify.log" 2>&1 &
+    GW=$!
+    python3 "$KIT_TEST/coi-http.py" 8082 "$WEBDIR" > "$OUT/web/coi-http.log" 2>&1 &
+    COI=$!
+    # the media page, served from this Mac's 127.0.0.1 (as webdemo does on the Linux servers)
+    cp "$KIT_TEST/demo/media.html" "$W/site/index.html"
+    ln -s "$MEDIA/bunny.webm" "$W/site/bunny.webm"; ln -s "$MEDIA/webgl" "$W/site/webgl"
+    cp "$KIT_TEST/demo/user.js" "$W/ff/"
+    python3 -m http.server 8000 --bind 127.0.0.1 --directory "$W/site" > "$OUT/web/media-http.log" 2>&1 &
+    MH=$!
+    for i in $(seq 1 30); do listening 4490 && listening 3390 && listening 8082 && listening 8000 && break; sleep 1; done
+    listening 4490 && listening 3390 && listening 8082 && listening 8000 && ok=1 || ok=0
+    check "web demo: the server, websockify and the pages are up" $ok
+    # ScreenCaptureKit sends only what changes: once the page is connected, an app opens and
+    # closes, so the first picture comes before Firefox does
+    ( for i in $(seq 1 180); do lsof -nP -iTCP:4490 -sTCP:ESTABLISHED > /dev/null 2>&1 && break; sleep 1; done
+      sleep 1; open -a Calculator; sleep 6; osascript -e 'quit app "Calculator"' ) > /dev/null 2>&1 &
+    MOT=$!
+    SERVER=mac CHROME="$CHROME_BIN" \
+    DEMO_WEBDEMO_CMD="'$FIREFOX' -no-remote -profile '$W/ff' -width 1000 -height 700 http://127.0.0.1:8000/ > '$OUT/web/firefox.log' 2>&1 &" \
+        node "$KIT_TEST/wasm-demo.mjs" http://127.0.0.1:8082/index.html 127.0.0.1:3390 probe probe \
+        "$OUT/web" "$OUT/web/raw.mp4" > "$OUT/web/driver.log" 2>&1
+    echo "web demo driver: exit $?"; tail -n 8 "$OUT/web/driver.log"
+    pkill -x firefox 2> /dev/null; kill $MOT $MH $COI $GW 2> /dev/null
+    if [ -s "$OUT/web/raw.mp4" ]; then
+        # as the site's other videos (test/record-demos.sh): 720p, H.264 CRF 28, AAC 96 kbit/s,
+        # a poster from 70 %
+        len=$(ffprobe -v error -show_entries format=duration -of csv=p=0 "$OUT/web/raw.mp4")
+        ffmpeg -v error -y -i "$OUT/web/raw.mp4" -vf "scale=1280:720:flags=lanczos,format=yuv420p" -c:v libx264 \
+            -crf 28 -preset slow -c:a aac -b:a 96k -movflags +faststart "$OUT/mac-host-web.mp4"
+        ffmpeg -v error -y -ss "$(echo "$len * 0.7" | bc)" -i "$OUT/web/raw.mp4" -frames:v 1 \
+            -vf "scale=1280:720:flags=lanczos" -q:v 4 "$OUT/mac-host-web.jpg"
+        rm -f "$OUT/web/raw.mp4"
+    fi
+    [ -s "$OUT/mac-host-web.mp4" ] && [ -s "$OUT/mac-host-web.jpg" ] && ok=1 || ok=0
+    check "web demo: a video of FreeRDP Web on this Mac" $ok "$(du -h "$OUT/mac-host-web.mp4" 2> /dev/null | cut -f1)"
+    # the page's Info panel at the end (wasm-demo.mjs prints its Video and AV1 lines)
+    grep -qE "AV1 frames|AV1 decoder" "$OUT/web/driver.log" 2> /dev/null && ok=1 || ok=0
+    check "web demo: the page decoded AV1" $ok "$(grep -E "Video|AV1 frames" "$OUT/web/driver.log" 2> /dev/null | tr '\n' ' ' | cut -c1-120)"
+    rm -rf "$W"
 fi
 # macOS's own crash reports of the server, if any
 mkdir -p "$OUT/crash"
