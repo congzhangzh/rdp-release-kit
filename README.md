@@ -190,7 +190,7 @@ Wine can not run it: Wine has no `_aligned_recalloc` in its UCRT yet.
 test/wasm-session.sh dist/wasm/web <freerdp-web>/rdp-gateway.sh   # log in from a browser
 ```
 
-FreeRDP's SDL3 client compiled with Emscripten (6.0.12, pinned by digest),
+FreeRDP's SDL3 client compiled with Emscripten (6.0.13, pinned by digest),
 with the [freerdp-web](https://github.com/congzhangzh/freerdp-web) page and
 its passkey vault for saved hosts, both pinned by commit in `sources.lock`.
 AV1 is decoded with the browser's WebCodecs, dav1d where those cannot. The

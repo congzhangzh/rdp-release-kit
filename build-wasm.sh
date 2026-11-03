@@ -16,8 +16,9 @@ OUT=$KIT/dist/wasm
 SOURCES=${SOURCES:-$HOME/.cache/rdp-release-kit/sources}
 # docker first: the builds are tested with it (podman: see README)
 ENGINE=${ENGINE:-$(command -v docker || command -v podman)}
-# Emscripten 6.0.12, as FreeRDP's Emscripten CI job uses it (#13728)
-IMAGE=emscripten/emsdk:6.0.12@sha256:77638e6c215a65f25a704c0c831d5c2463a8c0468a58c6cb82489dbe621dfa05
+# Emscripten 6.0.13, in step with avm-release-kit (its round 41655702766 built and decoded libavm
+# with it; 6.0.12 was FreeRDP's Emscripten CI job's, #13728); the digest is the multi-arch index's
+IMAGE=emscripten/emsdk:6.0.13@sha256:fb7864e398acfda863dfcea78b8bc8adad359fa60c6a0bbeb845931de64aa68a
 WORK=${WORK:-$HOME/.cache/rdp-release-kit/wasm}
 mkdir -p "$OUT" "$SOURCES" "$WORK"
 # the compiler cache, shared by every run on this machine; CCACHE=off
