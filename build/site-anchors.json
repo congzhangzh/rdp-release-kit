@@ -28,5 +28,8 @@
   ],
   "windows-rdp": [
     "windows-rdp"
+  ],
+  "mac-host": [
+    "mac-host"
   ]
 }
