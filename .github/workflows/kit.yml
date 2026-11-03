@@ -900,6 +900,9 @@ jobs:
                               caption: "freerdp-tk on Windows (Server 2025, a CI machine): the kit'"'"'s Windows client unpacked from its zip in PowerShell, freerdp-tk started from it, a connection to Windows'"'"' own Remote Desktop on the same PC: Notepad from Win+R, then Firefox in the session with web video and WebGL, its sound through the session; disconnect, freerdp-tk again, the saved connection opened with the password from Windows'"'"' Credential Manager. Big Buck Bunny © Blender Foundation, CC BY 3.0; WebGL Aquarium © Google, BSD."}]' \
                 dist/demo/demo.json > dist/demo/demo.json.new && mv dist/demo/demo.json.new dist/demo/demo.json
           fi
+          # the titles and captions in the page's other languages (zh, ja, fr), as "i18n" on
+          # every entry; an English text with no translation stays English (build/demo-i18n.py)
+          build/demo-i18n.py dist/demo/demo.json
           # assets are flat and GitHub turns '~' and '+' into '.': name the
           # files so first, so SHA256SUMS matches what is downloaded
           mkdir -p upload
