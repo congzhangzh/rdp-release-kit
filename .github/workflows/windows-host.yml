@@ -123,6 +123,20 @@ jobs:
           gh release download -R $env:GITHUB_REPOSITORY -D dl/webzip -p 'freerdp-web-*.zip'
           Expand-Archive (Get-ChildItem dl/webzip/*.zip | Select-Object -First 1).FullName -DestinationPath dl/wasm/web
 
+      # DIAGNOSTIC (branch windows-host only, never main): the page without its frame
+      # counter, freerdp-web-f8's A/B for the Windows web demos that got 3x slower with
+      # freerdp_web 20261103.1 (kit 20261103.10 to .12); the Info panel then says
+      # "AV1 frames –". If this run is fast, the wrapper costs it; if slow, it is not the page
+      - name: "Diagnostic: the page without decode-stats.js"
+        shell: pwsh
+        run: |
+          $f = Get-ChildItem dl/wasm -Recurse -Filter index.html | Select-Object -First 1
+          $before = Get-Content $f.FullName -Raw
+          $after = $before -replace '\s*<script src="decode-stats.js"></script>', ''
+          if ($after -eq $before) { throw "no decode-stats.js script tag in $($f.FullName)" }
+          Set-Content $f.FullName $after -NoNewline
+          "removed decode-stats.js from $($f.FullName)"
+
       - name: Unpack
         shell: pwsh
         run: |
