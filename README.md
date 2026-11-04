@@ -78,7 +78,7 @@ same tables are in the notes of every release.
 | Web client + freerdp-web page | freerdp 20261104.5, sdl3_wasm 3.4.18+timer, sdl3_ttf 3.2.2, freetype 2.15.0, libressl 4.4.0, opus 1.6.1, dav1d 1.5.4, avm 20261104.2, zlib 1.3.2, jansson 2.15.1, freerdp_web 20261104.1 | `test/wasm-session.sh`: a browser logs in to xrdp through SSH + websockify, the page served without COOP/COEP headers (as GitHub Pages) |
 | xrdp packages (.deb, .rpm) | xrdp 20261030.1, librfxcodec 0badc06, libpainter 379b8fb, xorgxrdp 20261018.1, x264 b35605a, opus 1.6.1, pipewire_xrdp 0.2, mutter 51.0-1.fc45 | `check-deps.sh`, then `test/xrdp-session.sh`: install in a fresh container of each release, log in over RDP: an Xorg session (xorgxrdp) with an xterm, then a Wayland one (sway, unless the release is marked no-sway) captured at the client's size; the login screen lists GNOME, and KDE unless no-kde; the default is GNOME on Fedora (Wayland first), Xorg elsewhere |
 | macOS host `FreeRDP-Shadow.app` | freerdp_mac_host 20261104.5, openssl 3.5.9, opus 1.6.1, dav1d 1.5.4, aom 3.15.2, avm 20261104.2, zlib 1.3.2, jansson 2.15.1 | `.github/workflows/mac-host.yml` builds and packages it on both architectures; the capture is tested by hand on a Mac (CI cannot grant Screen Recording) |
-| Linux host `freerdp-shadow-cli` (GNOME and X11) | freerdp_linux_host 20261104.5, openssl 3.5.9, opus 1.6.1, dav1d 1.5.4, aom 3.15.2, avm 20261104.2, libei 1.6.0, zlib 1.3.2, jansson 2.15.1 | `build/check-portable.sh` (glibc ≥ 2.34, and from the host only PAM, libsystemd, PipeWire and the X11 libraries), then `test/linux-host.sh` (the release waits for it): GNOME Shell 50 headless with the server as the package's systemd user unit (Mutter by default, `/subsystem` lists it first, AV1 and AV2 frames, idle CPU with a client under 20 %, keys through libei, the session's sound in Opus, the owner's login only, the sharing stopped in GNOME ends it with 0, its lines in the unit's journal through WinPR's journald appender; the optional session manager as a root system unit on 127.0.0.1:3391: the owner handed to their GNOME's shadow server, logged in, AV1 frames, a user with no GNOME session refused, then given a headless GNOME once in the group freerdp-headless, with its sound), and Xfce on Xvfb with `/subsystem:x11` (AV1 frames, the owner's login only) |
+| Linux host `freerdp-shadow-cli` (GNOME and X11) | freerdp_linux_host 20261104.5, openssl 3.5.9, opus 1.6.1, dav1d 1.5.4, aom 3.15.2, avm 20261104.2, libei 1.6.0, zlib 1.3.2, jansson 2.15.1 | `build/check-portable.sh` (glibc ≥ 2.34, and from the host only PAM, libsystemd, PipeWire and the X11 libraries), then `test/linux-host.sh` on x86_64 and aarch64, each natively on its own runner (the release waits for it): GNOME Shell 50 headless with the server as the package's systemd user unit (Mutter by default, `/subsystem` lists it first, AV1 and AV2 frames, idle CPU with a client under 20 %, keys through libei, the session's sound in Opus, the owner's login only, the sharing stopped in GNOME ends it with 0, its lines in the unit's journal through WinPR's journald appender; the optional session manager as a root system unit on 127.0.0.1:3391: the owner handed to their GNOME's shadow server, logged in, AV1 frames, a user with no GNOME session refused, then given a headless GNOME once in the group freerdp-headless, with its sound), and Xfce on Xvfb with `/subsystem:x11` (AV1 frames, the owner's login only) |
 
 Pins that are not a plain upstream release:
 
@@ -369,21 +369,22 @@ once that user is in `freerdp-headless`, a headless GNOME started for them
 (logged in, the shadow server's virtual monitor, frames with the screen
 changing, its sound, still running after the client leaves). `xorg`: Xfce on
 Xvfb, the unit's arguments with
-`/subsystem:x11`, AV1 frames, another account refused. CI runs both in a
-rootful podman container (`linux-host-test`); the release waits for them and
+`/subsystem:x11`, AV1 frames, another account refused. CI runs both, on an
+x86_64 and an aarch64 runner, in a rootful podman container (`linux-host-test`); the release waits for them and
 carries the archive.
 
 ### Installing the Linux host
 
-Each release has `freerdp-host-<version>-linux-x86_64.tar.xz` (its checksum
-in the release's `SHA256SUMS`). Install it for your own account, in the
+Each release has `freerdp-host-<version>-linux-x86_64.tar.xz` and
+`freerdp-host-<version>-linux-aarch64.tar.xz` for ARM64 (their checksums in the
+release's `SHA256SUMS`). Install it for your own account, in the
 desktop session you want to share (the archive's `README.txt` says the same):
 
 ```sh
-tar -xJf freerdp-host-*-linux-x86_64.tar.xz
+tar -xJf freerdp-host-*-linux-$(uname -m).tar.xz
 mkdir -p ~/.local/opt ~/.config/systemd/user
 rm -rf ~/.local/opt/freerdp-host   # an earlier version, if any (your settings stay)
-mv freerdp-host-*-linux-x86_64 ~/.local/opt/freerdp-host
+mv freerdp-host-*-linux-$(uname -m) ~/.local/opt/freerdp-host
 cp ~/.local/opt/freerdp-host/freerdp-shadow.service ~/.config/systemd/user/
 systemctl --user daemon-reload
 systemctl --user enable --now freerdp-shadow.service
@@ -440,8 +441,8 @@ change):
 
 ```sh
 sudo rm -rf /opt/freerdp-host   # an earlier version, if any
-sudo tar -xJf freerdp-host-*-linux-x86_64.tar.xz -C /opt
-sudo mv /opt/freerdp-host-*-linux-x86_64 /opt/freerdp-host
+sudo tar -xJf freerdp-host-*-linux-$(uname -m).tar.xz -C /opt
+sudo mv /opt/freerdp-host-*-linux-$(uname -m) /opt/freerdp-host
 sudo chown -R root:root /opt/freerdp-host
 sudo cp /opt/freerdp-host/freerdp-shadow-sesman.service /etc/systemd/system/
 sudo systemctl daemon-reload
