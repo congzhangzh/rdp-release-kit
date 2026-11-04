@@ -11,6 +11,10 @@ from right now, and what our own changes to a source fix:
 Every change that alters what is built (a pin, a build option, a patch, a
 toolchain) gets an entry here in the same commit.
 
+## 2026-11-04
+
+- **`avm` `20261103.1`** (`55df12d6d`, avm-release-kit-ea): `20261031.2` plus one plain-C change, `av2_avg_cdf_symbols` in one vectorized pass, bit-exact; the encoder spends 1.8 to 4.1 % fewer cycles on inter frames, and the decoder calls it once per frame. Its release kit: round 41739896575, 15/15, every target bit-exact, tsan clean (avm kit release 20261103.2). This round's check for it: the AV2 sessions (the Windows host and the Mac host tests, the xrdp-gnome demo) and the web client's AV2 decoding.
+
 ## 2026-11-03
 
 - **`freerdp_web` `20261103.2`** (tag c8015f5 → `ec91cd8b9`, freerdp-web-f8, 聪哥's go): the page shows the demo videos' titles and captions from `demo.json`'s `i18n.<lang>`, field by field with English as the fallback, in the intro, Get a server and Get a client, and follows a language change on the open page. On top of .1, no decode or Info code changed. freerdp-web's tests: unit 82, test-page all PASS, a Chrome check against 20261103.9's demo.json 26/26 in en/zh/ja/fr. This round's check for it: the web login test and the demos with this page.
