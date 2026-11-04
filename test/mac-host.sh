@@ -36,6 +36,7 @@ motion() {  # something on screen changes during a session
 }
 
 { sw_vers; uname -m; } > "$OUT/system.txt" 2>&1
+"$KIT_TEST/../build/cpu-line.sh" | tee -a "$OUT/system.txt"   # which AV2 kernels libavm runs here
 # the arguments of build/macos/org.freerdp.shadow.plist, plus -auth and a test port
 export WLOG_LEVEL=DEBUG WLOG_APPENDER=FILE WLOG_FILEAPPENDER_OUTPUT_FILE_PATH="$OUT"
 WLOG_FILEAPPENDER_OUTPUT_FILE_NAME=server.wlog "$SERVER" /bind-address:127.0.0.1 /port:4489 \

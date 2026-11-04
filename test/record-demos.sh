@@ -67,6 +67,7 @@ WEB=$(of_commit web) XRDP=$(of_commit xrdp) PIPEWIRE=$(newest pipewire-module-xr
 [ -n "$WEB" ] && [ -n "$XRDP" ] ||
     { echo "record-demos.sh: kit ${COMMIT:0:12} published no web-* or xrdp-* pre-release" >&2; exit 1; }
 echo "== inputs: $WEB, $XRDP, ${PIPEWIRE:-no pipewire-module-xrdp}"
+"$KIT/build/cpu-line.sh"   # which AV2 kernels xrdp's libavm runs here (xrdp-gnome encodes AV2)
 download "$WEB" "$IN/web" freerdp-web-page.zip
 mkdir -p "$IN/client"
 (cd "$IN/client" && python3 -m zipfile -e "$IN/web/freerdp-web-page.zip" .)

@@ -42,6 +42,7 @@ read -r -a RUN_OPTS <<< "${RUN_OPTS:-}"
 IMAGE=kit-linux-host-test
 NAME=kit-linux-host-$MODE-$$
 
+"$KIT/build/cpu-line.sh"   # which AV2 kernels the host's libavm runs here
 echo "== test bed (test/linux-host/Dockerfile)"
 $PODMAN build -q -t "$IMAGE" "$KIT/test/linux-host" > "$OUT/image-build.log" 2>&1 ||
     { tail -20 "$OUT/image-build.log"; exit 1; }

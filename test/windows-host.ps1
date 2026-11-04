@@ -92,6 +92,15 @@ function Stop($p) {
     Start-Sleep -Seconds 2
 }
 
+# which AV2 kernels the host's libavm runs here (build/cpu-line.sh on Linux and macOS):
+# IsProcessorFeaturePresent(41), PF_AVX512F_INSTRUCTIONS_AVAILABLE, says F with the OS's
+# support; libavm needs DQ, CD, BW and VL too, which Windows has no flag for, so this says F only
+try {
+    Add-Type -Namespace Kit -Name Cpu -MemberDefinition '[DllImport("kernel32.dll")] public static extern bool IsProcessorFeaturePresent(uint feature);' -ErrorAction Stop
+    $cpu = (Get-CimInstance Win32_Processor | Select-Object -First 1).Name.Trim()
+    "CPU: $cpu; AVX-512 F (IsProcessorFeaturePresent 41): $(if ([Kit.Cpu]::IsProcessorFeaturePresent(41)) { 'yes' } else { 'no' }); DQ CD BW VL not checked"
+} catch { "CPU: unknown ($($_.Exception.Message))" }
+
 # The screen: the runner's is 1024 x 768, half of what the demo's browser shows (the
 # shadow server shares the screen as it is; it cannot take the client's size as xrdp
 # does), so 1600 x 900 first, before any server reads it. And the dialog the runner
