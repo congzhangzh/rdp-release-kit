@@ -70,8 +70,14 @@ function Defender($when) {
             "detection: $($_.InitialDetectionTime) threat $($_.ThreatID) action $($_.ActionSuccess) $($_.Resources -join ', ')" })
         $lines += @(Get-MpThreat | ForEach-Object { "threat: $($_.ThreatName) ($($_.ThreatID))" })
     } catch { $lines += "Defender: $($_.Exception.Message)" }
+    # a svchost is named by the services it hosts: in the slow runs one used ~140 s
+    # (kit runs 41732759133, 41740460540) and none in the fast one (41740673857)
     $lines += @(Get-Process | Sort-Object CPU -Descending | Select-Object -First 6 |
-        ForEach-Object { "cpu: $($_.Name) $([int]$_.CPU) s" })
+        ForEach-Object {
+            $svc = if ($_.Name -eq "svchost") {
+                " [" + ((Get-CimInstance Win32_Service -Filter "ProcessId=$($_.Id)" -ErrorAction SilentlyContinue).Name -join ", ") + "]"
+            } else { "" }
+            "cpu: $($_.Name) $($_.Id) $([int]$_.CPU) s$svc" })
     $lines | Out-File -Append "$Out\memory.txt"
     $lines | ForEach-Object { "DEFENDER $_" }
 }
