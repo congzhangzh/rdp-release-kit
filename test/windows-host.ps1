@@ -423,6 +423,18 @@ if (-not (Get-Command ffmpeg -ErrorAction SilentlyContinue)) {
     & choco install ffmpeg -y --no-progress 2>&1 | Out-File "$demo\choco.log"
 }
 Memory "before the host demo"
+# StorSvc (the Storage Service) off for the demos: in the slow rounds it burned the CPU
+# (81 to 147 s), and the shadow server, dwm and the browser slowed with it (host demo
+# 479 to 922 s against ~175; kit runs 41732759133, 41740460540, 41746509344); stopped and
+# disabled first, the same test took 182.5 s (41751477744). A CI runner has no use for
+# it; on any other machine the test leaves the system's services alone
+if ($env:GITHUB_ACTIONS -eq "true") {
+    try {
+        Set-Service StorSvc -StartupType Disabled
+        Stop-Service StorSvc -Force -ErrorAction Stop
+        "StorSvc: $((Get-Service StorSvc).Status), $((Get-Service StorSvc).StartType)"
+    } catch { "StorSvc: not stopped: $($_.Exception.Message)" }
+}
 Defender "before the host demo"
 $env:SERVER = "windows"
 $env:DEMO_SOUND = if ($playback) { "1" } else { "" }   # the captions claim sound only with a device
