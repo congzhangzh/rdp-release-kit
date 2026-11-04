@@ -73,13 +73,16 @@ says who owns it, what it waits on, and where it lives.
 - **AV2 on by default**: kit branch `av2-default` (xrdp packages AV2 first, both hosts with
   `/gfx-av2`, the tests). Watch the demo recordings' frame rate: AV2 encodes in software.
 - **The page's presets**: put AV2 first in the bandwidth preset (freerdp-web, a page release).
-- **dav2d 4:4:4**: a client built with dav2d only still advertises AV2 4:4:4, so the screen
-  stays black (84x get_picture -22). FreeRDP fix, plus a plain bug report to dav2d (profile 4
-  is AV2 4:4:4; dav2d rejects profile > 2, `src/obu.c:224`). It's FreeRDP work, and
-  freerdp-59's session has ended: it needs a FreeRDP session.
-- **FreeRDP#13925**: ask for the re-review (the flags are reworked), and fold in the
-  av2-decoder-only commit (`f164292ac`). Also FreeRDP work for a FreeRDP session, with
-  聪哥's go per submission.
+- **dav2d 4:4:4** (freerdp-54 has it, 2026-11-04): the black screen (84x get_picture -22) was seen on
+  2026-10-30 with a client built with dav2d only, which advertised AV2 4:4:4 (no run id was recorded).
+  #13925 says it was fixed the same day: `WITH_GFX_AV2_I444` is defined only when libavm decodes, so a
+  dav2d-only client asks for 4:2:0. freerdp-54 is checking that in the code. Left either way: a plain
+  bug report to dav2d (profile 4 is AV2 4:4:4; dav2d rejects profile > 2, `src/obu.c:224`), which waits
+  for 聪哥's go.
+- **FreeRDP#13925**: the av2-decoder-only commit is in it already (`9db7fd073` on gfx-av2, the same
+  patch as `f164292ac`, so the av2-decoder-only branch is retired). The last review thread was answered
+  on 11-03 (`2fb7f3d5f`) and it merges cleanly onto master `a5d85a31f`. It waits for the maintainer,
+  with no nudge.
 - **This host**: the xrdp AV2 package (`xrdp-20261031.7`, debian-forky) is downloaded and
   checked. The restart waits for 聪哥, since live xrdp sessions are running.
 
@@ -89,9 +92,6 @@ says who owns it, what it waits on, and where it lives.
   Accessibility again (freerdp-d0 measured it). The choices are a Developer ID (paid, and
   Gatekeeper stays silent), a fixed self-signed certificate kept as a CI secret (free, and
   keeps the permissions), or staying ad hoc.
-- **FreeRDP#13925 (AV2):** a FreeRDP maintainer requested changes on 10-30 (a new caps
-  version or new flags, not both). The av2-decoder-only commit (`f164292ac`) belongs in
-  that PR. Its owner session isn't reachable.
 - **The site:** a page release only when the page code changed. The site is published with
   `site.yml` from a kit release.
 
