@@ -33,10 +33,10 @@ inside. MANIFEST lists the sources and what the server takes from the system.
 Install
 -------
 
-  tar -xJf freerdp-host-*-linux-x86_64.tar.xz
+  tar -xJf freerdp-host-*-linux-$(uname -m).tar.xz
   mkdir -p ~/.local/opt ~/.config/systemd/user
   rm -rf ~/.local/opt/freerdp-host   # an earlier version, if any (your settings stay)
-  mv freerdp-host-*-linux-x86_64 ~/.local/opt/freerdp-host
+  mv freerdp-host-*-linux-$(uname -m) ~/.local/opt/freerdp-host
   cp ~/.local/opt/freerdp-host/freerdp-shadow.service ~/.config/systemd/user/
   systemctl --user daemon-reload
   systemctl --user enable --now freerdp-shadow.service
@@ -105,8 +105,8 @@ Install it as root, in /opt/freerdp-host (a root service must not run programs a
 change, so not from ~/.local):
 
   sudo rm -rf /opt/freerdp-host   # an earlier version, if any
-  sudo tar -xJf freerdp-host-*-linux-x86_64.tar.xz -C /opt
-  sudo mv /opt/freerdp-host-*-linux-x86_64 /opt/freerdp-host
+  sudo tar -xJf freerdp-host-*-linux-$(uname -m).tar.xz -C /opt
+  sudo mv /opt/freerdp-host-*-linux-$(uname -m) /opt/freerdp-host
   sudo chown -R root:root /opt/freerdp-host
   sudo cp /opt/freerdp-host/freerdp-shadow-sesman.service /etc/systemd/system/
   sudo systemctl daemon-reload

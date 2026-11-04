@@ -302,11 +302,16 @@ jobs:
 
   # The Linux host: FreeRDP's shadow server for GNOME (Mutter, Wayland or X11) and
   # other X11 desktops in one binary (build.sh with HOST=1, freerdp_linux_host),
-  # x86_64 for now. Tested below; the release carries it
+  # x86_64 and aarch64, each natively on its own runner as the clients are. Tested
+  # below; the release carries both
   linux-host:
     needs: [releases]
     if: needs.releases.outputs.scope == 'all'
-    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-24.04, ubuntu-24.04-arm]
+    runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v7
 
@@ -332,15 +337,16 @@ jobs:
           HOST: "1"
         run: ./build.sh dist
 
+      # x86_64 keeps its artifact names (the release takes freerdp-host-linux-x86_64)
       - uses: actions/upload-artifact@v7
         if: always()
         with:
-          name: linux-host-log
-          path: ~/.cache/rdp-release-kit/work-x86_64-host/log
+          name: linux-host-log${{ runner.arch == 'ARM64' && '-aarch64' || '' }}
+          path: ~/.cache/rdp-release-kit/work-*-host/log
           retention-days: 7
       - uses: actions/upload-artifact@v7
         with:
-          name: freerdp-host-linux-x86_64
+          name: freerdp-host-linux-${{ runner.arch == 'ARM64' && 'aarch64' || 'x86_64' }}
           path: dist/freerdp-host-*
           if-no-files-found: error
           retention-days: 3
@@ -351,27 +357,30 @@ jobs:
   # owner's login only, the sharing stopped in GNOME ends it with 0); xorg, Xfce on
   # Xvfb with /subsystem:x11. Both in a rootful podman container, as the screens job
   # runs its systemd ones (AppArmor off: its profiles attach to the container's
-  # programs too). The release waits for both
+  # programs too). Each architecture on its own runner, with that architecture's
+  # client. The release waits for all four
   linux-host-test:
     needs: [build, linux-host]
     strategy:
       fail-fast: false
       matrix:
         desktop: [gnome, xorg]
-    runs-on: ubuntu-24.04
+        runner: [ubuntu-24.04, ubuntu-24.04-arm]
+    runs-on: ${{ matrix.runner }}
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
       - uses: actions/download-artifact@v8
         with:
-          name: freerdp-host-linux-x86_64
+          name: freerdp-host-linux-${{ runner.arch == 'ARM64' && 'aarch64' || 'x86_64' }}
           path: dl/host
       - uses: actions/download-artifact@v8
         with:
-          name: sdl3-freerdp-ubuntu-24.04
+          name: sdl3-freerdp-${{ matrix.runner }}
           path: dl/client
       - name: Tools
         run: |
+          command -v podman > /dev/null || { sudo apt-get update -q && sudo apt-get install -y -q podman; }
           printf '#!/bin/sh\nexec sudo podman "$@"\n' | sudo tee /usr/local/bin/podman-root > /dev/null
           sudo chmod 755 /usr/local/bin/podman-root
           sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
@@ -383,12 +392,12 @@ jobs:
           PODMAN: /usr/local/bin/podman-root
           RUN_OPTS: --security-opt apparmor=unconfined
         run: >
-          test/linux-host.sh ${{ matrix.desktop }} "$(ls dl/host/freerdp-host-*-linux-x86_64.tar.xz)"
-          "$(ls dl/client/sdl3-freerdp-*-linux-x86_64.tar.xz)" out
+          test/linux-host.sh ${{ matrix.desktop }} "$(ls dl/host/freerdp-host-*-linux-*.tar.xz)"
+          "$(ls dl/client/sdl3-freerdp-*-linux-*.tar.xz)" out
       - uses: actions/upload-artifact@v7
         if: always()
         with:
-          name: linux-host-test-${{ matrix.desktop }}
+          name: linux-host-test-${{ matrix.desktop }}${{ runner.arch == 'ARM64' && '-aarch64' || '' }}
           path: out
           retention-days: 7
 
@@ -948,15 +957,17 @@ jobs:
           build/newest-artifact.sh windows-host-demo dist/demo
           build/newest-artifact.sh demo-release dist/demo
           build/newest-artifact.sh mac-host-test dist/mac-host-test --optional
-      # the Linux host (x86_64), its job's newest attempt too: the tarball and its .sha256
-      # into dist/, where the files step below takes the tarball (its checksum goes into
-      # SHA256SUMS, as every asset's)
+      # the Linux host (x86_64 and aarch64), each job's newest attempt too: the tarballs
+      # and their .sha256 into dist/, where the files step below takes the tarballs
+      # (their checksums go into SHA256SUMS, as every asset's)
       - name: The Linux host (newest attempt)
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          build/newest-artifact.sh freerdp-host-linux-x86_64 dist
-          (cd dist && sha256sum -c freerdp-host-*-linux-x86_64.tar.xz.sha256)
+          for arch in x86_64 aarch64; do
+            build/newest-artifact.sh "freerdp-host-linux-$arch" dist
+            (cd dist && sha256sum -c freerdp-host-*-linux-"$arch".tar.xz.sha256)
+          done
 
       - name: The files
         run: |
@@ -1025,6 +1036,7 @@ jobs:
           freerdp_commit=$(awk '$1 == "freerdp" { print $4 }' sources.lock)
           host=$(cd upload && ls freerdp-host-*-windows-x86_64.zip)
           linux_host=$(cd upload && ls freerdp-host-*-linux-x86_64.tar.xz)
+          linux_host_arm=$(cd upload && ls freerdp-host-*-linux-aarch64.tar.xz)
           xrdp=$(awk '$1 == "xrdp" { print $2 }' sources.lock)
           key="FreeRDP $freerdp clients, xrdp $xrdp packages (kit ${GITHUB_SHA:0:12})"
           tag=$(build/prerelease-tag.sh release "$key")
@@ -1040,7 +1052,7 @@ jobs:
           build/xrdp-install-notes.sh --json upload "$base" |
             jq --arg r "$tag" --arg u "https://github.com/$GITHUB_REPOSITORY/releases/tag/$tag" --arg b "$base" --arg h "$host" \
                --arg ma "$(cd upload && ls freerdp-host-*-macos-arm64.zip)" --arg mx "$(cd upload && ls freerdp-host-*-macos-x86_64.zip)" \
-               --arg lx "$linux_host" '
+               --arg lx "$linux_host" --arg la "$linux_host_arm" '
               def platform: capture("-(?<os>linux|windows|macos)-(?<arch>[a-z0-9_]+)\\.") |
                 ({linux: "Linux", windows: "Windows", macos: "macOS"}[.os]) + " " +
                 (if .os == "macos" then {arm64: "Apple Silicon", x86_64: "Intel"}[.arch]
@@ -1060,7 +1072,7 @@ jobs:
               # the Linux host: share a Linux desktop'"'"'s own screen (GNOME on Wayland or X11, other X11
               # desktops), a systemd user unit on 127.0.0.1; one entry per architecture, as "mac"
               # (build/linux/host-README.txt, Install and Connect)
-              {linux: [[$lx, "x86_64"]] | map(.[0] as $f | ($f | rtrimstr(".tar.xz")) as $d | {platform: .[1], file: $f, url: ($b + "/" + $f),
+              {linux: [[$lx, "x86_64"], [$la, "ARM64"]] | map(.[0] as $f | ($f | rtrimstr(".tar.xz")) as $d | {platform: .[1], file: $f, url: ($b + "/" + $f),
                 unit: "freerdp-shadow.service",
                 command: ("curl -LO " + $b + "/" + $f + " && tar -xJf " + $f + " && mkdir -p ~/.local/opt ~/.config/systemd/user && rm -rf ~/.local/opt/freerdp-host && mv " + $d + " ~/.local/opt/freerdp-host && cp ~/.local/opt/freerdp-host/freerdp-shadow.service ~/.config/systemd/user/ && systemctl --user daemon-reload && systemctl --user enable --now freerdp-shadow.service"),
                 then: "It listens on 127.0.0.1 only: keep it there and reach it over SSH (ssh -L 13389:127.0.0.1:3389 user@server, then a client to 127.0.0.1:13389). The login is the desktop owner'"'"'s own account. A desktop that does not start graphical-session.target (Xfce, MATE) starts it from its autostart: systemctl --user import-environment DISPLAY XAUTHORITY && systemctl --user start freerdp-shadow. After GNOME'"'"'s Stop sharing, or to apply a change, run: systemctl --user restart freerdp-shadow",
@@ -1086,7 +1098,8 @@ jobs:
           | macOS host Apple Silicon | \`$(cd upload && ls freerdp-host-*-macos-arm64.zip)\` | share a Mac's own screen (AV2, AV1 and H.264, its sound): unzip, copy \`FreeRDP-Shadow.app\` to /Applications and the LaunchAgent \`org.freerdp.shadow.plist\` to ~/Library/LaunchAgents, \`launchctl bootstrap gui/\$(id -u) ~/Library/LaunchAgents/org.freerdp.shadow.plist\`, then allow Screen & System Audio Recording and Accessibility (README.txt; signed ad hoc, so each update asks again; not tested on CI, which cannot grant those) |
           | macOS host Intel | \`$(cd upload && ls freerdp-host-*-macos-x86_64.zip)\` | the same |
           | Windows host x86_64 | \`$host\` | share a Windows PC's own screen (logon and lock screens included, AV2 and AV1, its sound): unzip, then in an administrator's PowerShell \`.\\freerdp-shadow-service.exe install --allow-sas -- /bind-address:127.0.0.1 /gfx-av1 /gfx-av2 -gfx-avc444\` (AV1 only: leave out \`/gfx-av2\`; README.txt) |
-          | Linux host x86_64 | \`$linux_host\` | share a Linux desktop's own screen (GNOME on Wayland or X11 through Mutter, any other X11 desktop; AV2 and AV1; sound not tested yet): \`tar -xJf\` it, move the folder to \`~/.local/opt/freerdp-host\`, copy its \`freerdp-shadow.service\` to \`~/.config/systemd/user/\`, then \`systemctl --user daemon-reload && systemctl --user enable --now freerdp-shadow.service\`. It listens on 127.0.0.1 only: keep it there and reach it over SSH (\`ssh -L 13389:127.0.0.1:3389 user@server\`); the login is the desktop owner's own account (README.txt) |
+          | Linux host x86_64 | \`$linux_host\` | share a Linux desktop's own screen (GNOME on Wayland or X11 through Mutter, any other X11 desktop; AV2 and AV1, its sound): \`tar -xJf\` it, move the folder to \`~/.local/opt/freerdp-host\`, copy its \`freerdp-shadow.service\` to \`~/.config/systemd/user/\`, then \`systemctl --user daemon-reload && systemctl --user enable --now freerdp-shadow.service\`. It listens on 127.0.0.1 only: keep it there and reach it over SSH (\`ssh -L 13389:127.0.0.1:3389 user@server\`); the login is the desktop owner's own account (README.txt) |
+          | Linux host ARM64 | \`$linux_host_arm\` | the same, on an ARM64 Linux (aarch64) |
 
           The Linux client runs on glibc 2.34 and newer (RHEL 9, Debian 12, Ubuntu 22.04, Fedora 35 and newer) with PulseAudio's or PipeWire's libpulse; nothing else to install. The macOS client runs on macOS 12 and newer. Check a download: \`sha256sum -c --ignore-missing SHA256SUMS\`; its origin: \`gh attestation verify <file> -R $GITHUB_REPOSITORY\`. Each archive's MANIFEST lists what it was built from.
 
