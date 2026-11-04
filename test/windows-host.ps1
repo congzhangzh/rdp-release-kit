@@ -70,6 +70,9 @@ function Defender($when) {
             "detection: $($_.InitialDetectionTime) threat $($_.ThreatID) action $($_.ActionSuccess) $($_.Resources -join ', ')" })
         $lines += @(Get-MpThreat | ForEach-Object { "threat: $($_.ThreatName) ($($_.ThreatID))" })
     } catch { $lines += "Defender: $($_.Exception.Message)" }
+    $lines += @(Get-PSDrive -PSProvider FileSystem -ErrorAction SilentlyContinue |
+        Where-Object { $_.Used -or $_.Free } |
+        ForEach-Object { "disk: $($_.Name): {0:N1} GB free of {1:N1} GB" -f ($_.Free / 1GB), (($_.Used + $_.Free) / 1GB) })
     # a svchost is named by the services it hosts: in the slow runs one used ~140 s
     # (kit runs 41732759133, 41740460540) and none in the fast one (41740673857)
     $lines += @(Get-Process | Sort-Object CPU -Descending | Select-Object -First 6 |
@@ -418,6 +421,13 @@ if (-not (Get-Command ffmpeg -ErrorAction SilentlyContinue)) {
     & choco install ffmpeg -y --no-progress 2>&1 | Out-File "$demo\choco.log"
 }
 Memory "before the host demo"
+# DIAGNOSTIC (windows-host branch only): StorSvc off for the demos, the A/B for the slow
+# runs where it burned the CPU (kit run 41746509344)
+try {
+    Set-Service StorSvc -StartupType Disabled
+    Stop-Service StorSvc -Force -ErrorAction Stop
+    "DEFENDER StorSvc: $((Get-Service StorSvc).Status), $((Get-Service StorSvc).StartType)"
+} catch { "DEFENDER StorSvc: not stopped: $($_.Exception.Message)" }
 Defender "before the host demo"
 $env:SERVER = "windows"
 $env:DEMO_SOUND = if ($playback) { "1" } else { "" }   # the captions claim sound only with a device
