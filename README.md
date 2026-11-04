@@ -78,7 +78,7 @@ same tables are in the notes of every release.
 | Web client + freerdp-web page | freerdp 20261103.2, sdl3_wasm 3.4.18+timer, sdl3_ttf 3.2.2, freetype 2.15.0, libressl 4.4.0, opus 1.6.1, dav1d 1.5.4, avm 20261103.2, zlib 1.3.2, jansson 2.15.1, freerdp_web 20261103.3 | `test/wasm-session.sh`: a browser logs in to xrdp through SSH + websockify, the page served without COOP/COEP headers (as GitHub Pages) |
 | xrdp packages (.deb, .rpm) | xrdp 20261030.1, librfxcodec 0badc06, libpainter 379b8fb, xorgxrdp 20261018.1, x264 b35605a, opus 1.6.1, pipewire_xrdp 0.2, mutter 51.0-1.fc45 | `check-deps.sh`, then `test/xrdp-session.sh`: install in a fresh container of each release, log in over RDP: an Xorg session (xorgxrdp) with an xterm, then a Wayland one (sway, unless the release is marked no-sway) captured at the client's size; the login screen lists GNOME, and KDE unless no-kde; the default is GNOME on Fedora (Wayland first), Xorg elsewhere |
 | macOS host `FreeRDP-Shadow.app` | freerdp_mac_host 20261103.2, openssl 3.5.9, opus 1.6.1, dav1d 1.5.4, aom 3.15.2, avm 20261103.2, zlib 1.3.2, jansson 2.15.1 | `.github/workflows/mac-host.yml` builds and packages it on both architectures; the capture is tested by hand on a Mac (CI cannot grant Screen Recording) |
-| Linux host `freerdp-shadow-cli` (GNOME and X11) | freerdp_linux_host 20261103.2, openssl 3.5.9, opus 1.6.1, dav1d 1.5.4, aom 3.15.2, avm 20261103.2, libei 1.6.0, zlib 1.3.2, jansson 2.15.1 | `build/check-portable.sh` (glibc ≥ 2.34, and from the host only PAM, libsystemd, PipeWire and the X11 libraries), then `test/linux-host.sh` (new, not blocking yet): GNOME Shell 50 headless with the server as the package's systemd user unit (Mutter by default, `/subsystem` lists it first, AV1 and AV2 frames, idle CPU with a client under 20 %, keys through libei, the owner's login only, the sharing stopped in GNOME ends it with 0), and Xfce on Xvfb with `/subsystem:x11` (AV1 frames, the owner's login only) |
+| Linux host `freerdp-shadow-cli` (GNOME and X11) | freerdp_linux_host 20261103.2, openssl 3.5.9, opus 1.6.1, dav1d 1.5.4, aom 3.15.2, avm 20261103.2, libei 1.6.0, zlib 1.3.2, jansson 2.15.1 | `build/check-portable.sh` (glibc ≥ 2.34, and from the host only PAM, libsystemd, PipeWire and the X11 libraries), then `test/linux-host.sh` (the release waits for it): GNOME Shell 50 headless with the server as the package's systemd user unit (Mutter by default, `/subsystem` lists it first, AV1 and AV2 frames, idle CPU with a client under 20 %, keys through libei, the owner's login only, the sharing stopped in GNOME ends it with 0), and Xfce on Xvfb with `/subsystem:x11` (AV1 frames, the owner's login only) |
 
 Pins that are not a plain upstream release:
 
@@ -352,8 +352,45 @@ while, so a window with a clock runs), the server's idle CPU with a client
 sharing stopped from GNOME (`org.gnome.Shell.Eval`, with GNOME Shell in
 `--unsafe-mode`) ending the unit with 0 and no restart. `xorg`: Xfce on Xvfb,
 the unit's arguments with `/subsystem:x11`, AV1 frames, another account
-refused. CI runs both in a rootful podman container (`linux-host-test`), not
-blocking anything yet.
+refused. CI runs both in a rootful podman container (`linux-host-test`); the
+release waits for them and carries the archive.
+
+### Installing the Linux host
+
+Each release has `freerdp-host-<version>-linux-x86_64.tar.xz` (its checksum
+in the release's `SHA256SUMS`). Install it for your own account, in the
+desktop session you want to share (the archive's `README.txt` says the same):
+
+```sh
+tar -xJf freerdp-host-*-linux-x86_64.tar.xz
+mkdir -p ~/.local/opt ~/.config/systemd/user
+mv freerdp-host-*-linux-x86_64 ~/.local/opt/freerdp-host
+cp ~/.local/opt/freerdp-host/freerdp-shadow.service ~/.config/systemd/user/
+systemctl --user daemon-reload
+systemctl --user enable --now freerdp-shadow.service
+```
+
+It starts with the desktop session (GNOME starts `graphical-session.target`)
+and logs to `journalctl --user -u freerdp-shadow`. A desktop that does not
+start that target (Xfce, MATE) starts it from its autostart:
+`systemctl --user import-environment DISPLAY XAUTHORITY && systemctl --user start freerdp-shadow`.
+Stopping the sharing from GNOME's top bar ends the server and it stays
+stopped; `systemctl --user restart freerdp-shadow` brings it back.
+
+**Keep it on 127.0.0.1 and reach it over SSH.** The unit binds the server to
+the loopback interface only (`/bind-address:127.0.0.1`); do not change that
+to open port 3389 to the network (see [Deploying a server](#deploying-a-server-keep-rdp-off-the-internet)).
+From the client:
+
+```sh
+ssh -N -L 13389:127.0.0.1:3389 user@server &
+sdl-freerdp /v:127.0.0.1:13389 /u:user
+```
+
+The login is the account whose desktop it is, checked by the system's PAM
+over TLS; any other account is refused. Remove it with
+`systemctl --user disable --now freerdp-shadow.service`, then delete
+`~/.config/systemd/user/freerdp-shadow.service` and `~/.local/opt/freerdp-host`.
 
 ## xrdp packages
 

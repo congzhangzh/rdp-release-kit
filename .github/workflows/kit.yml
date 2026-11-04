@@ -302,13 +302,11 @@ jobs:
 
   # The Linux host: FreeRDP's shadow server for GNOME (Mutter, Wayland or X11) and
   # other X11 desktops in one binary (build.sh with HOST=1, freerdp_linux_host),
-  # x86_64 for now. New: built and tested below, nothing waits for it yet, and it is
-  # not in the release
+  # x86_64 for now. Tested below; the release carries it
   linux-host:
     needs: [releases]
     if: needs.releases.outputs.scope == 'all'
     runs-on: ubuntu-24.04
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v7
 
@@ -353,7 +351,7 @@ jobs:
   # owner's login only, the sharing stopped in GNOME ends it with 0); xorg, Xfce on
   # Xvfb with /subsystem:x11. Both in a rootful podman container, as the screens job
   # runs its systemd ones (AppArmor off: its profiles attach to the container's
-  # programs too). New, so it doesn't block anything yet
+  # programs too). The release waits for both
   linux-host-test:
     needs: [build, linux-host]
     strategy:
@@ -361,7 +359,6 @@ jobs:
       matrix:
         desktop: [gnome, xorg]
     runs-on: ubuntu-24.04
-    continue-on-error: true
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
@@ -900,7 +897,7 @@ jobs:
   # download (docs/RELEASE.md, "Products and channels")
   release:
     if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
-    needs: [build, windows, macos, mac-host, mac-host-test, xrdp, mutter, wasm, demo, windows-host]
+    needs: [build, windows, macos, mac-host, mac-host-test, linux-host, linux-host-test, xrdp, mutter, wasm, demo, windows-host]
     runs-on: ubuntu-24.04
     # one at a time across commits: each counts N from the releases before it,
     # so two pushes close together get .1 and .2, not both .1 (the second
@@ -951,6 +948,15 @@ jobs:
           build/newest-artifact.sh windows-host-demo dist/demo
           build/newest-artifact.sh demo-release dist/demo
           build/newest-artifact.sh mac-host-test dist/mac-host-test --optional
+      # the Linux host (x86_64), its job's newest attempt too: the tarball and its .sha256
+      # into dist/, where the files step below takes the tarball (its checksum goes into
+      # SHA256SUMS, as every asset's)
+      - name: The Linux host (newest attempt)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          build/newest-artifact.sh freerdp-host-linux-x86_64 dist
+          (cd dist && sha256sum -c freerdp-host-*-linux-x86_64.tar.xz.sha256)
 
       - name: The files
         run: |
@@ -1018,6 +1024,7 @@ jobs:
           freerdp=$(awk '$1 == "freerdp" { print $2 }' sources.lock)
           freerdp_commit=$(awk '$1 == "freerdp" { print $4 }' sources.lock)
           host=$(cd upload && ls freerdp-host-*-windows-x86_64.zip)
+          linux_host=$(cd upload && ls freerdp-host-*-linux-x86_64.tar.xz)
           xrdp=$(awk '$1 == "xrdp" { print $2 }' sources.lock)
           key="FreeRDP $freerdp clients, xrdp $xrdp packages (kit ${GITHUB_SHA:0:12})"
           tag=$(build/prerelease-tag.sh release "$key")
@@ -1032,7 +1039,8 @@ jobs:
           # shellcheck disable=SC2046 # one argument per client archive
           build/xrdp-install-notes.sh --json upload "$base" |
             jq --arg r "$tag" --arg u "https://github.com/$GITHUB_REPOSITORY/releases/tag/$tag" --arg b "$base" --arg h "$host" \
-               --arg ma "$(cd upload && ls freerdp-host-*-macos-arm64.zip)" --arg mx "$(cd upload && ls freerdp-host-*-macos-x86_64.zip)" '
+               --arg ma "$(cd upload && ls freerdp-host-*-macos-arm64.zip)" --arg mx "$(cd upload && ls freerdp-host-*-macos-x86_64.zip)" \
+               --arg lx "$linux_host" '
               def platform: capture("-(?<os>linux|windows|macos)-(?<arch>[a-z0-9_]+)\\.") |
                 ({linux: "Linux", windows: "Windows", macos: "macOS"}[.os]) + " " +
                 (if .os == "macos" then {arm64: "Apple Silicon", x86_64: "Intel"}[.arch]
@@ -1048,7 +1056,17 @@ jobs:
                 command: ("curl -LO " + $b + "/" + $f + " && ditto -x -k " + $f + " . && cd " + ($f | rtrimstr(".zip")) + " && cp -R FreeRDP-Shadow.app /Applications/ && xattr -dr com.apple.quarantine /Applications/FreeRDP-Shadow.app && cp org.freerdp.shadow.plist ~/Library/LaunchAgents/ && launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/org.freerdp.shadow.plist"),
                 then: "Then allow FreeRDP Shadow in System Settings > Privacy & Security, under Screen Recording and Accessibility, and run: launchctl kickstart -k gui/$(id -u)/org.freerdp.shadow",
                 kickstart: "launchctl kickstart -k gui/$(id -u)/org.freerdp.shadow",
-                remove: "launchctl bootout gui/$(id -u)/org.freerdp.shadow; rm ~/Library/LaunchAgents/org.freerdp.shadow.plist; rm -rf /Applications/FreeRDP-Shadow.app"})}' \
+                remove: "launchctl bootout gui/$(id -u)/org.freerdp.shadow; rm ~/Library/LaunchAgents/org.freerdp.shadow.plist; rm -rf /Applications/FreeRDP-Shadow.app"})} +
+              # the Linux host: share a Linux desktop'"'"'s own screen (GNOME on Wayland or X11, other X11
+              # desktops), a systemd user unit on 127.0.0.1; one entry per architecture, as "mac"
+              # (build/linux/host-README.txt, Install and Connect)
+              {linux: [[$lx, "x86_64"]] | map(.[0] as $f | ($f | rtrimstr(".tar.xz")) as $d | {platform: .[1], file: $f, url: ($b + "/" + $f),
+                unit: "freerdp-shadow.service",
+                command: ("curl -LO " + $b + "/" + $f + " && tar -xJf " + $f + " && mkdir -p ~/.local/opt ~/.config/systemd/user && mv " + $d + " ~/.local/opt/freerdp-host && cp ~/.local/opt/freerdp-host/freerdp-shadow.service ~/.config/systemd/user/ && systemctl --user daemon-reload && systemctl --user enable --now freerdp-shadow.service"),
+                then: "It listens on 127.0.0.1 only: keep it there and reach it over SSH (ssh -L 13389:127.0.0.1:3389 user@server, then a client to 127.0.0.1:13389). The login is the desktop owner'"'"'s own account. A desktop that does not start graphical-session.target (Xfce, MATE) starts it from its autostart: systemctl --user import-environment DISPLAY XAUTHORITY && systemctl --user start freerdp-shadow. After GNOME'"'"'s Stop sharing, or to apply a change, run: systemctl --user restart freerdp-shadow",
+                kickstart: "systemctl --user restart freerdp-shadow",
+                log: "journalctl --user -u freerdp-shadow",
+                remove: "systemctl --user disable --now freerdp-shadow.service; rm ~/.config/systemd/user/freerdp-shadow.service; rm -r ~/.local/opt/freerdp-host"})}' \
               --args $(cd upload && ls sdl3-freerdp-*-linux-*.tar.xz sdl3-freerdp-*-windows-*.zip sdl3-freerdp-*-macos-*.tar.xz) \
             > upload/install.json
           (cd upload && sha256sum install.json >> SHA256SUMS)
@@ -1068,13 +1086,14 @@ jobs:
           | macOS host Apple Silicon | \`$(cd upload && ls freerdp-host-*-macos-arm64.zip)\` | share a Mac's own screen (AV2, AV1 and H.264, its sound): unzip, copy \`FreeRDP-Shadow.app\` to /Applications and the LaunchAgent \`org.freerdp.shadow.plist\` to ~/Library/LaunchAgents, \`launchctl bootstrap gui/\$(id -u) ~/Library/LaunchAgents/org.freerdp.shadow.plist\`, then allow Screen & System Audio Recording and Accessibility (README.txt; signed ad hoc, so each update asks again; not tested on CI, which cannot grant those) |
           | macOS host Intel | \`$(cd upload && ls freerdp-host-*-macos-x86_64.zip)\` | the same |
           | Windows host x86_64 | \`$host\` | share a Windows PC's own screen (logon and lock screens included, AV2 and AV1, its sound): unzip, then in an administrator's PowerShell \`.\\freerdp-shadow-service.exe install --allow-sas -- /bind-address:127.0.0.1 /gfx-av1 /gfx-av2 -gfx-avc444\` (AV1 only: leave out \`/gfx-av2\`; README.txt) |
+          | Linux host x86_64 | \`$linux_host\` | share a Linux desktop's own screen (GNOME on Wayland or X11 through Mutter, any other X11 desktop; AV2 and AV1, its sound): \`tar -xJf\` it, move the folder to \`~/.local/opt/freerdp-host\`, copy its \`freerdp-shadow.service\` to \`~/.config/systemd/user/\`, then \`systemctl --user daemon-reload && systemctl --user enable --now freerdp-shadow.service\`. It listens on 127.0.0.1 only: keep it there and reach it over SSH (\`ssh -L 13389:127.0.0.1:3389 user@server\`); the login is the desktop owner's own account (README.txt) |
 
           The Linux client runs on glibc 2.34 and newer (RHEL 9, Debian 12, Ubuntu 22.04, Fedora 35 and newer) with PulseAudio's or PipeWire's libpulse; nothing else to install. The macOS client runs on macOS 12 and newer. Check a download: \`sha256sum -c --ignore-missing SHA256SUMS\`; its origin: \`gh attestation verify <file> -R $GITHUB_REPOSITORY\`. Each archive's MANIFEST lists what it was built from.
 
           $install
 
           The demo videos (\`xrdp-original-*.mp4\` with xrdp's upstream release as Debian 13 ships it, \`xrdp-gnome*.mp4\`, \`xrdp-kde.mp4\` with this release's xrdp, \`grd-gnome.mp4\`, \`demo.json\`) are this build's web client and xrdp, recorded on throwaway servers: everything shown is synthetic. Big Buck Bunny © Blender Foundation, CC BY 3.0; WebGL Aquarium © Google, BSD."
-          notes=$(build/release-notes.sh "$summary" linux windows macos web xrdp windows_host)$'\n\n'"<!-- kit-key: $key -->"
+          notes=$(build/release-notes.sh "$summary" linux windows macos web xrdp windows_host linux_host)$'\n\n'"<!-- kit-key: $key -->"
           LATEST=1 build/publish-prerelease.sh "$tag" "$title" "$notes" upload/*
       # the release page keeps the kit's releases and the newest 3 per-round pre-releases of
       # each kind; the rest go, their unique files archived first (build/prune-prereleases.sh).
