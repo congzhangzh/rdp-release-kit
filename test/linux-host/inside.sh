@@ -233,8 +233,29 @@ if [ "$MODE" = gnome ]; then
     kill $CPID 2> /dev/null; sleep 1
     check "sesman: a user with no GNOME session is refused, and sees nothing" \
         'sesman | grep -q "other has no GNOME session: refused" && [ "$(frames sesman-other AV1)$(frames sesman-other AV2)" = 00 ]'
+
+    # headless: other, now in the unit's group freerdp-headless, gets a GNOME of
+    # its own. tester's GNOME stops first: a rootless podman counts every
+    # container's inotify instances against one host user (128), too few for two
+    groupadd -f freerdp-headless && usermod -aG freerdp-headless other
+    as "systemctl --user stop freerdp-sesman-shadow.service gnome-shell-test.service" >> "$OUT/units.log" 2>&1
+    OTHER_UID=$(id -u other)
+    other_shadow() { journalctl _UID="$OTHER_UID" _SYSTEMD_USER_UNIT=freerdp-sesman-shadow.service -o cat --no-pager 2> /dev/null; }
+    USER_=other PASS_=other-pw PORT_=3391 connect sesman-headless /gfx:AV2:off
+    for _ in $(seq 90); do other_shadow | grep -q "is activated" && break; sleep 1; done
+    sleep 10
+    check "sesman headless: other (in freerdp-headless) gets a headless GNOME" \
+        'sesman | grep -q "other has no GNOME session: starting a headless one" && sesman | grep -q "headless GNOME of other is up"'
+    check "sesman headless: logged in, on the shadow server's own virtual monitor" \
+        'other_shadow | grep -q "is activated" && other_shadow | grep -q "sharing a virtual monitor of its own"'
+    check "sesman headless: the client gets frames" '[ "$(frames sesman-headless AV1)" -ge 1 ]' "$(codecs sesman-headless)"
+    kill $CPID 2> /dev/null; sleep 3
+    check "sesman headless: the GNOME keeps running after the client leaves" \
+        'systemctl is-active --quiet freerdp-sesman-gnome-other.service'
     sesman > "$OUT/sesman.log"
     sesman_shadow > "$OUT/sesman-shadow.log"
+    other_shadow > "$OUT/sesman-shadow-other.log"
+    journalctl -u freerdp-sesman-gnome-other -o cat --no-pager > "$OUT/sesman-gnome-other.log" 2>&1
 
     journal > "$OUT/server.log"
     echo "INFO  the server's lines in the unit's journal (journalctl --user -u): $(wc -l < "$OUT/server.log"), by identifier (-t freerdp-shadow-cli): $(journalctl -t freerdp-shadow-cli -o cat --no-pager 2> /dev/null | wc -l)"

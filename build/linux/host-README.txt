@@ -98,7 +98,8 @@ connection it reads the client's first packet and nothing else, takes the user i
 the shadow server in the user's own systemd manager if it is not running yet (the unit
 freerdp-sesman-shadow, on a socket in /run/user/<uid>), drops to the user and hands the
 connection over. It never sees a password: TLS and the login (PAM, the session's owner only)
-happen in that shadow server, as with the user unit. A user with no GNOME session is refused.
+happen in that shadow server, as with the user unit. A user with no GNOME session gets a
+headless one if they are in the group freerdp-headless (below), and is refused otherwise.
 
 Install it as root, in /opt/freerdp-host (a root service must not run programs a user can
 change, so not from ~/.local):
@@ -119,13 +120,24 @@ then a client to 127.0.0.1:13391 with your own user name and password. Its log:
 sudo journalctl -u freerdp-shadow-sesman (who connects, to whose session); the shadow
 server's own lines are in your journal, journalctl --user -u freerdp-sesman-shadow.
 
-Headless sessions: with --headless-group <group> in the unit's ExecStart, a user of that
-group who has no GNOME session gets a headless GNOME Shell (a monitor of its own, the size of
---headless-size, 1920x1080 by default), started by the first connection that names them. It
-keeps running when the client leaves, so the next connection finds the same desktop, until
-the user logs out in it or sudo systemctl stop freerdp-sesman-gnome-<user>. It is started
-before any login (the login happens in the shadow server, once GNOME is up): keep the group
-small, and the port on 127.0.0.1 or a private network.
+Headless sessions: a user of the group freerdp-headless who has no GNOME session gets a
+headless GNOME Shell, with a monitor of its own (1920x1080; --headless-size in the unit's
+ExecStart changes it), started by the first connection that names them. The group does not
+exist until you make it, so this is off until then:
+
+  sudo groupadd -f freerdp-headless
+  sudo usermod -aG freerdp-headless <user>
+
+The first connection waits for GNOME and the shadow server to start (about half a minute in
+our tests, two at most; a client that gives up
+earlier connects on its next try). The session keeps running when the client leaves, so the
+next connection finds the same desktop, until the user logs out in it or
+sudo systemctl stop freerdp-sesman-gnome-<user>. It is started before the login (the login
+happens in the shadow server, once GNOME is up): anyone who reaches the port can make it
+start for a member of the group, so keep the port on 127.0.0.1 (reached over SSH, as the unit
+has it) or a private network. Log out of a headless session before logging in on this
+computer's own screen as the same user: two GNOME sessions of one user at once are not
+supported.
 
 Remove it with
 

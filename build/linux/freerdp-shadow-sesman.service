@@ -6,7 +6,10 @@
 # which it starts in the user's own systemd manager
 # (systemctl --user status freerdp-sesman-shadow). It never sees a password:
 # TLS and the login (PAM, the session's owner only) happen in that shadow
-# server. Needs the server unpacked in /opt/freerdp-host, owned by root.
+# server. A user with no GNOME session gets a headless one if they are in the
+# group freerdp-headless (sudo groupadd -f freerdp-headless; sudo usermod -aG
+# freerdp-headless <user>); without the group everyone else is refused. Needs
+# the server unpacked in /opt/freerdp-host, owned by root.
 [Unit]
 Description=FreeRDP session manager: RDP to the GNOME session of the user who connects, on 127.0.0.1:3391
 Documentation=https://github.com/congzhangzh/rdp-release-kit
@@ -15,9 +18,11 @@ After=network.target systemd-logind.service
 [Service]
 # after "--": the shadow server's own options (it adds /ipc-socket and
 # /sec:tls); AV2 to the clients that offer it, AV1 to the others, as the user
-# unit. --headless-group <group>: that group's users get a headless GNOME
-# when they have no session (before any login: keep the group small)
-ExecStart=/opt/freerdp-host/bin/freerdp-shadow-sesman --bind 127.0.0.1 --port 3391 --shadow /opt/freerdp-host/bin/freerdp-shadow-cli -- /gfx-av1 /gfx-av2
+# unit. --headless-group: that group's users get a headless GNOME when they
+# have none, started by the first connection that names them, before the
+# login (which the shadow server asks for once GNOME is up); --headless-size
+# its monitor (1920x1080)
+ExecStart=/opt/freerdp-host/bin/freerdp-shadow-sesman --bind 127.0.0.1 --port 3391 --headless-group freerdp-headless --shadow /opt/freerdp-host/bin/freerdp-shadow-cli -- /gfx-av1 /gfx-av2
 Restart=on-failure
 RestartSec=5
 
