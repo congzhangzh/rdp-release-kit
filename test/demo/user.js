@@ -27,3 +27,13 @@ user_pref("media.autoplay.default", 0);   // the video starts with its sound
 user_pref("termsofuse.bypassNotification", true);
 user_pref("datareporting.policy.dataSubmissionPolicyBypassNotification", true);
 user_pref("browser.preonboarding.enabled", false);
+// Firefox's own "Would you like to pin Firefox to your taskbar? This request is coming
+// from Firefox" (Windows 11) sat in front on the Windows runner and kept PowerShell from
+// the front, so the freerdp-tk Windows demo was skipped (kit 20261103.10 to 20261104.4,
+// seen in windows-host.mp4): no onboarding, upgrade or recommendation messages
+user_pref("browser.startup.upgradeDialog.enabled", false);
+user_pref("browser.shell.skipDefaultBrowserCheckOnFirstRun", true);
+user_pref("browser.newtabpage.activity-stream.asrouter.userprefs.cfr.addons", false);
+user_pref("browser.newtabpage.activity-stream.asrouter.userprefs.cfr.features", false);
+user_pref("messaging-system.rsexperimentloader.enabled", false);
+user_pref("app.shield.optoutstudies.enabled", false);
