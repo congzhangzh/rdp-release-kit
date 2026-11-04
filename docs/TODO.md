@@ -73,13 +73,11 @@ says who owns it, what it waits on, and where it lives.
 - **AV2 on by default**: kit branch `av2-default` (xrdp packages AV2 first, both hosts with
   `/gfx-av2`, the tests). Watch the demo recordings' frame rate: AV2 encodes in software.
 - **The page's presets**: put AV2 first in the bandwidth preset (freerdp-web, a page release).
-- **dav2d profile 4 report** (the FreeRDP side is closed: freerdp-54 checked on 2026-11-04 that a
-  dav2d-only client asks for 4:2:0, `WITH_GFX_AV2_I444` only with libavm, since the 10-30 fixups
-  a397dc6ee / 52e08a37a; the 84x get_picture -22 came from an older build). Left: a plain bug report
-  to dav2d (profile 4 is AV2 4:4:4; dav2d rejects profile > 2, `src/obu.c:224`, reproduced; dav2d #67
-  lists profile 3 and monochrome, not 4), waiting for 聪哥's go. Note: Debian's dav2d 0.0.1 mis-decodes
-  inter frames and `Finddav2d.cmake` has no version check, so a client linked to a distro dav2d would
-  show broken pictures (the kit's clients use libavm).
+- **dav2d 4:4:4: closed** (2026-11-04, freerdp-54). A dav2d-only FreeRDP client asks for 4:2:0
+  since 10-30 (a397dc6ee / 52e08a37a), and dav2d itself accepts profiles 3 and 4 since MR !964 (merged
+  2026-10-30, `src/obu.c:219` `profile > 4`), so no report is needed. Possible follow-up for a FreeRDP
+  session: once a dav2d release carries !964, `WITH_GFX_AV2_I444` only with libavm is too strict. Debian's
+  dav2d 0.0.1 mis-decodes inter frames and `Finddav2d.cmake` has no version check; the kit uses libavm.
 - **FreeRDP#13925**: the av2-decoder-only commit is in it already (`9db7fd073` on gfx-av2, the same
   patch as `f164292ac`, so the av2-decoder-only branch is retired). The last review thread was answered
   on 11-03 (`2fb7f3d5f`) and it merges cleanly onto master `a5d85a31f`. It waits for the maintainer,
