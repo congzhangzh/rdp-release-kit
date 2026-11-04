@@ -29,6 +29,7 @@ Install
 
   tar -xJf freerdp-host-*-linux-x86_64.tar.xz
   mkdir -p ~/.local/opt ~/.config/systemd/user
+  rm -rf ~/.local/opt/freerdp-host   # an earlier version, if any (your settings stay)
   mv freerdp-host-*-linux-x86_64 ~/.local/opt/freerdp-host
   cp ~/.local/opt/freerdp-host/freerdp-shadow.service ~/.config/systemd/user/
   systemctl --user daemon-reload
