@@ -84,6 +84,18 @@ cpu() {
 # once the screen changes (an idle GNOME records cursor frames and skips the full
 # one as "too early"), and X11's capture sends what changed
 CLOCK='while :; do date +%T.%N; sleep 0.05; done'
+# a tone for the sound checks, for pw-cat --raw: 1 kHz at -12 dBFS, 48 kHz, 2
+# channels, 16 bits, 4 s (one period of 48 frames, 4000 times)
+TONE=/tmp/tone.raw
+PERIOD=$(awk 'BEGIN { for (i = 0; i < 48; i++) { v = int(8191 * sin(2 * 3.14159265 * i / 48)); if (v < 0) v += 65536
+    b = sprintf("\\x%02x\\x%02x", v % 256, int(v / 256)); s = s b b } print s }')
+# shellcheck disable=SC2059
+for _ in $(seq 4000); do printf "$PERIOD"; done > "$TONE"
+chmod 644 "$TONE"
+play_tone() { pw-cat --playback --raw --rate 48000 --channels 2 --format s16 "$TONE"; }
+# tone_waves <name>: the waves that carry sound: in Opus a wave of silence is a few
+# bytes, of the tone a few hundred (one wave every 50 ms)
+tone_waves() { grep -oE ' Wave: .*size: [0-9]+' "$OUT/$1.wlog" 2> /dev/null | awk '$NF >= 100' | wc -l; }
 
 if [ "$MODE" = gnome ]; then
     for _ in $(seq 60); do
@@ -173,6 +185,20 @@ if [ "$MODE" = gnome ]; then
     kill $CPID 2> /dev/null; sleep 2
     as "pkill -x foot"
 
+    # sound: what the session plays (the tone, 4 s) reaches the client in Opus, as it
+    # plays. No sound card here: the sink is WirePlumber's Dummy Output, whose
+    # monitor the server records, as it would a sound card's
+    connect sound /gfx:AV2:off /sound:sys:fake
+    sleep 10
+    as "$(declare -f play_tone); TONE=$TONE play_tone" > "$OUT/pw-cat.log" 2>&1
+    sleep 3
+    kill $CPID 2> /dev/null; sleep 2
+    check "sound: the server records what the session's sink plays" \
+        'journal | grep -q "sound: capturing what the default sink plays"'
+    check "sound: the tone reaches the client in Opus, as it plays (4 s, 80 waves)" \
+        'grep -q "Opening device with format WAVE_FORMAT_OPUS" "$OUT/sound.wlog" && [ "$(tone_waves sound)" -ge 60 ]' \
+        "$(tone_waves sound) waves with sound"
+
     # another account: refused, the screen is tester's
     USER_=other PASS_=other-pw connect other
     sleep 8
@@ -241,13 +267,13 @@ if [ "$MODE" = gnome ]; then
     as "systemctl --user stop freerdp-sesman-shadow.service gnome-shell-test.service" >> "$OUT/units.log" 2>&1
     OTHER_UID=$(id -u other)
     other_shadow() { journalctl _UID="$OTHER_UID" _SYSTEMD_USER_UNIT=freerdp-sesman-shadow.service -o cat --no-pager 2> /dev/null; }
-    USER_=other PASS_=other-pw PORT_=3391 connect sesman-headless /gfx:AV2:off
+    as_other() { su other -s /bin/bash -c "export XDG_RUNTIME_DIR=/run/user/$OTHER_UID \
+        DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/$OTHER_UID/bus WAYLAND_DISPLAY=wayland-0; cd; $*"; }
+    USER_=other PASS_=other-pw PORT_=3391 connect sesman-headless /gfx:AV2:off /sound:sys:fake
     for _ in $(seq 90); do other_shadow | grep -q "is activated" && break; sleep 1; done
     # the same clock window, in other's GNOME: it opens on the virtual monitor, the
     # only one there, so the frames count what changes, not only the first picture
-    su other -s /bin/bash -c "export XDG_RUNTIME_DIR=/run/user/$OTHER_UID \
-        DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/$OTHER_UID/bus WAYLAND_DISPLAY=wayland-0; cd; \
-        nohup foot sh -c '$CLOCK' > /tmp/foot-clock-other.log 2>&1 &"
+    as_other "nohup foot sh -c '$CLOCK' > /tmp/foot-clock-other.log 2>&1 &"
     sleep 25
     check "sesman headless: other (in freerdp-headless) gets a headless GNOME" \
         'sesman | grep -q "other has no GNOME session: starting a headless one" && sesman | grep -q "headless GNOME of other is up"'
@@ -255,6 +281,12 @@ if [ "$MODE" = gnome ]; then
         'other_shadow | grep -q "is activated" && other_shadow | grep -q "sharing a virtual monitor of its own"'
     check "sesman headless: at least 20 frames in AV1 with the screen changing" \
         '[ "$(frames sesman-headless AV1)" -ge 20 ]' "$(codecs sesman-headless)"
+    # sound in the headless GNOME too: the session manager starts other's PipeWire
+    as_other "$(declare -f play_tone); TONE=$TONE play_tone" > "$OUT/pw-cat-other.log" 2>&1
+    sleep 3
+    check "sesman headless: the tone played there reaches the client in Opus" \
+        'grep -q "Opening device with format WAVE_FORMAT_OPUS" "$OUT/sesman-headless.wlog" && [ "$(tone_waves sesman-headless)" -ge 60 ]' \
+        "$(tone_waves sesman-headless) waves with sound"
     kill $CPID 2> /dev/null; sleep 3
     pkill -u other -x foot
     check "sesman headless: the GNOME keeps running after the client leaves" \
