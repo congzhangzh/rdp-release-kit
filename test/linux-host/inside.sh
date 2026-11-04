@@ -243,13 +243,20 @@ if [ "$MODE" = gnome ]; then
     other_shadow() { journalctl _UID="$OTHER_UID" _SYSTEMD_USER_UNIT=freerdp-sesman-shadow.service -o cat --no-pager 2> /dev/null; }
     USER_=other PASS_=other-pw PORT_=3391 connect sesman-headless /gfx:AV2:off
     for _ in $(seq 90); do other_shadow | grep -q "is activated" && break; sleep 1; done
-    sleep 10
+    # the same clock window, in other's GNOME: it opens on the virtual monitor, the
+    # only one there, so the frames count what changes, not only the first picture
+    su other -s /bin/bash -c "export XDG_RUNTIME_DIR=/run/user/$OTHER_UID \
+        DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/$OTHER_UID/bus WAYLAND_DISPLAY=wayland-0; cd; \
+        nohup foot sh -c '$CLOCK' > /tmp/foot-clock-other.log 2>&1 &"
+    sleep 25
     check "sesman headless: other (in freerdp-headless) gets a headless GNOME" \
         'sesman | grep -q "other has no GNOME session: starting a headless one" && sesman | grep -q "headless GNOME of other is up"'
     check "sesman headless: logged in, on the shadow server's own virtual monitor" \
         'other_shadow | grep -q "is activated" && other_shadow | grep -q "sharing a virtual monitor of its own"'
-    check "sesman headless: the client gets frames" '[ "$(frames sesman-headless AV1)" -ge 1 ]' "$(codecs sesman-headless)"
+    check "sesman headless: at least 20 frames in AV1 with the screen changing" \
+        '[ "$(frames sesman-headless AV1)" -ge 20 ]' "$(codecs sesman-headless)"
     kill $CPID 2> /dev/null; sleep 3
+    pkill -u other -x foot
     check "sesman headless: the GNOME keeps running after the client leaves" \
         'systemctl is-active --quiet freerdp-sesman-gnome-other.service'
     sesman > "$OUT/sesman.log"
