@@ -91,6 +91,7 @@ if [ -n "${HOST:-}" ]; then
     fi
 
     FREERDP=freerdp_linux_host
+    host_source "$FREERDP"
     if overridden "$FREERDP"; then
         echo "== $FREERDP (local)"
     else

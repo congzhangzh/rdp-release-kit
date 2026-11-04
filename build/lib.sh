@@ -150,6 +150,17 @@ overridden() {
     [[ " ${OVERRIDES:-} " == *" $1 "* ]]
 }
 
+# host_source <name>: HOST=1 builds FreeRDP from <name> (freerdp_host,
+# freerdp_mac_host, freerdp_linux_host), not from freerdp. A local SRC_freerdp
+# alone would be ignored while the package is still named -local with an
+# OVERRIDE line in its MANIFEST, so stop and say which SRC_ to set
+host_source() {
+    if overridden freerdp && ! overridden "$1"; then
+        echo "HOST=1 builds FreeRDP from $1, not freerdp: set SRC_$1=<dir> (SRC_freerdp alone is not used)" >&2
+        exit 1
+    fi
+}
+
 # sync_override <name>: $WORK/src/<name> becomes the files listed in
 # $WORK/override/<name>.list, copied by content: a file whose content did
 # not change keeps its time stamp and Ninja or make leaves it alone.

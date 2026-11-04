@@ -100,6 +100,7 @@ WHAT=(-DWITH_CLIENT=ON -DWITH_CLIENT_SDL=ON -DWITH_CLIENT_SDL3=ON -DWITH_CLIENT_
       -DWITH_SERVER=OFF -DWITH_GFX_AV2=ON -DWITH_AVM=ON)
 if [ -n "${HOST:-}" ]; then
     FREERDP=freerdp_host
+    host_source "$FREERDP"
     cmake_dep aom "${CROSS[@]}" -DENABLE_TESTS=OFF -DENABLE_EXAMPLES=OFF -DENABLE_DOCS=OFF \
         -DENABLE_TOOLS=OFF
     # H.264 (AVC420) from Windows' own Media Foundation encoder (FreeRDP#13970), no
