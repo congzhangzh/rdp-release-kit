@@ -9,6 +9,12 @@ there, like VNC or GNOME's own Desktop Sharing; it does not start sessions of it
   freerdp-shadow.service     a systemd user unit: starts it with your desktop session
   bin/winpr-hash             a line of a SAM file (not needed for the system's accounts)
 
+Optional, off unless you install it (see "The session manager" below; it runs as root):
+
+  bin/freerdp-shadow-sesman      one port for every user of this computer: each
+                                 connection goes to the GNOME session of the user it names
+  freerdp-shadow-sesman.service  its systemd system unit, on 127.0.0.1:3391
+
 One server for two kinds of desktop; it takes, at start, the first that finds a monitor:
 
   Mutter   GNOME, on Wayland or X11, through Mutter's own screen-cast and remote-desktop
@@ -36,7 +42,11 @@ Install
   systemctl --user enable --now freerdp-shadow.service
 
 Its log is the unit's journal: journalctl --user -u freerdp-shadow (-f to follow it) shows
-what it shares and who logs in. It starts with the desktop session (GNOME
+what it shares and who logs in. Where the journal is kept in memory only (no
+/var/log/journal, as on some distributions), journald keeps no file of your own and
+journalctl --user may show nothing: read it as root (sudo journalctl -t freerdp-shadow-cli),
+or keep the journal on disk (Storage=persistent in /etc/systemd/journald.conf, then
+sudo systemctl restart systemd-journald). It starts with the desktop session (GNOME
 starts graphical-session.target) and stops with it. A desktop that does not start that target
 (Xfce, MATE...) gets it from its autostart instead, with the display:
 
@@ -77,12 +87,59 @@ computer (websockify 127.0.0.1:3390 127.0.0.1:3389) and forward 3390 instead.
 
 The server makes its own TLS certificate on its first start, in ~/.config/freerdp/shadow/.
 
+The session manager (optional, runs as root)
+--------------------------------------------
+
+freerdp-shadow-sesman lets every user of this computer reach their own GNOME session on one
+port, without installing the user unit above: it runs as root, as a system service, on a port
+of its own, 127.0.0.1:3391 (the user unit keeps 3389, so both can be installed). For each
+connection it reads the client's first packet and nothing else, takes the user it names
+(the client's user name, "Cookie: mstshash=<user>"), finds that user's GNOME Shell, starts
+the shadow server in the user's own systemd manager if it is not running yet (the unit
+freerdp-sesman-shadow, on a socket in /run/user/<uid>), drops to the user and hands the
+connection over. It never sees a password: TLS and the login (PAM, the session's owner only)
+happen in that shadow server, as with the user unit. A user with no GNOME session is refused.
+
+Install it as root, in /opt/freerdp-host (a root service must not run programs a user can
+change, so not from ~/.local):
+
+  sudo rm -rf /opt/freerdp-host   # an earlier version, if any
+  sudo tar -xJf freerdp-host-*-linux-x86_64.tar.xz -C /opt
+  sudo mv /opt/freerdp-host-*-linux-x86_64 /opt/freerdp-host
+  sudo chown -R root:root /opt/freerdp-host
+  sudo cp /opt/freerdp-host/freerdp-shadow-sesman.service /etc/systemd/system/
+  sudo systemctl daemon-reload
+  sudo systemctl enable --now freerdp-shadow-sesman.service
+
+Connect as with the user unit, through SSH, to port 3391 this time:
+
+  ssh -L 13391:127.0.0.1:3391 <user>@<this computer>
+
+then a client to 127.0.0.1:13391 with your own user name and password. Its log:
+sudo journalctl -u freerdp-shadow-sesman (who connects, to whose session); the shadow
+server's own lines are in your journal, journalctl --user -u freerdp-sesman-shadow.
+
+Headless sessions: with --headless-group <group> in the unit's ExecStart, a user of that
+group who has no GNOME session gets a headless GNOME Shell (a monitor of its own, the size of
+--headless-size, 1920x1080 by default), started by the first connection that names them. It
+keeps running when the client leaves, so the next connection finds the same desktop, until
+the user logs out in it or sudo systemctl stop freerdp-sesman-gnome-<user>. It is started
+before any login (the login happens in the shadow server, once GNOME is up): keep the group
+small, and the port on 127.0.0.1 or a private network.
+
+Remove it with
+
+  sudo systemctl disable --now freerdp-shadow-sesman.service
+  sudo rm /etc/systemd/system/freerdp-shadow-sesman.service
+  sudo rm -r /opt/freerdp-host
+
 What it cannot do
 -----------------
 
-It runs in your session, after you have logged in: it cannot show the login screen, or
-this computer before anyone logs in. A Wayland desktop other than GNOME (KDE Plasma, sway)
-has no subsystem here yet; on X11 they work through the X11 one.
+It runs in your session, after you have logged in: it cannot show the login screen. Before
+anyone logs in, only the session manager's headless sessions reach this computer. A Wayland
+desktop other than GNOME (KDE Plasma, sway) has no subsystem here yet; on X11 they work
+through the X11 one (not through the session manager, which finds GNOME sessions only).
 
 What is in it: MANIFEST (the sources and their versions), licenses/.
 More: https://github.com/congzhangzh/rdp-release-kit

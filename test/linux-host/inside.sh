@@ -55,9 +55,9 @@ install_host() {
     SERVER=$T_HOME/.local/opt/freerdp-host/bin/freerdp-shadow-cli
     cp "$T_HOME/.local/opt/freerdp-host/MANIFEST" "$OUT/MANIFEST"
 }
-# listening sockets on port 3389 (0D3D) from /proc/net/tcp, whose addresses are
-# hex: 0100007F is 127.0.0.1, 00000000 any address
-listeners() { awk '$4 == "0A" && $2 ~ /:0D3D$/ { print $2 }' /proc/net/tcp /proc/net/tcp6; }
+# listening sockets on port 3389 (0D3D), or the hex port given, from /proc/net/tcp,
+# whose addresses are hex: 0100007F is 127.0.0.1, 00000000 any address
+listeners() { awk -v port=":${1:-0D3D}\$" '$4 == "0A" && $2 ~ port { print $2 }' /proc/net/tcp /proc/net/tcp6; }
 # connect <name> [client options...]: a client in the background, its log in
 # /out/<name>.wlog (DEBUG: it names the codec of each frame)
 connect() {
@@ -65,7 +65,7 @@ connect() {
     shift
     WLOG_LEVEL=DEBUG WLOG_APPENDER=FILE WLOG_FILEAPPENDER_OUTPUT_FILE_PATH="$OUT" \
         WLOG_FILEAPPENDER_OUTPUT_FILE_NAME="$name.wlog" DISPLAY=:99 \
-        "$CLIENT" /v:127.0.0.1:3389 /u:"${USER_:-tester}" /p:"${PASS_:-$PW}" /cert:ignore /sec:tls \
+        "$CLIENT" /v:127.0.0.1:"${PORT_:-3389}" /u:"${USER_:-tester}" /p:"${PASS_:-$PW}" /cert:ignore /sec:tls \
         /size:1280x800 "$@" > "$OUT/$name.out" 2>&1 &
     CPID=$!
 }
@@ -202,6 +202,40 @@ if [ "$MODE" = gnome ]; then
     jlevel() { as "journalctl --user -t freerdp-shadow-cli _TRANSPORT=stdout -p $1..$1 -o cat --no-pager" 2> /dev/null; }
     check "journald appender: an INFO line at priority info, as freerdp-shadow-cli" 'jlevel info | grep -q "subsystem: Mutter"'
     check "journald appender: a WARN line at priority warning" 'jlevel warning | grep -q "stopped the sharing"'
+
+    # the session manager (optional: a root system unit on 127.0.0.1:3391), installed
+    # as the archive's README says: a connection that names tester goes to tester's
+    # GNOME, through a shadow server it starts in tester's user manager
+    { rm -rf /opt/freerdp-host && tar -xJf /host.tar.xz -C /opt && mv /opt/freerdp-host-*-linux-* /opt/freerdp-host \
+        && chown -R root:root /opt/freerdp-host \
+        && cp /opt/freerdp-host/freerdp-shadow-sesman.service /etc/systemd/system/ \
+        && systemctl daemon-reload && systemctl enable --now freerdp-shadow-sesman.service; } >> "$OUT/install.log" 2>&1
+    sesman() { journalctl -u freerdp-shadow-sesman -o cat --no-pager 2> /dev/null; }
+    sesman_shadow() { as "journalctl --user -u freerdp-sesman-shadow -o cat --no-pager" 2> /dev/null; }
+    for _ in $(seq 30); do sesman | grep -q "listening on" && break; sleep 1; done
+    check "sesman: the system unit runs, on 127.0.0.1:3391 only (0D3F)" \
+        '[ "$(systemctl show freerdp-shadow-sesman -p ActiveState --value)" = active ] && [ "$(listeners 0D3F)" = "0100007F:0D3F" ]' \
+        "$(listeners 0D3F | tr '\n' ' ')"
+    as "nohup foot sh -c '$CLOCK' > /tmp/foot-clock.log 2>&1 &"
+    # the first connection waits for the shadow server to start
+    PORT_=3391 connect sesman /gfx:AV2:off
+    sleep 25
+    n=$(frames sesman AV1)
+    check "sesman: tester is handed to the shadow server of tester's GNOME" \
+        'sesman | grep -q "tester -> the shadow server of their GNOME session"'
+    check "sesman: the client is logged in (PAM, the session's owner)" 'sesman_shadow | grep -q "is activated"'
+    check "sesman: at least 20 frames in AV1 with the screen changing" '[ "${n:-0}" -ge 20 ]' "$(codecs sesman)"
+    kill $CPID 2> /dev/null; sleep 2
+    as "pkill -x foot"
+    # other has an account but no GNOME session: refused before any login
+    USER_=other PASS_=other-pw PORT_=3391 connect sesman-other
+    sleep 8
+    kill $CPID 2> /dev/null; sleep 1
+    check "sesman: a user with no GNOME session is refused, and sees nothing" \
+        'sesman | grep -q "other has no GNOME session: refused" && [ "$(frames sesman-other AV1)$(frames sesman-other AV2)" = 00 ]'
+    sesman > "$OUT/sesman.log"
+    sesman_shadow > "$OUT/sesman-shadow.log"
+
     journal > "$OUT/server.log"
     echo "INFO  the server's lines in the unit's journal (journalctl --user -u): $(wc -l < "$OUT/server.log"), by identifier (-t freerdp-shadow-cli): $(journalctl -t freerdp-shadow-cli -o cat --no-pager 2> /dev/null | wc -l)"
     journalctl --user-unit=gnome-shell-test.service -o cat --no-pager > "$OUT/gnome-shell.log" 2>&1

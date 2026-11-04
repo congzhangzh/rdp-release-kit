@@ -1,0 +1,25 @@
+# FreeRDP's session manager, optional and off unless installed (README.txt, "The
+# session manager"): a SYSTEM unit that runs as root, on 127.0.0.1:3391, a port
+# of its own (the user unit freerdp-shadow.service keeps 3389). It reads the
+# first packet of each connection, the user it names (Cookie: mstshash=), and
+# hands the connection to the shadow server of that user's GNOME session,
+# which it starts in the user's own systemd manager
+# (systemctl --user status freerdp-sesman-shadow). It never sees a password:
+# TLS and the login (PAM, the session's owner only) happen in that shadow
+# server. Needs the server unpacked in /opt/freerdp-host, owned by root.
+[Unit]
+Description=FreeRDP session manager: RDP to the GNOME session of the user who connects, on 127.0.0.1:3391
+Documentation=https://github.com/congzhangzh/rdp-release-kit
+After=network.target systemd-logind.service
+
+[Service]
+# after "--": the shadow server's own options (it adds /ipc-socket and
+# /sec:tls); AV2 to the clients that offer it, AV1 to the others, as the user
+# unit. --headless-group <group>: that group's users get a headless GNOME
+# when they have no session (before any login: keep the group small)
+ExecStart=/opt/freerdp-host/bin/freerdp-shadow-sesman --bind 127.0.0.1 --port 3391 --shadow /opt/freerdp-host/bin/freerdp-shadow-cli -- /gfx-av1 /gfx-av2
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

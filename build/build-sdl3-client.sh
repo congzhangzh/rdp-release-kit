@@ -17,7 +17,10 @@
 # needs glibc, libgcc_s, PAM, libsystemd, PipeWire and the X11 libraries a
 # desktop has (build/check-portable.sh checks that list). The result is
 # <output dir>/freerdp-host-<version>-linux-<arch>.tar.xz, with a systemd user
-# unit and a README (build/linux/).
+# unit and a README (build/linux/). Also in it, off unless installed: the
+# session manager freerdp-shadow-sesman (WITH_SHADOW_SESMAN), a root system
+# unit on a port of its own that hands each connection to the shadow server of
+# the GNOME session of the user it names.
 set -Eeuo pipefail
 
 KIT=$1
@@ -117,6 +120,7 @@ if [ -n "${HOST:-}" ]; then
         -DOPENSSL_ROOT_DIR=$DEPS -DOPENSSL_USE_STATIC_LIBS=ON \
         -DWITH_CLIENT=OFF -DWITH_CLIENT_COMMON=OFF -DWITH_CLIENT_CHANNELS=OFF \
         -DWITH_SERVER=ON -DWITH_SHADOW=ON -DWITH_SHADOW_X11=ON -DWITH_SHADOW_MUTTER=ON \
+        -DWITH_SHADOW_SESMAN=ON \
         -DWITH_PROXY=OFF -DWITH_PLATFORM_SERVER=OFF -DWITH_SAMPLE=OFF -DWITH_WINPR_TOOLS=ON \
         -DWITH_X11=ON -DWITH_WAYLAND=OFF -DWITH_XCURSOR=OFF -DWITH_XRANDR=OFF \
         -DWITH_PULSE=OFF -DWITH_ALSA=OFF -DWITH_OSS=OFF -DWITH_CUPS=OFF -DWITH_PCSC=OFF \
@@ -146,7 +150,10 @@ if [ -n "${HOST:-}" ]; then
     # what a desktop has: PAM, libsystemd (sd-bus, the journal), PipeWire, X11
     # and its extensions
     HOST_LIBS='libpam\.so\.0|libsystemd\.so\.0|libpipewire-0\.3\.so\.0|libX11\.so\.6|libXext\.so\.6|libXdamage\.so\.1|libXfixes\.so\.3|libXinerama\.so\.1|libXtst\.so\.6'
-    for tool in freerdp-shadow-cli winpr-hash; do
+    # freerdp-shadow-sesman: its own README section and unit; the unit names the
+    # shadow server's path (/opt/freerdp-host/bin), so its built-in default
+    # (the install prefix) does not count
+    for tool in freerdp-shadow-cli freerdp-shadow-sesman winpr-hash; do
         f=$(find "$STAGE" -type f -name "$tool*" -perm -u+x | head -1)
         [ -n "$f" ] || { echo "HOST=1: no $tool in the build" >&2; exit 1; }
         cp "$f" "$PKG/bin/$tool"
@@ -158,7 +165,7 @@ if [ -n "${HOST:-}" ]; then
     # -W: names not cut short; grep without -q reads it all (pipefail)
     readelf -W --dyn-syms "$PKG/bin/freerdp-shadow-cli" | grep ' sd_journal_stream_fd' > /dev/null ||
         { echo "HOST=1: no journald appender in freerdp-shadow-cli (sd_journal_stream_fd)" >&2; exit 1; }
-    cp "$KIT/build/linux/freerdp-shadow.service" "$PKG/"
+    cp "$KIT/build/linux/freerdp-shadow.service" "$KIT/build/linux/freerdp-shadow-sesman.service" "$PKG/"
     cp "$KIT/build/linux/host-README.txt" "$PKG/README.txt"
     licenses "$PKG/licenses" "$FREERDP" openssl opus dav1d aom avm libei zlib jansson
     {
