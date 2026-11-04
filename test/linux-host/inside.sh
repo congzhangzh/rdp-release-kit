@@ -118,8 +118,9 @@ if [ "$MODE" = gnome ]; then
     install_host
     as "systemctl --user daemon-reload && systemctl --user enable --now freerdp-shadow.service" \
         >> "$OUT/install.log" 2>&1
-    # the server's lines (the unit's WLOG_APPENDER=journald), by their identifier
-    journal() { journalctl -t freerdp-shadow-cli -o cat --no-pager 2> /dev/null; }
+    # the server's lines as its user reads them: the unit's own journal
+    # (WLOG_APPENDER=journald), journalctl --user -u freerdp-shadow
+    journal() { as "journalctl --user -u freerdp-shadow -o cat --no-pager" 2> /dev/null; }
     for _ in $(seq 60); do journal | grep -q "Listening on" && break; sleep 1; done
     unit() { as "systemctl --user show freerdp-shadow.service -p $1 --value"; }
     SPID=$(unit MainPID)
@@ -195,8 +196,14 @@ if [ "$MODE" = gnome ]; then
     as "gdbus call --session --dest org.gnome.Shell --object-path /org/gnome/Shell --method org.gnome.Shell.Eval \
         'global.backend.get_remote_access_controller().uninhibit_remote_access()'" >> "$OUT/eval.log" 2>&1
 
+    # from WinPR's journald appender: its stream (_TRANSPORT=stdout; syslog's lines
+    # say syslog), the identifier the unit gives it, and each line's own level
+    # (INFO = priority 6, WARN = 4; the console appender's lines would all be 6)
+    jlevel() { as "journalctl --user -t freerdp-shadow-cli _TRANSPORT=stdout -p $1..$1 -o cat --no-pager" 2> /dev/null; }
+    check "journald appender: an INFO line at priority info, as freerdp-shadow-cli" 'jlevel info | grep -q "subsystem: Mutter"'
+    check "journald appender: a WARN line at priority warning" 'jlevel warning | grep -q "stopped the sharing"'
     journal > "$OUT/server.log"
-    echo "INFO  the server's lines by unit (journalctl --user-unit): $(journalctl --user-unit=freerdp-shadow.service -o cat --no-pager 2> /dev/null | wc -l), by identifier: $(wc -l < "$OUT/server.log")"
+    echo "INFO  the server's lines in the unit's journal (journalctl --user -u): $(wc -l < "$OUT/server.log"), by identifier (-t freerdp-shadow-cli): $(journalctl -t freerdp-shadow-cli -o cat --no-pager 2> /dev/null | wc -l)"
     journalctl --user-unit=gnome-shell-test.service -o cat --no-pager > "$OUT/gnome-shell.log" 2>&1
     journalctl -b --no-pager > "$OUT/journal.log" 2>&1
 else

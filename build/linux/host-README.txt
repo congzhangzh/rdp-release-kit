@@ -35,7 +35,8 @@ Install
   systemctl --user daemon-reload
   systemctl --user enable --now freerdp-shadow.service
 
-Its log: journalctl --user -u freerdp-shadow. It starts with the desktop session (GNOME
+Its log is the unit's journal: journalctl --user -u freerdp-shadow (-f to follow it) shows
+what it shares and who logs in. It starts with the desktop session (GNOME
 starts graphical-session.target) and stops with it. A desktop that does not start that target
 (Xfce, MATE...) gets it from its autostart instead, with the display:
 

@@ -78,7 +78,7 @@ same tables are in the notes of every release.
 | Web client + freerdp-web page | freerdp 20261104.2, sdl3_wasm 3.4.18+timer, sdl3_ttf 3.2.2, freetype 2.15.0, libressl 4.4.0, opus 1.6.1, dav1d 1.5.4, avm 20261103.2, zlib 1.3.2, jansson 2.15.1, freerdp_web 20261103.4 | `test/wasm-session.sh`: a browser logs in to xrdp through SSH + websockify, the page served without COOP/COEP headers (as GitHub Pages) |
 | xrdp packages (.deb, .rpm) | xrdp 20261030.1, librfxcodec 0badc06, libpainter 379b8fb, xorgxrdp 20261018.1, x264 b35605a, opus 1.6.1, pipewire_xrdp 0.2, mutter 51.0-1.fc45 | `check-deps.sh`, then `test/xrdp-session.sh`: install in a fresh container of each release, log in over RDP: an Xorg session (xorgxrdp) with an xterm, then a Wayland one (sway, unless the release is marked no-sway) captured at the client's size; the login screen lists GNOME, and KDE unless no-kde; the default is GNOME on Fedora (Wayland first), Xorg elsewhere |
 | macOS host `FreeRDP-Shadow.app` | freerdp_mac_host 20261104.2, openssl 3.5.9, opus 1.6.1, dav1d 1.5.4, aom 3.15.2, avm 20261103.2, zlib 1.3.2, jansson 2.15.1 | `.github/workflows/mac-host.yml` builds and packages it on both architectures; the capture is tested by hand on a Mac (CI cannot grant Screen Recording) |
-| Linux host `freerdp-shadow-cli` (GNOME and X11) | freerdp_linux_host 20261104.2, openssl 3.5.9, opus 1.6.1, dav1d 1.5.4, aom 3.15.2, avm 20261103.2, libei 1.6.0, zlib 1.3.2, jansson 2.15.1 | `build/check-portable.sh` (glibc ≥ 2.34, and from the host only PAM, libsystemd, PipeWire and the X11 libraries), then `test/linux-host.sh` (the release waits for it): GNOME Shell 50 headless with the server as the package's systemd user unit (Mutter by default, `/subsystem` lists it first, AV1 and AV2 frames, idle CPU with a client under 20 %, keys through libei, the owner's login only, the sharing stopped in GNOME ends it with 0), and Xfce on Xvfb with `/subsystem:x11` (AV1 frames, the owner's login only) |
+| Linux host `freerdp-shadow-cli` (GNOME and X11) | freerdp_linux_host 20261104.2, openssl 3.5.9, opus 1.6.1, dav1d 1.5.4, aom 3.15.2, avm 20261103.2, libei 1.6.0, zlib 1.3.2, jansson 2.15.1 | `build/check-portable.sh` (glibc ≥ 2.34, and from the host only PAM, libsystemd, PipeWire and the X11 libraries), then `test/linux-host.sh` (the release waits for it): GNOME Shell 50 headless with the server as the package's systemd user unit (Mutter by default, `/subsystem` lists it first, AV1 and AV2 frames, idle CPU with a client under 20 %, keys through libei, the owner's login only, the sharing stopped in GNOME ends it with 0, its lines in the unit's journal through WinPR's journald appender), and Xfce on Xvfb with `/subsystem:x11` (AV1 frames, the owner's login only) |
 
 Pins that are not a plain upstream release:
 
@@ -338,22 +338,28 @@ OpenSSL, Opus, libaom (AV1), libavm (AV2) and libei statically; from the
 system it takes glibc 2.34 or newer, PAM, libsystemd, PipeWire and the X11
 libraries (`build/check-portable.sh` checks that list). The archive holds a
 systemd user unit, `freerdp-shadow.service`, on 127.0.0.1 only, restarted on
-a failure but not after GNOME's Stop (the server then ends with 0), and a
-README (`build/linux/host-README.txt`): install, reach it over SSH. Logins are
-the session owner's own account (PAM, TLS security).
+a failure but not after GNOME's Stop (the server then ends with 0), that logs
+to the unit's journal through WinPR's journald appender (`WITH_SYSTEMD=ON`,
+`WLOG_APPENDER=journald`, INFO), and a README (`build/linux/host-README.txt`):
+install, reach it over SSH. Logins are the session owner's own account (PAM,
+TLS security).
 
 `test/linux-host.sh` runs it in a throwaway container with the kit's Linux
 client on an Xvfb of its own. `gnome`: GNOME Shell headless with systemd as
 PID 1 (podman `--systemd=always`), the package installed as its README says;
-the checks are the default subsystem (Mutter), the `/subsystem` list, AV1 and
-AV2 frames once the screen changes (an idle GNOME sends no full frame for a
-while, so a window with a clock runs), the server's idle CPU with a client
-(under 20 %), keys typed through libei, another account refused, and the
-sharing stopped from GNOME (`org.gnome.Shell.Eval`, with GNOME Shell in
-`--unsafe-mode`) ending the unit with 0 and no restart. `xorg`: Xfce on Xvfb,
-the unit's arguments with `/subsystem:x11`, AV1 frames, another account
-refused. CI runs both in a rootful podman container (`linux-host-test`); the
-release waits for them and carries the archive.
+the checks read the server's lines from the unit's journal as its user would
+(`journalctl --user -u freerdp-shadow`) and are the default subsystem
+(Mutter), the `/subsystem` list, AV1 and AV2 frames once the screen changes
+(an idle GNOME sends no full frame for a while, so a window with a clock
+runs), the server's idle CPU with a client (under 20 %), keys typed through
+libei, another account refused, the sharing stopped from GNOME
+(`org.gnome.Shell.Eval`, with GNOME Shell in `--unsafe-mode`) ending the unit
+with 0 and no restart, and those lines coming from WinPR's journald appender
+(`_TRANSPORT=stdout`, identifier `freerdp-shadow-cli`, INFO at priority 6 and
+WARN at 4). `xorg`: Xfce on Xvfb, the unit's arguments with
+`/subsystem:x11`, AV1 frames, another account refused. CI runs both in a
+rootful podman container (`linux-host-test`); the release waits for them and
+carries the archive.
 
 ### Installing the Linux host
 
@@ -372,7 +378,8 @@ systemctl --user enable --now freerdp-shadow.service
 ```
 
 It starts with the desktop session (GNOME starts `graphical-session.target`)
-and logs to `journalctl --user -u freerdp-shadow`. A desktop that does not
+and logs to the unit's journal: `journalctl --user -u freerdp-shadow` (`-f`
+to follow it) shows what it shares and who logs in. A desktop that does not
 start that target (Xfce, MATE) starts it from its autostart:
 `systemctl --user import-environment DISPLAY XAUTHORITY && systemctl --user start freerdp-shadow`.
 Stopping the sharing from GNOME's top bar ends the server and it stays

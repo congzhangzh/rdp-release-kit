@@ -21,10 +21,10 @@ ExecStart=%h/.local/opt/freerdp-host/bin/freerdp-shadow-cli /bind-address:127.0.
 Restart=on-failure
 RestartSec=5
 # its log, journalctl --user -u freerdp-shadow, with what it shares and who
-# logs in (INFO): through syslog, line by line (the console appender's stdout
-# is a pipe here and holds its lines in a buffer; WinPR's journald appender is
-# not built: FreeRDP's CMake sets WINPR_HAVE_JOURNALD_H too late for config.h)
-Environment=WLOG_APPENDER=syslog WLOG_LEVEL=INFO
+# logs in (INFO): straight to the journal, line by line and with each line's
+# level (the console appender's stdout is a pipe here and holds its lines in a
+# buffer), under the identifier freerdp-shadow-cli (journalctl -t)
+Environment=WLOG_APPENDER=journald WLOG_JOURNALD_ID=freerdp-shadow-cli WLOG_LEVEL=INFO
 
 [Install]
 WantedBy=graphical-session.target

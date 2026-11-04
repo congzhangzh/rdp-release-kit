@@ -12,7 +12,8 @@
 #   server's idle CPU with one client stays under 20 %, typed keys arrive through
 #   libei, AV2 frames, another account is refused, and stopping the sharing in
 #   GNOME (org.gnome.Shell.Eval, --unsafe-mode) ends the unit with 0, not
-#   restarted.
+#   restarted. The server's lines are read as its user would, from the unit's
+#   journal (journalctl --user -u freerdp-shadow: WinPR's journald appender).
 # xorg: Xfce on Xvfb, the unit's arguments with /subsystem:x11: /subsystem picks
 #   X11 there, a login gets AV1 frames, another account is refused.
 #

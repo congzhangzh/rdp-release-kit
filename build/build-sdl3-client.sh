@@ -105,8 +105,9 @@ if [ -n "${HOST:-}" ]; then
         fi
     fi
     # pkg-config sees /deps first, then the host's PipeWire and libsystemd
-    # (sd-bus); every other library FreeRDP could pick up from the image is
-    # turned off below. The deprecated 3.x API is left out, as on Windows.
+    # (sd-bus, and the journal for WLog's journald appender, WITH_SYSTEMD);
+    # every other library FreeRDP could pick up from the image is turned off
+    # below. The deprecated 3.x API is left out, as on Windows.
     configure "$WORK/build/$FREERDP" \
         env PKG_CONFIG_LIBDIR="$DEPS/lib/pkgconfig:/usr/lib64/pkgconfig:/usr/share/pkgconfig" \
         cmake -G Ninja -S "$src" -B "$WORK/build/$FREERDP" -DCMAKE_BUILD_TYPE=Release "${LAUNCHER[@]}" \
@@ -122,7 +123,7 @@ if [ -n "${HOST:-}" ]; then
         -DWITH_KRB5=OFF -DWITH_FUSE=OFF -DWITH_FFMPEG=OFF -DWITH_SWSCALE=OFF -DWITH_SOXR=OFF \
         -DWITH_OPENH264=OFF -DWITH_GFX_AV1=ON -DWITH_AOM=ON -DWITH_DAV1D=ON -DWITH_OPUS=ON \
         -DWITH_GFX_AV2=ON -DWITH_AVM=ON -DWITH_SIMD=ON \
-        -DWITH_SYSTEMD=OFF -DWITH_UNICODE_BUILTIN=ON -DWITH_INTERNAL_MD4=ON \
+        -DWITH_SYSTEMD=ON -DWITH_UNICODE_BUILTIN=ON -DWITH_INTERNAL_MD4=ON \
         -DWITH_INTERNAL_RC4=ON -DWITH_SSO_MIB=OFF -DCHANNEL_URBDRC=OFF \
         -DWITHOUT_WINPR_3x_DEPRECATED=ON -DWITHOUT_FREERDP_3x_DEPRECATED=ON \
         -DWITH_MANPAGES=OFF "${DEV[@]}" > "$WORK/log/freerdp.log" 2>&1
@@ -142,7 +143,8 @@ if [ -n "${HOST:-}" ]; then
     PKG=$WORK/pkg/$NAME
     rm -rf "$WORK/pkg"
     mkdir -p "$PKG/bin" "$PKG/licenses"
-    # what a desktop has: PAM, sd-bus, PipeWire, X11 and its extensions
+    # what a desktop has: PAM, libsystemd (sd-bus, the journal), PipeWire, X11
+    # and its extensions
     HOST_LIBS='libpam\.so\.0|libsystemd\.so\.0|libpipewire-0\.3\.so\.0|libX11\.so\.6|libXext\.so\.6|libXdamage\.so\.1|libXfixes\.so\.3|libXinerama\.so\.1|libXtst\.so\.6'
     for tool in freerdp-shadow-cli winpr-hash; do
         f=$(find "$STAGE" -type f -name "$tool*" -perm -u+x | head -1)
@@ -151,6 +153,11 @@ if [ -n "${HOST:-}" ]; then
         strip --strip-debug "$PKG/bin/$tool"
         "$KIT/build/check-portable.sh" "$PKG/bin/$tool" 2.34 "$HOST_LIBS"
     done
+    # the unit logs with WLOG_APPENDER=journald: WinPR's journald appender must be
+    # in it (before FreeRDP#14029 WITH_SYSTEMD=ON left it out without a word).
+    # -W: names not cut short; grep without -q reads it all (pipefail)
+    readelf -W --dyn-syms "$PKG/bin/freerdp-shadow-cli" | grep ' sd_journal_stream_fd' > /dev/null ||
+        { echo "HOST=1: no journald appender in freerdp-shadow-cli (sd_journal_stream_fd)" >&2; exit 1; }
     cp "$KIT/build/linux/freerdp-shadow.service" "$PKG/"
     cp "$KIT/build/linux/host-README.txt" "$PKG/README.txt"
     licenses "$PKG/licenses" "$FREERDP" openssl opus dav1d aom avm libei zlib jansson
