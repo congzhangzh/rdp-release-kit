@@ -405,6 +405,19 @@ if ($Media -and (Test-Path "$Media\bunny.webm") -and (Test-Path $firefox)) {
     Copy-Item "$Media\bunny.webm" "$wd\site\"
     Copy-Item -Recurse -Force "$Media\webgl" "$wd\site\"
     Copy-Item "$KitTest\demo\user.js" "$wd\firefox\"
+    # and the same as enterprise policy, which also holds the messages a pref misses (the
+    # "pin Firefox to your taskbar" prompt that kept the front in kit 20261103.10 to
+    # 20261104.4): on a CI runner only, never in another machine's Firefox install
+    if ($env:GITHUB_ACTIONS -eq "true") {
+        $dist = Join-Path (Split-Path $firefox) "distribution"
+        New-Item -ItemType Directory -Force -Path $dist | Out-Null
+        Set-Content -Encoding utf8 -Path "$dist\policies.json" -Value (@{ policies = @{
+            UserMessaging = @{ SkipOnboarding = $true; MoreFromMozilla = $false; FeatureRecommendations = $false
+                ExtensionRecommendations = $false; UrlbarInterventions = $false; FirefoxLabs = $false; Locked = $true }
+            DontCheckDefaultBrowser = $true; DisableDefaultBrowserAgent = $true
+            OverrideFirstRunPage = ""; OverridePostUpdatePage = "" } } | ConvertTo-Json -Depth 4)
+        "Firefox policies: $dist\policies.json"
+    }
     # a profile per user (the freerdp-tk demo's user runs it too, in a session of its own)
     Set-Content -Encoding ascii -Path "$env:SystemRoot\webdemo.cmd" -Value @(
         "@if not exist `"%LOCALAPPDATA%\webdemo-firefox`" mkdir `"%LOCALAPPDATA%\webdemo-firefox`" && copy `"$wd\firefox\user.js`" `"%LOCALAPPDATA%\webdemo-firefox\`" > nul",
