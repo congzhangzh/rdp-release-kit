@@ -395,7 +395,8 @@ if (-not $env:CHROME) { $env:CHROME = "${env:ProgramFiles}\Google\Chrome\Applica
 $driver = Get-Content "$web\driver.log" -Raw -ErrorAction SilentlyContinue
 $pageLog = Get-Content "$web\page.log" -Raw -ErrorAction SilentlyContinue
 $av1 = if ($driver -match "av1 decoders configured: (.+)") { $Matches[1].Trim() } else { "no word" }
-Check "web: the page started the client as $user" ($pageLog -match " /u:$user ")
+# since freerdp_web 20261104.3 the page's log masks the user like the password
+Check "web: the page started the client with a user" ($pageLog -match " /u:($user|\*\*\*) ")
 Check "web: the page decodes AV1 (a WebCodecs decoder configured)" ($av1 -match "profile \d") $av1
 
 # a demo video of the same: the web client on this Windows host
