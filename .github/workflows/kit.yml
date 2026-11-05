@@ -704,7 +704,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          tag=$(gh release list -R "$GITHUB_REPOSITORY" -L 100 --json tagName,isPrerelease,isDraft,publishedAt \
+          tag=$(gh release list -R "$GITHUB_REPOSITORY" -L 1000 --json tagName,isPrerelease,isDraft,publishedAt \
             -q '[.[] | select(.isPrerelease and (.isDraft | not) and (.tagName | startswith("web-")))] | sort_by(.publishedAt) | last | .tagName')
           [ -n "$tag" ] || { echo "no web-* pre-release to take the xrdp packages from" >&2; exit 1; }
           gh release download "$tag" -R "$GITHUB_REPOSITORY" -p '*.deb' -D dist/xrdp/debian-13
@@ -820,12 +820,18 @@ jobs:
               cp dist/in/xrdp-debian-13/debian-13/* dist/xrdp/debian-13/
               cp dist/in/xrdp-fedora-45/fedora-45/* dist/xrdp/fedora-45/
           else
-              # the newest xrdp-<date>.<N>-* (xrdp-preview-* before them)
+              # the newest xrdp-<date>.<N>-* (xrdp-preview-* before them); the limit is well
+              # above the repo's releases: a kind published only when its inputs change, as
+              # pipewire-module-xrdp is, can sit far down the list
               newest() {
-                  gh release list -R "$GITHUB_REPOSITORY" -L 100 --json tagName,isPrerelease,isDraft,publishedAt \
+                  gh release list -R "$GITHUB_REPOSITORY" -L 1000 --json tagName,isPrerelease,isDraft,publishedAt \
                       -q "[.[] | select(.isPrerelease and (.isDraft | not) and (.tagName | startswith(\"$1-\")))] | sort_by(.publishedAt) | last | .tagName"
               }
-              get() { gh release download "$1" -R "$GITHUB_REPOSITORY" -D "$2" -p "$3"; echo "$3 of $1"; }
+              # an empty tag would make gh take the Latest release, not fail
+              get() {
+                  [ -n "$1" ] || { echo "no pre-release for $2 $3" >&2; exit 1; }
+                  gh release download "$1" -R "$GITHUB_REPOSITORY" -D "$2" -p "$3"; echo "$3 of $1"
+              }
               get "$(newest xrdp)" dist/xrdp/debian-13 '*debian-13_amd64.deb'
               get "$(newest xrdp)" dist/xrdp/fedora-45 '*fc45.x86_64.rpm'
               get "$(newest pipewire-module-xrdp)" dist/xrdp/fedora-45 '*fc45.x86_64.rpm'
