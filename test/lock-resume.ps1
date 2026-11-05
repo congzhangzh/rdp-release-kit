@@ -12,6 +12,22 @@ $sum = "$Out\$Tag-summary.txt"
 function Say($s) { $s | Tee-Object -FilePath $sum -Append }
 function Locked { [bool](Get-Process LogonUI -ErrorAction SilentlyContinue) }
 function Now { (Get-Date).TimeOfDay }
+# as SYSTEM, without a password. tscon alone does nothing when this session already owns the
+# console (LogonUI stays): tsdiscon first (freerdp-54 on a Windows 11 VM; both returned 0)
+function Unlock {
+    $sid = (Get-Process -Id $PID).SessionId
+    schtasks /create /tn FreeRDPShadowUnlock /ru SYSTEM /sc once /st 23:59 /f `
+        /tr "cmd /c tsdiscon $sid & tscon $sid /dest:console" | Out-Null
+    schtasks /run /tn FreeRDPShadowUnlock | Out-Null
+    Start-Sleep 4
+    schtasks /delete /tn FreeRDPShadowUnlock /f | Out-Null
+    -not (Locked)
+}
+
+# the main test ends with the screen locked: without this the "before lock" phase has no
+# capture to lose, the run starts paused
+$startedLocked = Locked
+if ($startedLocked) { [void](Unlock) }
 
 $env:WLOG_LEVEL = "INFO"
 $env:WLOG_APPENDER = "FILE"
@@ -31,14 +47,8 @@ Start-Sleep 2
 $lockedSeen = Locked
 Start-Sleep 10
 
-# unlock: as SYSTEM, tscon gives the console back to this session without a password
-$sid = (Get-Process -Id $PID).SessionId
 $tUnlock = Now
-schtasks /create /tn FreeRDPShadowUnlock /ru SYSTEM /sc once /st 23:59 /f /tr "tscon $sid /dest:console" | Out-Null
-schtasks /run /tn FreeRDPShadowUnlock | Out-Null
-Start-Sleep 4
-$unlocked = -not (Locked)
-schtasks /delete /tn FreeRDPShadowUnlock /f | Out-Null
+$unlocked = Unlock
 Start-Sleep 10
 $tEnd = Now
 
@@ -53,7 +63,8 @@ $phase = @{ before = 0; locked = 0; after = 0 }
 $errs = @{ before = 0; locked = 0; after = 0 }
 foreach ($l in Get-Content "$Out\$Tag-server.wlog" -ErrorAction SilentlyContinue) {
     if ($l -notmatch '^\[(\d+):(\d+):(\d+):(\d+)\]') { continue }
-    $t = New-TimeSpan -Hours $matches[1] -Minutes $matches[2] -Seconds $matches[3] -Milliseconds $matches[4]
+    # Windows PowerShell 5.1's New-TimeSpan has no -Milliseconds
+    $t = [TimeSpan]::new(0, [int]$matches[1], [int]$matches[2], [int]$matches[3], [int]$matches[4])
     $p = if ($t -lt $tLock) { "before" } elseif ($t -lt $tUnlock) { "locked" } else { "after" }
     if ($l -match 'SurfaceCopy') { $phase[$p]++ }
     if ($l -match '\[ERROR\]\[com\.freerdp\.server\.shadow\.win\]') { $errs[$p]++ }
@@ -63,7 +74,7 @@ $paused = ([regex]::Matches("$log", 'capture paused')).Count
 $resumed = ([regex]::Matches("$log", 'capture resumed')).Count
 
 Say "== $Tag ($HostDir)"
-Say "lock seen (LogonUI running): $lockedSeen; unlock by tscon worked: $unlocked"
+Say "locked at the start: $startedLocked; lock seen (LogonUI running): $lockedSeen; unlock by tscon worked: $unlocked"
 Say "server alive at the end: $serverAlive; client session alive at the end: $clientAlive"
 Say ("frames (SurfaceCopy) before lock: {0}, while locked: {1}, after unlock: {2}" -f $phase.before, $phase.locked, $phase.after)
 Say ("shadow.win ERROR lines before: {0}, while locked: {1}, after: {2}" -f $errs.before, $errs.locked, $errs.after)
