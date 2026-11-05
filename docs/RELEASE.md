@@ -93,7 +93,7 @@ upstream tag / frozen branch
   → main: CI again; the products go to their pre-releases (web-…, xrdp-…)
   → all green: the release <YYYYMMDD>.<N>, made latest: every product,
     SHA256SUMS, build provenance attestations
-  → consumers download and verify; the site, by hand, from a release (site workflow)
+  → consumers download and verify; the site, on purpose, from a release (site workflow)
 ```
 
 - **Watching upstream**: [`check-upstream.sh`](../check-upstream.sh)
@@ -106,7 +106,7 @@ upstream tag / frozen branch
   makes releases (tags `20261025.1`, no prefix; earlier `v20261021.1`, `v0.4.12`). The kit pins
   a release when one comes out (the upstream check opens the issue), tests the client with it,
   and makes `web-<YYYYMMDD>.<N>-<kit commit>`; the kit's release carries the client and that
-  freerdp-web release as one whole. The kit then publishes the site from a release, by hand
+  freerdp-web release as one whole. The kit then publishes the site from a release, on the owner's go
   (the `site` workflow): that release's client, page and demos, after freerdp-web's page test
   and a login from the files going live, and a login from the live site after. So the site
   only gets a page and a client the kit tested together, and a kit change may break the page:
@@ -188,6 +188,23 @@ the site, and the page is fixed and released after it.
   from main (`gh workflow run kit.yml --ref main`): it builds everything and,
   like a push, records the demos and publishes a rolling release, which the
   site workflow then publishes.
+- **The site**: published at tag level, never for every submit (聪哥, 2026-11-05). There are
+  two ways, and each is an act of the owner's: `site.yml` by hand from a release, or one go
+  for a page tag once the kit has pinned it:
+
+  ```
+  gh workflow run kit.yml -R congzhangzh/rdp-release-kit --ref main -f publish_page=<page tag>
+  ```
+
+  That runs the whole round, and if every test passes, the release it made goes to `site.yml`
+  with `publish=true`, with no second go. Sessions never send this command. It is the owner's
+  to run; a page tag, a pin, a push or a run without the input publishes nothing. The go
+  names the tag, so a run whose commit pins another page stops at once (`build/site-go.sh`).
+  `site.yml`'s gates are the same either way: freerdp-web's page test, both logins before the
+  deploy, the login from the published site after. If that last login fails, the site that
+  was live goes back up as a new commit of `gh-pages` (`build/site-rollback.sh`), and the run
+  stays failed. A publish that changed nothing has nothing to roll back; a cancelled run
+  rolls nothing back, and `gh-pages` that has moved on is left alone.
   What reaches people is still gated: the release holds only what every
   test passed, and freerdp-web's site changes only when it publishes.
 

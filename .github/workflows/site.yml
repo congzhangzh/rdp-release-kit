@@ -1,9 +1,11 @@
 name: site
 
 # The web client's site, congzhangzh.github.io/freerdp-web/, published from a
-# kit release by hand, never on its own: Run workflow, pick the release
-# (default: the latest), tick "publish". Without it, every check runs and
-# nothing goes live. One direction only: freerdp-web holds the page's
+# kit release on purpose, never on its own: Run workflow, pick the release
+# (default: the latest), tick "publish"; or kit.yml starts it from its own
+# release, when the owner started that run with the go for one page tag
+# (publish_page, docs/RELEASE.md, "The site"). Without "publish", every check
+# runs and nothing goes live. One direction only: freerdp-web holds the page's
 # source and its tags; the kit pins a tag, builds and tests the client with
 # it, records the demos, and publishes the site. (Until 2026-10-27
 # freerdp-web published it, pulling the kit's pre-releases back: a cycle.)
@@ -16,7 +18,8 @@ name: site
 # branch gh-pages, which its Pages serve, as a commit of its own (every site
 # that was ever live stays in that branch's history), pushed with a deploy
 # key for that repository alone (secret FREERDP_WEB_PAGES_KEY). Then a login
-# from the published site.
+# from the published site; if that fails, the site that was live before goes
+# back up, and the run stays failed (build/site-rollback.sh).
 on:
   workflow_dispatch:
     inputs:
@@ -135,12 +138,17 @@ jobs:
     if: inputs.publish
     needs: [site, login]
     runs-on: ubuntu-24.04
+    outputs:
+      # both set only if this run changed the live site: what a rollback needs
+      before: ${{ steps.push.outputs.before }}
+      after: ${{ steps.push.outputs.after }}
     steps:
       - uses: actions/download-artifact@v8
         with:
           name: site
           path: site
       - name: To freerdp-web's gh-pages, as a commit of its own
+        id: push
         env:
           KEY: ${{ secrets.FREERDP_WEB_PAGES_KEY }}
           RELEASE: ${{ needs.site.outputs.release }}
@@ -157,6 +165,7 @@ jobs:
             # the first publish: a branch with no history of its own
             git init -q -b gh-pages pages && git -C pages remote add origin "git@github.com:$PAGES_REPO.git"
           fi
+          before=$(git -C pages rev-parse -q --verify HEAD || true)
           find pages -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
           cp -a site/. pages/
           git -C pages add -A
@@ -165,6 +174,11 @@ jobs:
               echo "the site is unchanged: nothing to commit"
           git -C pages push -q origin gh-pages
           git -C pages log -1 --format='gh-pages: %h %s'
+          after=$(git -C pages rev-parse HEAD)
+          if [ -n "$before" ] && [ "$before" != "$after" ]; then
+            echo "before=$before" >> "$GITHUB_OUTPUT"
+            echo "after=$after" >> "$GITHUB_OUTPUT"
+          fi
 
   # a login from the published site, as a user would, once GitHub serves it
   check:
@@ -204,3 +218,37 @@ jobs:
           path: dist/test/
           if-no-files-found: ignore
           retention-days: 7
+
+  # The live site never stays broken: the login from it failed, so the site
+  # that was live before goes back, as a new commit. Only a failed check of a
+  # publish that changed the site, not a cancelled run; the run stays failed.
+  rollback:
+    needs: [site, deploy, check]
+    if: always() && needs.check.result == 'failure' && needs.deploy.outputs.before != ''
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - name: Back to the site that was live
+        env:
+          KEY: ${{ secrets.FREERDP_WEB_PAGES_KEY }}
+          BEFORE: ${{ needs.deploy.outputs.before }}
+          AFTER: ${{ needs.deploy.outputs.after }}
+          RELEASE: ${{ needs.site.outputs.release }}
+        run: |
+          [ -n "$KEY" ] || { echo "no deploy key: the secret FREERDP_WEB_PAGES_KEY is not set" >&2; exit 1; }
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$KEY" > ~/.ssh/pages_key && chmod 600 ~/.ssh/pages_key
+          ssh-keyscan -t ed25519 github.com >> ~/.ssh/known_hosts 2> /dev/null
+          export GIT_SSH_COMMAND="ssh -i $HOME/.ssh/pages_key -o IdentitiesOnly=yes"
+          git config --global user.name "rdp-release-kit"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git clone -q --branch gh-pages --single-branch "git@github.com:$PAGES_REPO.git" pages
+          old=$(build/site-rollback.sh pages "$BEFORE" "$AFTER" "$RELEASE")
+          git -C pages log -1 --format='gh-pages: %h %s'
+          echo "### Rolled back: $RELEASE failed its check, ${old:-the old site} is live again" >> "$GITHUB_STEP_SUMMARY"
+          [ -n "$old" ] || exit 0
+          for i in $(seq 60); do
+            [ "$(curl -fsSL "${PAGES_URL}RELEASE?back$i" 2> /dev/null)" = "$old" ] && exit 0
+            sleep 10
+          done
+          echo "kit release $old did not come back at $PAGES_URL in 10 minutes" >&2; exit 1
