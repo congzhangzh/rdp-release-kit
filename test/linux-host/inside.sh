@@ -264,6 +264,24 @@ if [ "$MODE" = gnome ]; then
         '! kill -0 $CPID 2> /dev/null && sesman_shadow | grep -q "client authentication failure"' \
         "$(grep -c -i 'reconnect' "$OUT/sesman-badpw.wlog" 2> /dev/null) lines on reconnecting"
     kill $CPID 2> /dev/null; sleep 2
+    # an update, as a package makes one: a new file renamed over the running server.
+    # The next connection gets a new server, in the same GNOME
+    shadow_pid() { as "systemctl --user show -p MainPID --value freerdp-sesman-shadow.service" 2> /dev/null; }
+    shell_pid() { pgrep -u tester -o -x gnome-shell; }
+    PORT_=3391 connect sesman-before /gfx:AV2:off
+    sleep 8
+    kill $CPID 2> /dev/null; sleep 2
+    OLD_SHADOW=$(shadow_pid)
+    OLD_SHELL=$(shell_pid)
+    cp -p /opt/freerdp-host/bin/freerdp-shadow-cli /opt/freerdp-host/bin/freerdp-shadow-cli.new
+    mv -f /opt/freerdp-host/bin/freerdp-shadow-cli.new /opt/freerdp-host/bin/freerdp-shadow-cli
+    PORT_=3391 connect sesman-update /gfx:AV2:off
+    sleep 12
+    NEW_SHADOW=$(shadow_pid)
+    check "sesman: after an update the next connection gets a new server, in the same GNOME" \
+        '[ "$OLD_SHADOW" -gt 0 ] && [ "${NEW_SHADOW:-0}" -gt 0 ] && [ "$NEW_SHADOW" != "$OLD_SHADOW" ] && [ "$(shell_pid)" = "$OLD_SHELL" ] && kill -0 $CPID' \
+        "server $OLD_SHADOW -> $NEW_SHADOW, shell $OLD_SHELL -> $(shell_pid)"
+    kill $CPID 2> /dev/null; sleep 2
     # other has an account but no GNOME session: refused before any login
     USER_=other PASS_=other-pw PORT_=3391 connect sesman-other
     sleep 8

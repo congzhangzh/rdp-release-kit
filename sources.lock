@@ -64,6 +64,7 @@
 # 20261102.2: integration-all rebuilt on FreeRDP master c6d2998da (3.33.0 and 15 of our PRs merged
 # upstream), from the current PR branches with their review fixes (freerdp-d2)
 # 20261103.2: .1 + several shadow subsystems in one build, the first with a monitor wins (freerdp-ce)
+# 20261106.7: .6 + sesman restarts a shadow server that was updated (freerdp-f7)
 # 20261106.6: .5 + a headless user gets a whole GNOME session where gnome-session exists (freerdp-f7)
 # 20261106.5: .4 + live resize on a headless GNOME through sesman; a frozen client no longer holds the size (freerdp-f7)
 # 20261106.4: .3 + runtime statistics in the libraries: graphics, decoders, network, audio, one reader, a WebAssembly export (#14051, #14058, freerdp-18, freerdp-f7)
@@ -78,7 +79,7 @@
 # 20261103.1: .4 + the input race fix (#14020), WinPR's 8 MiB default stack (#14004), the Mutter review fixes
 # 20261102.4: integration-all rebuilt on master 9f9d97e81 (#13934, #13948, #13974 merged upstream), with the
 # DXGI cleanup and the Linux GNOME (Mutter) shadow backend incl. its no-spin and end-on-Stop fixes (freerdp-d2, freerdp-ce)
-freerdp     20261106.6   git+https://github.com/congzhangzh/FreeRDP.git                                      6efab1b88a82e2a702f52c1dcebedd35d1609c74
+freerdp     20261106.7   git+https://github.com/congzhangzh/FreeRDP.git                                      70bbc2abaeea0dd1b2043a1b53db272039c70b3b
 # FreeRDP for the Windows host (freerdp-shadow-cli, freerdp-shadow-service),
 # not for the clients: our release-20261030.7, picked from the fork's
 # integration-shadow-win, FreeRDP master 2a508c725 (2026-10-31) plus our pull
@@ -97,7 +98,7 @@ freerdp     20261106.6   git+https://github.com/congzhangzh/FreeRDP.git         
 # 20261031.8: the keys a client leaves held are let go when it leaves or sends a
 # Synchronize (#13958; before, a client dropped mid-shortcut left Win/Alt down)
 # 20261031.11: integration-all, the one FreeRDP the clients and the Mac host build too
-freerdp_host 20261106.6   git+https://github.com/congzhangzh/FreeRDP.git                                      6efab1b88a82e2a702f52c1dcebedd35d1609c74
+freerdp_host 20261106.7   git+https://github.com/congzhangzh/FreeRDP.git                                      70bbc2abaeea0dd1b2043a1b53db272039c70b3b
 # FreeRDP for the macOS host (FreeRDP-Shadow.app, build-macos-client.sh HOST=1):
 # freerdp-d0's release-20261031.4, picked from the fork's integration-shadow-mac,
 # FreeRDP master dae0390a4 plus the AV2 extension (#13925), the shadow server's
@@ -110,13 +111,13 @@ freerdp_host 20261106.6   git+https://github.com/congzhangzh/FreeRDP.git        
 # lookup), rdpsnd's server no longer pads Opus waves (#13952), and -sec-nla also
 # turns EXT off (#13953); 20261031.11: integration-all, the one FreeRDP the clients and
 # the Windows host build too
-freerdp_mac_host 20261106.6   git+https://github.com/congzhangzh/FreeRDP.git                                 6efab1b88a82e2a702f52c1dcebedd35d1609c74
+freerdp_mac_host 20261106.7   git+https://github.com/congzhangzh/FreeRDP.git                                 70bbc2abaeea0dd1b2043a1b53db272039c70b3b
 # FreeRDP for the Linux host (freerdp-shadow-cli, build.sh HOST=1): the same
 # release-20261103.2 of integration-all, whose shadow server builds the Mutter
 # subsystem (GNOME, X11 or Wayland: Mutter's ScreenCast and RemoteDesktop APIs,
 # freerdp-ce's FreeRDP#14006 with its no-spin and end-on-Stop fixes) and the X11
 # one together and takes the first that finds a monitor (c6d03209e)
-freerdp_linux_host 20261106.6 git+https://github.com/congzhangzh/FreeRDP.git                               6efab1b88a82e2a702f52c1dcebedd35d1609c74
+freerdp_linux_host 20261106.7 git+https://github.com/congzhangzh/FreeRDP.git                               70bbc2abaeea0dd1b2043a1b53db272039c70b3b
 sdl3        3.4.18   https://github.com/libsdl-org/SDL/releases/download/release-3.4.18/SDL3-3.4.18.tar.gz        9c75cf16330322c217dedd2e0609f1124f1b54b8633e763467b4684d0f4334a3
 sdl3_ttf    3.2.2    https://github.com/libsdl-org/SDL_ttf/releases/download/release-3.2.2/SDL3_ttf-3.2.2.tar.gz   63547d58d0185c833213885b635a2c0548201cc8f301e6587c0be1a67e1e045d
 freetype    2.15.0   https://download.savannah.gnu.org/releases/freetype/freetype-2.15.0.tar.xz                   93cd47eb719c325107f2d3cf087d06299e944c3b48a40b55537302304dea1dd5
