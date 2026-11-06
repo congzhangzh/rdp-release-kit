@@ -69,8 +69,9 @@ jobs:
               # keep arriving, so no network timeout fires. Three minutes, then Ubuntu's own
               sudo timeout 180 apt-get install -y --no-install-recommends ffmpeg || {
                 echo "== Ubuntu's archive instead of Azure's $(date -u +%T)"
-                sudo grep -rlE 'azure\.archive\.ubuntu\.com' /etc/apt/sources.list /etc/apt/sources.list.d |
-                  sudo xargs sed -i 's/azure\.archive\.ubuntu\.com/archive.ubuntu.com/g'
+                # a runner names it in /etc/apt/apt-mirrors.txt (mirror+file:), not in sources.list
+                sudo grep -rl 'azure\.archive\.ubuntu\.com' /etc/apt |
+                  sudo xargs -r sed -i 's/azure\.archive\.ubuntu\.com/archive.ubuntu.com/g'
                 sudo apt-get update
                 sudo apt-get install -y --no-install-recommends ffmpeg
               }; }
