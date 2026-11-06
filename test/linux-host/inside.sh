@@ -303,6 +303,8 @@ if [ "$MODE" = gnome ]; then
     autostart() { printf '[Desktop Entry]\nType=Application\nName=%s\nExec=sh -c "touch /tmp/%s"\n' "$1" "$2" > "/etc/xdg/autostart/$1.desktop"; }
     autostart org.gnome.Software software-ran
     autostart other-system other-system-ran
+    # GNOME's session target wants gnome-software.service: the same stand-in by that path
+    printf '[Service]\nType=oneshot\nExecStart=/usr/bin/touch /tmp/software-unit-ran\n' > /usr/lib/systemd/user/gnome-software.service
     USER_=other PASS_=other-pw PORT_=3391 connect sesman-headless /gfx:AV2:off /sound:sys:fake /dynamic-resolution
     # a whole GNOME session takes longer to start than the shell alone
     for _ in $(seq 150); do other_shadow | grep -q "is activated" && break; sleep 1; done
@@ -317,6 +319,9 @@ if [ "$MODE" = gnome ]; then
     sleep 5
     check "sesman headless: GNOME Software stays out of the autostart, the other entries run" \
         '[ -e /tmp/other-system-ran ] && [ ! -e /tmp/software-ran ]' "$(ls /tmp/*-ran 2> /dev/null | tr '\n' ' ')"
+    check "sesman headless: gnome-software.service is masked, so the session target does not start it" \
+        '[ "$(as_other "systemctl --user show -p LoadState --value gnome-software.service")" = masked ] && [ ! -e /tmp/software-unit-ran ]' \
+        "$(as_other "systemctl --user show -p LoadState --value gnome-software.service" 2>&1) $(ls /tmp/software-unit-ran 2> /dev/null)"
     check "sesman headless: other (in freerdp-headless) gets a headless GNOME" \
         'sesman | grep -q "other has no GNOME session: starting a headless one" && sesman | grep -q "headless GNOME of other is up"'
     check "sesman headless: logged in, on the shadow server's own virtual monitor" \

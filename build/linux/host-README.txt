@@ -117,11 +117,15 @@ change, so not from ~/.local):
   sudo systemctl daemon-reload
   sudo systemctl enable --now freerdp-shadow-sesman.service
 
-A session the manager starts has no seat, so polkit takes it for a remote one, and each thing
-GNOME Software does in the background would ask for an administrator's password. So it does not
-start by itself in these sessions, and only in these: the manager puts a hidden entry of the same
-name first in the session's XDG_CONFIG_DIRS. You can still open it by hand. A session already
-running keeps what it started with until it ends.
+A session the manager starts has no seat, so polkit takes it for a remote one, and GNOME Software
+would bring administrator dialogs into it. So the manager closes both ways it starts, for its own
+sessions only: it is out of the autostart, and gnome-software.service is masked until the user's
+manager ends. So it does not open from the menu or show up in an Activities search.
+`gnome-software` in a terminal still starts it, and it then asks like any other program. A session
+already running keeps what it started with until it ends.
+
+A login with the right password unlocks a locked session the session manager started; it has no
+real screen. A GNOME on a real screen stays locked.
 
 If an earlier version's install step added a polkit rule, remove it:
 
