@@ -201,6 +201,17 @@ if [ "$MODE" = gnome ]; then
         'grep -q "Opening device with format WAVE_FORMAT_OPUS" "$OUT/sound.wlog" && [ "$(tone_waves sound)" -ge 60 ]' \
         "$(tone_waves sound) waves with sound"
 
+    # sound that plays before anyone connects: the stream the first client makes must
+    # join a sink already playing, not stay silent with its links in init
+    as "$(declare -f play_tone); TONE=$TONE; for _ in 1 2 3 4; do play_tone; done" > "$OUT/pw-cat-first.log" 2>&1 &
+    TPID=$!
+    sleep 2
+    connect sound-first /gfx:AV2:off /sound:sys:fake
+    wait $TPID || true
+    kill $CPID 2> /dev/null; sleep 2
+    check "sound: a tone already playing reaches the first client" \
+        '[ "$(tone_waves sound-first)" -ge 60 ]' "$(tone_waves sound-first) waves with sound"
+
     # another account: refused, the screen is tester's
     USER_=other PASS_=other-pw connect other
     sleep 8
