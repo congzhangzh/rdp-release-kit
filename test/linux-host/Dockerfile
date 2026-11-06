@@ -15,7 +15,7 @@ ARG BASE=docker.io/library/debian:testing
 FROM ${BASE}
 RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
         systemd systemd-sysv libpam-systemd dbus dbus-user-session \
-        gnome-shell xwayland gsettings-desktop-schemas adwaita-icon-theme fonts-dejavu-core \
+        gnome-shell gnome-session xwayland gsettings-desktop-schemas adwaita-icon-theme fonts-dejavu-core \
         pipewire pipewire-bin wireplumber foot \
         xvfb xauth xdotool imagemagick xterm \
         xfce4-session xfwm4 xfdesktop4 xfce4-panel xfce4-settings dbus-x11 \

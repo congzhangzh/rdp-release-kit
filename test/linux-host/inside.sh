@@ -281,11 +281,15 @@ if [ "$MODE" = gnome ]; then
     as_other() { su other -s /bin/bash -c "export XDG_RUNTIME_DIR=/run/user/$OTHER_UID \
         DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/$OTHER_UID/bus WAYLAND_DISPLAY=wayland-0; cd; $*"; }
     USER_=other PASS_=other-pw PORT_=3391 connect sesman-headless /gfx:AV2:off /sound:sys:fake /dynamic-resolution
-    for _ in $(seq 90); do other_shadow | grep -q "is activated" && break; sleep 1; done
+    # a whole GNOME session takes longer to start than the shell alone
+    for _ in $(seq 150); do other_shadow | grep -q "is activated" && break; sleep 1; done
     # the same clock window, in other's GNOME: it opens on the virtual monitor, the
     # only one there, so the frames count what changes, not only the first picture
     as_other "nohup foot sh -c '$CLOCK' > /tmp/foot-clock-other.log 2>&1 &"
     sleep 25
+    check "sesman headless: a whole GNOME session, with its settings daemons" \
+        '[ "$(pgrep -u other -c "^gsd-")" -ge 5 ]' \
+        "$(pgrep -u other -c '^gsd-') gsd-* running"
     check "sesman headless: other (in freerdp-headless) gets a headless GNOME" \
         'sesman | grep -q "other has no GNOME session: starting a headless one" && sesman | grep -q "headless GNOME of other is up"'
     check "sesman headless: logged in, on the shadow server's own virtual monitor" \

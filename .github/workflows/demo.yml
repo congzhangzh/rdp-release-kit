@@ -62,8 +62,11 @@ jobs:
         timeout-minutes: 10
         run: |
           command -v ffmpeg > /dev/null ||
-            { sudo apt-get -o Acquire::http::Timeout=30 -o Acquire::Retries=3 update -qq &&
-              sudo apt-get -o Acquire::http::Timeout=30 -o Acquire::Retries=3 install -y -qq ffmpeg > /dev/null; }
+            { echo "== apt-get update $(date -u +%T)"
+              sudo apt-get -o Acquire::http::Timeout=30 -o Acquire::Retries=3 update
+              echo "== apt-get install ffmpeg $(date -u +%T)"
+              sudo apt-get -o Acquire::http::Timeout=30 -o Acquire::Retries=3 install -y ffmpeg; }
+          echo "== podman wrapper $(date -u +%T)"
           printf '#!/bin/sh\nexec sudo podman "$@"\n' | sudo tee /usr/local/bin/podman-root > /dev/null
           sudo chmod 755 /usr/local/bin/podman-root
           # Ubuntu forbids unprivileged user namespaces (AppArmor), and Fedora's
