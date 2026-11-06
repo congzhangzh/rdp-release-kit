@@ -14,8 +14,6 @@ Optional, off unless you install it (see "The session manager" below; it runs as
   bin/freerdp-shadow-sesman      one port for every user of this computer: each
                                  connection goes to the GNOME session of the user it names
   freerdp-shadow-sesman.service  its systemd system unit, on 127.0.0.1:3391
-  freerdp-shadow-sesman.rules    a polkit rule: the group freerdp-headless may refresh the
-                                 software catalogue with no password, and nothing else
 
 One server for two kinds of desktop; it takes, at start, the first that finds a monitor:
 
@@ -116,15 +114,18 @@ change, so not from ~/.local):
   sudo mv /opt/freerdp-host-*-linux-$(uname -m) /opt/freerdp-host
   sudo chown -R root:root /opt/freerdp-host
   sudo cp /opt/freerdp-host/freerdp-shadow-sesman.service /etc/systemd/system/
-  sudo install -D -m 644 /opt/freerdp-host/freerdp-shadow-sesman.rules \
-      /etc/polkit-1/rules.d/49-freerdp-shadow-sesman.rules
   sudo systemctl daemon-reload
   sudo systemctl enable --now freerdp-shadow-sesman.service
 
-A session the manager starts has no seat, so polkit takes it for a remote one, and GNOME
-Software's background refresh would ask for an administrator's password. The rule allows that
-refresh for the group freerdp-headless; installing a package or changing a repository still
-asks. Edit the group in it if yours has another name.
+A session the manager starts has no seat, so polkit takes it for a remote one, and each thing
+GNOME Software does in the background would ask for an administrator's password. So it does not
+start by itself in these sessions, and only in these: the manager puts a hidden entry of the same
+name first in the session's XDG_CONFIG_DIRS. You can still open it by hand. A session already
+running keeps what it started with until it ends.
+
+If an earlier version's install step added a polkit rule, remove it:
+
+  sudo rm -f /etc/polkit-1/rules.d/49-freerdp-shadow-sesman.rules
 
 Connect as with the user unit, through SSH, to port 3391 this time:
 
@@ -157,7 +158,6 @@ Remove it with
 
   sudo systemctl disable --now freerdp-shadow-sesman.service
   sudo rm /etc/systemd/system/freerdp-shadow-sesman.service
-  sudo rm /etc/polkit-1/rules.d/49-freerdp-shadow-sesman.rules
   sudo rm -r /opt/freerdp-host
 
 What it cannot do

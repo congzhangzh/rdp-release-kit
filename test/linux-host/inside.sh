@@ -237,13 +237,10 @@ if [ "$MODE" = gnome ]; then
     { rm -rf /opt/freerdp-host && tar -xJf /host.tar.xz -C /opt && mv /opt/freerdp-host-*-linux-* /opt/freerdp-host \
         && chown -R root:root /opt/freerdp-host \
         && cp /opt/freerdp-host/freerdp-shadow-sesman.service /etc/systemd/system/ \
-        && install -D -m 644 /opt/freerdp-host/freerdp-shadow-sesman.rules /etc/polkit-1/rules.d/49-freerdp-shadow-sesman.rules \
         && systemctl daemon-reload && systemctl enable --now freerdp-shadow-sesman.service; } >> "$OUT/install.log" 2>&1
     sesman() { journalctl -u freerdp-shadow-sesman -o cat --no-pager 2> /dev/null; }
     sesman_shadow() { as "journalctl --user -u freerdp-sesman-shadow -o cat --no-pager" 2> /dev/null; }
     for _ in $(seq 30); do sesman | grep -q "listening on" && break; sleep 1; done
-    check "sesman: the package's polkit rule, installed as its README says, names the group of the unit" \
-        'grep -q "isInGroup(\"freerdp-headless\")" /etc/polkit-1/rules.d/49-freerdp-shadow-sesman.rules && grep -q -- "--headless-group freerdp-headless" /etc/systemd/system/freerdp-shadow-sesman.service'
     check "sesman: the system unit runs, on 127.0.0.1:3391 only (0D3F)" \
         '[ "$(systemctl show freerdp-shadow-sesman -p ActiveState --value)" = active ] && [ "$(listeners 0D3F)" = "0100007F:0D3F" ]' \
         "$(listeners 0D3F | tr '\n' ' ')"
@@ -301,6 +298,11 @@ if [ "$MODE" = gnome ]; then
     other_shadow() { journalctl _UID="$OTHER_UID" _SYSTEMD_USER_UNIT=freerdp-sesman-shadow.service -o cat --no-pager 2> /dev/null; }
     as_other() { su other -s /bin/bash -c "export XDG_RUNTIME_DIR=/run/user/$OTHER_UID \
         DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/$OTHER_UID/bus WAYLAND_DISPLAY=wayland-0; cd; $*"; }
+    # the image has no gnome-software: an entry of its name that leaves a mark stands in
+    # for it, and a second one proves that autostart ran at all
+    autostart() { printf '[Desktop Entry]\nType=Application\nName=%s\nExec=sh -c "touch /tmp/%s"\n' "$1" "$2" > "/etc/xdg/autostart/$1.desktop"; }
+    autostart org.gnome.Software software-ran
+    autostart other-system other-system-ran
     USER_=other PASS_=other-pw PORT_=3391 connect sesman-headless /gfx:AV2:off /sound:sys:fake /dynamic-resolution
     # a whole GNOME session takes longer to start than the shell alone
     for _ in $(seq 150); do other_shadow | grep -q "is activated" && break; sleep 1; done
@@ -311,6 +313,10 @@ if [ "$MODE" = gnome ]; then
     check "sesman headless: a whole GNOME session, with its settings daemons" \
         '[ "$(pgrep -u other -c "^gsd-")" -ge 5 ]' \
         "$(pgrep -u other -c '^gsd-') gsd-* running"
+    for _ in $(seq 30); do [ -e /tmp/other-system-ran ] && break; sleep 1; done
+    sleep 5
+    check "sesman headless: GNOME Software stays out of the autostart, the other entries run" \
+        '[ -e /tmp/other-system-ran ] && [ ! -e /tmp/software-ran ]' "$(ls /tmp/*-ran 2> /dev/null | tr '\n' ' ')"
     check "sesman headless: other (in freerdp-headless) gets a headless GNOME" \
         'sesman | grep -q "other has no GNOME session: starting a headless one" && sesman | grep -q "headless GNOME of other is up"'
     check "sesman headless: logged in, on the shadow server's own virtual monitor" \

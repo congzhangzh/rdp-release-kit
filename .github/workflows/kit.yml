@@ -178,7 +178,7 @@ jobs:
           retention-days: 3
 
   # The macOS host: FreeRDP's shadow server as FreeRDP-Shadow.app (build-macos-client.sh
-  # with HOST=1, freerdp_mac_host), as mac-host.yml builds it on its branch. Built and
+  # with HOST=1, freerdp_mac_host). Built and
   # packaged here; mac-host-test below runs it
   mac-host:
     needs: [releases]
