@@ -59,6 +59,7 @@ jobs:
       # GNOME and KDE run systemd in a podman container: a rootful one here,
       # which also opens /dev/udmabuf for KWin (no GPU, no DRM, no vgem)
       - name: Tools
+        timeout-minutes: 10
         run: |
           command -v ffmpeg > /dev/null ||
             { sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg > /dev/null; }
