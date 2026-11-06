@@ -280,7 +280,7 @@ if [ "$MODE" = gnome ]; then
     other_shadow() { journalctl _UID="$OTHER_UID" _SYSTEMD_USER_UNIT=freerdp-sesman-shadow.service -o cat --no-pager 2> /dev/null; }
     as_other() { su other -s /bin/bash -c "export XDG_RUNTIME_DIR=/run/user/$OTHER_UID \
         DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/$OTHER_UID/bus WAYLAND_DISPLAY=wayland-0; cd; $*"; }
-    USER_=other PASS_=other-pw PORT_=3391 connect sesman-headless /gfx:AV2:off /sound:sys:fake
+    USER_=other PASS_=other-pw PORT_=3391 connect sesman-headless /gfx:AV2:off /sound:sys:fake /dynamic-resolution
     for _ in $(seq 90); do other_shadow | grep -q "is activated" && break; sleep 1; done
     # the same clock window, in other's GNOME: it opens on the virtual monitor, the
     # only one there, so the frames count what changes, not only the first picture
@@ -298,6 +298,16 @@ if [ "$MODE" = gnome ]; then
     check "sesman headless: the tone played there reaches the client in Opus" \
         'grep -q "Opening device with format WAVE_FORMAT_OPUS" "$OUT/sesman-headless.wlog" && [ "$(tone_waves sesman-headless)" -ge 60 ]' \
         "$(tone_waves sesman-headless) waves with sound"
+    # the client resizes its window: the session's virtual monitor follows, on the same
+    # connection, and the encoder goes on at the new size
+    n=$(frames sesman-headless AV1)
+    WID=$(DISPLAY=:99 xdotool search --pid $CPID | tail -1)
+    DISPLAY=:99 xdotool windowsize "$WID" 1100 700
+    for _ in $(seq 15); do other_shadow | grep -q "stream: 1100x700" && break; sleep 1; done
+    sleep 8
+    check "sesman headless: a client's window resize reaches the session, same connection, frames go on" \
+        'other_shadow | grep -q "stream: 1100x700" && kill -0 $CPID && [ "$(frames sesman-headless AV1)" -gt "$n" ]' \
+        "$n -> $(frames sesman-headless AV1) AV1 frames"
     kill $CPID 2> /dev/null; sleep 3
     pkill -u other -x foot
     check "sesman headless: the GNOME keeps running after the client leaves" \
