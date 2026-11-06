@@ -257,6 +257,13 @@ if [ "$MODE" = gnome ]; then
         'grep -q MonitorReady "$OUT/sesman.wlog"'
     kill $CPID 2> /dev/null; sleep 2
     as "pkill -x foot"
+    # a wrong password: the client is told why and ends, it does not reconnect with it
+    PASS_=wrong-pw PORT_=3391 connect sesman-badpw /gfx:AV2:off /auto-reconnect
+    for _ in $(seq 40); do kill -0 $CPID 2> /dev/null || break; sleep 1; done
+    check "sesman: a wrong password ends the client within 40 s, no reconnecting" \
+        '! kill -0 $CPID 2> /dev/null && sesman_shadow | grep -q "client authentication failure"' \
+        "$(grep -c -i 'reconnect' "$OUT/sesman-badpw.wlog" 2> /dev/null) lines on reconnecting"
+    kill $CPID 2> /dev/null; sleep 2
     # other has an account but no GNOME session: refused before any login
     USER_=other PASS_=other-pw PORT_=3391 connect sesman-other
     sleep 8
