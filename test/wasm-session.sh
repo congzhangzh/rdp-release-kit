@@ -408,13 +408,8 @@ if [ -n "${SCREENS:-}" ]; then
         run screens-separate test-screens.mjs MODE=separate XRDP="$NAME"
         run screens-span test-screens.mjs MODE=span XRDP="$NAME"
         # FreeRDP's counters in a real session, in Info and in clientStats(). AV1 by name:
-        # AV2 has no decoder counters and the kit's xrdp puts it first, and the page's test
-        # takes no codec of its own (a page with no test-stats.mjs is skipped by run)
-        [ ! -f "$TESTS/test-stats.mjs" ] || {
-            sed 's#&extra=/gfx&#\&extra=/gfx:AV2:off,AV1:i444\&#' "$TESTS/test-stats.mjs" > "$TESTS/test-stats-av1.mjs"
-            grep -q 'AV2:off' "$TESTS/test-stats-av1.mjs" || { echo "test-stats.mjs: no /gfx to change" >&2; status=1; }
-            run stats test-stats-av1.mjs USER_NAME=tester PASSWORD=kit-test-pw
-        }
+        # AV2 has no decoder counters and the kit's xrdp puts it first
+        run stats test-stats.mjs USER_NAME=tester PASSWORD=kit-test-pw EXTRA=/gfx:AV2:off,AV1:i444
         # CAPTURE=1: the page's mouse and keyboard capture test too, on the same server
         [ -z "${CAPTURE:-}" ] || run capture test-capture.mjs XRDP="$NAME"
         # RECONNECT=1: the page's reconnect test, with a websockify of its own (6082) to

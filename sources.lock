@@ -64,6 +64,7 @@
 # 20261102.2: integration-all rebuilt on FreeRDP master c6d2998da (3.33.0 and 15 of our PRs merged
 # upstream), from the current PR branches with their review fixes (freerdp-d2)
 # 20261103.2: .1 + several shadow subsystems in one build, the first with a monitor wins (freerdp-ce)
+# 20261106.12: .11 + a dropped round no longer ends the next one in the shadow server: an abort in WaitForSubscribers (freerdp-34)
 # 20261106.11: .10 + gnome-software.service masked in sesman's sessions, and a login unlocks a session sesman started (freerdp-34)
 # 20261106.10: .9 + sesman keeps GNOME Software out of the autostart of its own sessions, no polkit rule any more (freerdp-f7)
 # 20261106.9: .8 + no admin dialog for a background catalogue refresh in a sesman session (freerdp-f7)
@@ -83,7 +84,7 @@
 # 20261103.1: .4 + the input race fix (#14020), WinPR's 8 MiB default stack (#14004), the Mutter review fixes
 # 20261102.4: integration-all rebuilt on master 9f9d97e81 (#13934, #13948, #13974 merged upstream), with the
 # DXGI cleanup and the Linux GNOME (Mutter) shadow backend incl. its no-spin and end-on-Stop fixes (freerdp-d2, freerdp-ce)
-freerdp     20261106.11  git+https://github.com/congzhangzh/FreeRDP.git                                      9a098b024939f1755ca26b578b0c0d34a2cdcbbd
+freerdp     20261106.12  git+https://github.com/congzhangzh/FreeRDP.git                                      d0353582c4c02bab4b05acd6a38e17a1ca736647
 # FreeRDP for the Windows host (freerdp-shadow-cli, freerdp-shadow-service),
 # not for the clients: our release-20261030.7, picked from the fork's
 # integration-shadow-win, FreeRDP master 2a508c725 (2026-10-31) plus our pull
@@ -102,7 +103,7 @@ freerdp     20261106.11  git+https://github.com/congzhangzh/FreeRDP.git         
 # 20261031.8: the keys a client leaves held are let go when it leaves or sends a
 # Synchronize (#13958; before, a client dropped mid-shortcut left Win/Alt down)
 # 20261031.11: integration-all, the one FreeRDP the clients and the Mac host build too
-freerdp_host 20261106.11  git+https://github.com/congzhangzh/FreeRDP.git                                      9a098b024939f1755ca26b578b0c0d34a2cdcbbd
+freerdp_host 20261106.12  git+https://github.com/congzhangzh/FreeRDP.git                                      d0353582c4c02bab4b05acd6a38e17a1ca736647
 # FreeRDP for the macOS host (FreeRDP-Shadow.app, build-macos-client.sh HOST=1):
 # freerdp-d0's release-20261031.4, picked from the fork's integration-shadow-mac,
 # FreeRDP master dae0390a4 plus the AV2 extension (#13925), the shadow server's
@@ -115,13 +116,13 @@ freerdp_host 20261106.11  git+https://github.com/congzhangzh/FreeRDP.git        
 # lookup), rdpsnd's server no longer pads Opus waves (#13952), and -sec-nla also
 # turns EXT off (#13953); 20261031.11: integration-all, the one FreeRDP the clients and
 # the Windows host build too
-freerdp_mac_host 20261106.11  git+https://github.com/congzhangzh/FreeRDP.git                                 9a098b024939f1755ca26b578b0c0d34a2cdcbbd
+freerdp_mac_host 20261106.12  git+https://github.com/congzhangzh/FreeRDP.git                                 d0353582c4c02bab4b05acd6a38e17a1ca736647
 # FreeRDP for the Linux host (freerdp-shadow-cli, build.sh HOST=1): the same
 # release-20261103.2 of integration-all, whose shadow server builds the Mutter
 # subsystem (GNOME, X11 or Wayland: Mutter's ScreenCast and RemoteDesktop APIs,
 # freerdp-ce's FreeRDP#14006 with its no-spin and end-on-Stop fixes) and the X11
 # one together and takes the first that finds a monitor (c6d03209e)
-freerdp_linux_host 20261106.11 git+https://github.com/congzhangzh/FreeRDP.git                               9a098b024939f1755ca26b578b0c0d34a2cdcbbd
+freerdp_linux_host 20261106.12 git+https://github.com/congzhangzh/FreeRDP.git                               d0353582c4c02bab4b05acd6a38e17a1ca736647
 sdl3        3.4.18   https://github.com/libsdl-org/SDL/releases/download/release-3.4.18/SDL3-3.4.18.tar.gz        9c75cf16330322c217dedd2e0609f1124f1b54b8633e763467b4684d0f4334a3
 sdl3_ttf    3.2.2    https://github.com/libsdl-org/SDL_ttf/releases/download/release-3.2.2/SDL3_ttf-3.2.2.tar.gz   63547d58d0185c833213885b635a2c0548201cc8f301e6587c0be1a67e1e045d
 freetype    2.15.0   https://download.savannah.gnu.org/releases/freetype/freetype-2.15.0.tar.xz                   93cd47eb719c325107f2d3cf087d06299e944c3b48a40b55537302304dea1dd5
@@ -197,4 +198,4 @@ python_macos_x86_64   3.13.17+20261021 https://github.com/astral-sh/python-build
 # in SDL_Emscripten_TimerHelper); 3.4.18 already ignores FS.mkdir errors for
 # /tmp/filedrop, which 3.2.30 needed backported
 sdl3_wasm   3.4.18+timer git+https://github.com/congzhangzh/SDL.git                                      1d615c14f95a3389bf0026e719144ad51378e40c
-freerdp_web 20261106.4  git+https://github.com/congzhangzh/freerdp-web.git                                     3cbc20d723381b573bde464cec9d88725ee3d1c6
+freerdp_web 20261106.5  git+https://github.com/congzhangzh/freerdp-web.git                                     a54e70f6885c066f0d3d4ca2b7be762d1ab1d1dd
