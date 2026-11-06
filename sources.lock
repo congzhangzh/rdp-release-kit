@@ -64,6 +64,7 @@
 # 20261102.2: integration-all rebuilt on FreeRDP master c6d2998da (3.33.0 and 15 of our PRs merged
 # upstream), from the current PR branches with their review fixes (freerdp-d2)
 # 20261103.2: .1 + several shadow subsystems in one build, the first with a monitor wins (freerdp-ce)
+# 20261106.1: 20261105.1 + the Linux host's clipboard (Mutter), and its sound and microphone through PipeWire on both subsystems (freerdp-34)
 # 20261105.1: .8 + #14050 (upstream's cfb77bd0a dropped sessions: the read and write threads shared the TLS BIO's retry flag) and two log-text commits
 # 20261104.8: integration-all rebuilt on master a5d85a31f (2026-11-04): #13954, #13978, #13982, #14004,
 # #14005, #14020 (as 903e1b145) and #14029 merged upstream, so 15 picks drop out; the DXGI pause re-fit onto upstream's check_resize;
@@ -72,7 +73,7 @@
 # 20261103.1: .4 + the input race fix (#14020), WinPR's 8 MiB default stack (#14004), the Mutter review fixes
 # 20261102.4: integration-all rebuilt on master 9f9d97e81 (#13934, #13948, #13974 merged upstream), with the
 # DXGI cleanup and the Linux GNOME (Mutter) shadow backend incl. its no-spin and end-on-Stop fixes (freerdp-d2, freerdp-ce)
-freerdp     20261105.1   git+https://github.com/congzhangzh/FreeRDP.git                                      ccd119becb730c9c60bb67dd3441c47c8193fb70
+freerdp     20261106.1   git+https://github.com/congzhangzh/FreeRDP.git                                      514d05c5611950793810abdfe1c749eeaa6416d0
 # FreeRDP for the Windows host (freerdp-shadow-cli, freerdp-shadow-service),
 # not for the clients: our release-20261030.7, picked from the fork's
 # integration-shadow-win, FreeRDP master 2a508c725 (2026-10-31) plus our pull
@@ -91,7 +92,7 @@ freerdp     20261105.1   git+https://github.com/congzhangzh/FreeRDP.git         
 # 20261031.8: the keys a client leaves held are let go when it leaves or sends a
 # Synchronize (#13958; before, a client dropped mid-shortcut left Win/Alt down)
 # 20261031.11: integration-all, the one FreeRDP the clients and the Mac host build too
-freerdp_host 20261105.1   git+https://github.com/congzhangzh/FreeRDP.git                                      ccd119becb730c9c60bb67dd3441c47c8193fb70
+freerdp_host 20261106.1   git+https://github.com/congzhangzh/FreeRDP.git                                      514d05c5611950793810abdfe1c749eeaa6416d0
 # FreeRDP for the macOS host (FreeRDP-Shadow.app, build-macos-client.sh HOST=1):
 # freerdp-d0's release-20261031.4, picked from the fork's integration-shadow-mac,
 # FreeRDP master dae0390a4 plus the AV2 extension (#13925), the shadow server's
@@ -104,13 +105,13 @@ freerdp_host 20261105.1   git+https://github.com/congzhangzh/FreeRDP.git        
 # lookup), rdpsnd's server no longer pads Opus waves (#13952), and -sec-nla also
 # turns EXT off (#13953); 20261031.11: integration-all, the one FreeRDP the clients and
 # the Windows host build too
-freerdp_mac_host 20261105.1   git+https://github.com/congzhangzh/FreeRDP.git                                 ccd119becb730c9c60bb67dd3441c47c8193fb70
+freerdp_mac_host 20261106.1   git+https://github.com/congzhangzh/FreeRDP.git                                 514d05c5611950793810abdfe1c749eeaa6416d0
 # FreeRDP for the Linux host (freerdp-shadow-cli, build.sh HOST=1): the same
 # release-20261103.2 of integration-all, whose shadow server builds the Mutter
 # subsystem (GNOME, X11 or Wayland: Mutter's ScreenCast and RemoteDesktop APIs,
 # freerdp-ce's FreeRDP#14006 with its no-spin and end-on-Stop fixes) and the X11
 # one together and takes the first that finds a monitor (c6d03209e)
-freerdp_linux_host 20261105.1 git+https://github.com/congzhangzh/FreeRDP.git                               ccd119becb730c9c60bb67dd3441c47c8193fb70
+freerdp_linux_host 20261106.1 git+https://github.com/congzhangzh/FreeRDP.git                               514d05c5611950793810abdfe1c749eeaa6416d0
 sdl3        3.4.18   https://github.com/libsdl-org/SDL/releases/download/release-3.4.18/SDL3-3.4.18.tar.gz        9c75cf16330322c217dedd2e0609f1124f1b54b8633e763467b4684d0f4334a3
 sdl3_ttf    3.2.2    https://github.com/libsdl-org/SDL_ttf/releases/download/release-3.2.2/SDL3_ttf-3.2.2.tar.gz   63547d58d0185c833213885b635a2c0548201cc8f301e6587c0be1a67e1e045d
 freetype    2.15.0   https://download.savannah.gnu.org/releases/freetype/freetype-2.15.0.tar.xz                   93cd47eb719c325107f2d3cf087d06299e944c3b48a40b55537302304dea1dd5
@@ -136,6 +137,9 @@ jansson     2.15.1   https://github.com/akheron/jansson/releases/download/v2.15.
 # libei, the Linux host's input through GNOME's RemoteDesktop (ConnectToEIS):
 # its client library, static (AlmaLinux 9 has none), by its release tag's commit
 libei       1.6.0    git+https://gitlab.freedesktop.org/libinput/libei.git                                   8a46bf3d4b6af7f25a61be53386cf618218114ef
+# libpng, the Linux host's PNG <-> bitmap for the clipboard (WinPR's
+# WINPR_UTILS_IMAGE_PNG): static, by its release tag's commit
+libpng      1.6.59   git+https://github.com/pnggroup/libpng.git                                              cd952f49f95bb27154ae77dbb103032d95f6e580
 # xrdp, for the server packages (Xorg and Wayland sessions): our release,
 # not an upstream one. A ripe commit of the fork's integration-wlup-all,
 # picked as release-<YYYYMMDD>.<N>: xrdp devel plus our branches on their

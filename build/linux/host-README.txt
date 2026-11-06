@@ -25,10 +25,15 @@ One server for two kinds of desktop; it takes, at start, the first that finds a 
 
 /subsystem lists them, the one it would take marked with *; /subsystem:x11 forces X11.
 
+Sound and microphone work on both, through PipeWire and WirePlumber in the session: what the
+default sink plays goes to the client, a client's microphone appears as a source of the
+session. No sound card is needed. The clipboard is shared on Mutter only: text, HTML and
+images, no files. A selection made before the server starts shows up with the next copy.
+
 It needs from the system: glibc 2.34 or newer, PAM, libsystemd, PipeWire's
 libpipewire-0.3 and the X11 libraries (libX11, Xext, Xdamage, Xfixes, Xinerama, Xtst), which
-a desktop has. Everything else (FreeRDP, OpenSSL, the AV1, AV2 and Opus codecs, libei) is
-inside. MANIFEST lists the sources and what the server takes from the system.
+a desktop has. Everything else (FreeRDP, OpenSSL, the AV1, AV2 and Opus codecs, libei, libpng)
+is inside. MANIFEST lists the sources and what the server takes from the system.
 
 Install
 -------

@@ -12,8 +12,9 @@
 # (freerdp-shadow-cli) from freerdp_linux_host, with two subsystems, Mutter
 # (GNOME, X11 or Wayland: Mutter's ScreenCast and RemoteDesktop APIs, PipeWire,
 # libei) and X11 (any other X11 desktop); the server takes, at start, the first
-# that finds a monitor. AV1 with libaom, AV2 with libavm, Opus sound; logins
-# through PAM. FreeRDP and every codec are linked statically; from the host it
+# that finds a monitor. AV1 with libaom, AV2 with libavm, Opus sound; the
+# session's clipboard (Mutter), its sound and a microphone (PipeWire, both
+# subsystems); logins through PAM. FreeRDP and every codec are linked statically; from the host it
 # needs glibc, libgcc_s, PAM, libsystemd, PipeWire and the X11 libraries a
 # desktop has (build/check-portable.sh checks that list). The result is
 # <output dir>/freerdp-host-<version>-linux-<arch>.tar.xz, with a systemd user
@@ -90,6 +91,10 @@ if [ -n "${HOST:-}" ]; then
         stamp libei
     fi
 
+    # libpng, for the clipboard's images (WINPR_UTILS_IMAGE_PNG): a desktop's
+    # applications copy PNG, an RDP client asks for a bitmap
+    cmake_dep libpng -DPNG_SHARED=OFF -DPNG_STATIC=ON -DPNG_TESTS=OFF -DPNG_TOOLS=OFF
+
     FREERDP=freerdp_linux_host
     host_source "$FREERDP"
     if overridden "$FREERDP"; then
@@ -121,7 +126,7 @@ if [ -n "${HOST:-}" ]; then
         -DOPENSSL_ROOT_DIR=$DEPS -DOPENSSL_USE_STATIC_LIBS=ON \
         -DWITH_CLIENT=OFF -DWITH_CLIENT_COMMON=OFF -DWITH_CLIENT_CHANNELS=OFF \
         -DWITH_SERVER=ON -DWITH_SHADOW=ON -DWITH_SHADOW_X11=ON -DWITH_SHADOW_MUTTER=ON \
-        -DWITH_SHADOW_SESMAN=ON \
+        -DWITH_SHADOW_SESMAN=ON -DWITH_SHADOW_PIPEWIRE=ON -DWINPR_UTILS_IMAGE_PNG=ON \
         -DWITH_PROXY=OFF -DWITH_PLATFORM_SERVER=OFF -DWITH_SAMPLE=OFF -DWITH_WINPR_TOOLS=ON \
         -DWITH_X11=ON -DWITH_WAYLAND=OFF -DWITH_XCURSOR=OFF -DWITH_XRANDR=OFF \
         -DWITH_PULSE=OFF -DWITH_ALSA=OFF -DWITH_OSS=OFF -DWITH_CUPS=OFF -DWITH_PCSC=OFF \
@@ -139,6 +144,8 @@ if [ -n "${HOST:-}" ]; then
     done
     grep -q -E '^PAM_LIBRARY:FILEPATH=/' "$WORK/build/$FREERDP/CMakeCache.txt" ||
         { echo "HOST=1: PAM not found (log/freerdp.log)" >&2; exit 1; }
+    grep -q -E "^PNG_LIBRARY[A-Z_]*:FILEPATH=$DEPS/" "$WORK/build/$FREERDP/CMakeCache.txt" ||
+        { echo "HOST=1: not our static libpng (log/freerdp.log)" >&2; exit 1; }
     cmake --build "$WORK/build/$FREERDP" >> "$WORK/log/freerdp.log" 2>&1
     DESTDIR=$STAGE cmake --install "$WORK/build/$FREERDP" >> "$WORK/log/freerdp.log" 2>&1
     ccache_stats
@@ -168,7 +175,7 @@ if [ -n "${HOST:-}" ]; then
         { echo "HOST=1: no journald appender in freerdp-shadow-cli (sd_journal_stream_fd)" >&2; exit 1; }
     cp "$KIT/build/linux/freerdp-shadow.service" "$KIT/build/linux/freerdp-shadow-sesman.service" "$PKG/"
     cp "$KIT/build/linux/host-README.txt" "$PKG/README.txt"
-    licenses "$PKG/licenses" "$FREERDP" openssl opus dav1d aom avm libei zlib jansson
+    licenses "$PKG/licenses" "$FREERDP" openssl opus dav1d aom avm libei libpng zlib jansson
     {
         echo "FreeRDP's shadow server for Linux ${VERSION[$FREERDP]}, $ARCH, built $(date -u +%F)"
         # shellcheck source=/dev/null
@@ -177,7 +184,7 @@ if [ -n "${HOST:-}" ]; then
         [ "${DEV[0]:-}" != -DCMAKE_INTERPROCEDURAL_OPTIMIZATION=OFF ] || echo "LTO off (local build)"
         echo
         echo "sources (sources.lock):"
-        for name in "$FREERDP" openssl opus dav1d aom avm libei zlib jansson; do
+        for name in "$FREERDP" openssl opus dav1d aom avm libei libpng zlib jansson; do
             printf '  %-18s %-10s %s\n' "$name" "${VERSION[$name]}" "${SHA[$name]}"
         done
         echo

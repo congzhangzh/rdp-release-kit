@@ -193,6 +193,8 @@ if [ "$MODE" = gnome ]; then
     as "$(declare -f play_tone); TONE=$TONE play_tone" > "$OUT/pw-cat.log" 2>&1
     sleep 3
     kill $CPID 2> /dev/null; sleep 2
+    check "clipboard: the session's clipboard channel opens (Monitor Ready reaches the client)" \
+        'grep -q MonitorReady "$OUT/sound.wlog"'
     check "sound: the server records what the session's sink plays" \
         'journal | grep -q "sound: capturing what the default sink plays"'
     check "sound: the tone reaches the client in Opus, as it plays (4 s, 80 waves)" \
@@ -251,6 +253,8 @@ if [ "$MODE" = gnome ]; then
         'sesman | grep -q "tester -> the shadow server of their GNOME session"'
     check "sesman: the client is logged in (PAM, the session's owner)" 'sesman_shadow | grep -q "is activated"'
     check "sesman: at least 20 frames in AV1 with the screen changing" '[ "${n:-0}" -ge 20 ]' "$(codecs sesman)"
+    check "sesman: the session's clipboard channel opens (Monitor Ready reaches the client)" \
+        'grep -q MonitorReady "$OUT/sesman.wlog"'
     kill $CPID 2> /dev/null; sleep 2
     as "pkill -x foot"
     # other has an account but no GNOME session: refused before any login
