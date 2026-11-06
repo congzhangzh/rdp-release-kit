@@ -291,6 +291,8 @@ if ($about -match "(?m)^\s+avm\s") {
     # the native session confirmed it once already: the page makes it twice
     Check "web-av2: the server confirmed AV2 for the page too (FRDP_2)" (([regex]::Matches($serverLog, "CAPS version=0x20000")).Count -ge 2)
     Check "web-av2: the page got a picture" ((Get-Content "$webAv2\page.log" -Raw -ErrorAction SilentlyContinue) -match "Remote framebuffer format")
+    # frames still arrive and count when the decoder rejects each of them
+    Check "web-av2: the decoder rejected no frame" (-not ((Get-Content "$webAv2\page.log" -Raw -ErrorAction SilentlyContinue) -match "Corrupt frame"))
 } else {
     "web-av2: this web client has no AV2 (its MANIFEST names no avm); skipped" | Out-File -Append "$Out\notes.txt"
 }
@@ -398,6 +400,7 @@ $av1 = if ($driver -match "av1 decoders configured: (.+)") { $Matches[1].Trim() 
 # since freerdp_web 20261104.3 the page's log masks the user like the password
 Check "web: the page started the client with a user" ($pageLog -match " /u:($user|\*\*\*) ")
 Check "web: the page decodes AV1 (a WebCodecs decoder configured)" ($av1 -match "profile \d") $av1
+Check "web: the decoder rejected no frame" (-not ($pageLog -match "Corrupt frame"))
 
 # a demo video of the same: the web client on this Windows host
 # (wasm-demo.mjs, SERVER=windows), finished as the site's other videos are

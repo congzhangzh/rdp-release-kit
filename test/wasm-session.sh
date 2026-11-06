@@ -456,6 +456,9 @@ xcodec() { "$ENGINE" exec "$NAME" grep -a -q -- "--enable-av2" /usr/sbin/xrdp 2>
 check "the page started the client with a user" 'grep -Eq -- " /u:(tester|\*\*\*) " "$OUT/page.log"'
 # the client's own messages arrive whole: a freed queue item read in the SDL3 dialog
 # (FreeRDP#13961) turned "The connection is being established" into "����ection …"
+# frames still arrive and count when the decoder rejects each of them: the page
+# stays black behind a session that looks alive
+check "the decoder rejected no frame" '! grep -q "Corrupt frame" "$OUT/page.log"'
 check "the page log has no garbled text (no U+FFFD)" '! grep -q $'"'"'\xef\xbf\xbd'"'"' "$OUT/page.log"'
 if [ "$SERVER" = xrdp-gnome ]; then
 check "sesman started GNOME for tester (gnome-session, GNOME Shell)" \
