@@ -174,6 +174,10 @@ if [ -n "${HOST:-}" ]; then
     readelf -W --dyn-syms "$PKG/bin/freerdp-shadow-cli" | grep ' sd_journal_stream_fd' > /dev/null ||
         { echo "HOST=1: no journald appender in freerdp-shadow-cli (sd_journal_stream_fd)" >&2; exit 1; }
     cp "$KIT/build/linux/freerdp-shadow.service" "$KIT/build/linux/freerdp-shadow-sesman.service" "$PKG/"
+    # polkit reads no rule under /opt: the README's opt-in step copies it to /etc
+    f=$(find "$STAGE" -type f -name freerdp-shadow-sesman.rules | head -1)
+    [ -n "$f" ] || { echo "HOST=1: no freerdp-shadow-sesman.rules in the build" >&2; exit 1; }
+    cp "$f" "$PKG/"
     cp "$KIT/build/linux/host-README.txt" "$PKG/README.txt"
     licenses "$PKG/licenses" "$FREERDP" openssl opus dav1d aom avm libei libpng zlib jansson
     {

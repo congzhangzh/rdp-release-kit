@@ -237,10 +237,13 @@ if [ "$MODE" = gnome ]; then
     { rm -rf /opt/freerdp-host && tar -xJf /host.tar.xz -C /opt && mv /opt/freerdp-host-*-linux-* /opt/freerdp-host \
         && chown -R root:root /opt/freerdp-host \
         && cp /opt/freerdp-host/freerdp-shadow-sesman.service /etc/systemd/system/ \
+        && install -D -m 644 /opt/freerdp-host/freerdp-shadow-sesman.rules /etc/polkit-1/rules.d/49-freerdp-shadow-sesman.rules \
         && systemctl daemon-reload && systemctl enable --now freerdp-shadow-sesman.service; } >> "$OUT/install.log" 2>&1
     sesman() { journalctl -u freerdp-shadow-sesman -o cat --no-pager 2> /dev/null; }
     sesman_shadow() { as "journalctl --user -u freerdp-sesman-shadow -o cat --no-pager" 2> /dev/null; }
     for _ in $(seq 30); do sesman | grep -q "listening on" && break; sleep 1; done
+    check "sesman: the package's polkit rule, installed as its README says, names the group of the unit" \
+        'grep -q "isInGroup(\"freerdp-headless\")" /etc/polkit-1/rules.d/49-freerdp-shadow-sesman.rules && grep -q -- "--headless-group freerdp-headless" /etc/systemd/system/freerdp-shadow-sesman.service'
     check "sesman: the system unit runs, on 127.0.0.1:3391 only (0D3F)" \
         '[ "$(systemctl show freerdp-shadow-sesman -p ActiveState --value)" = active ] && [ "$(listeners 0D3F)" = "0100007F:0D3F" ]' \
         "$(listeners 0D3F | tr '\n' ' ')"
