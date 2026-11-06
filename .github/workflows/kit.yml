@@ -673,7 +673,7 @@ jobs:
           # (the screens job); a page from before them has none
           mkdir -p dist/wasm/tests
           (cd ~/.cache/rdp-release-kit/wasm/src/freerdp_web &&
-              cp test-screens*.mjs test-connect.mjs test-keymap.py "$GITHUB_WORKSPACE/dist/wasm/tests/" 2> /dev/null) ||
+              cp test-screens*.mjs test-stats.mjs test-connect.mjs test-keymap.py "$GITHUB_WORKSPACE/dist/wasm/tests/" 2> /dev/null) ||
               echo "the pinned page has no All screens tests"
           ls dist/wasm/tests
 
