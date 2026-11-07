@@ -11,6 +11,10 @@ from right now, and what our own changes to a source fix:
 Every change that alters what is built (a pin, a build option, a patch, a
 toolchain) gets an entry here in the same commit.
 
+## 2026-11-07
+
+- **`freerdp`, `freerdp_host`, `freerdp_mac_host`, `freerdp_linux_host` `20261107.1`** (`df8cc012b`, freerdp-34, 聪哥's go): a pointer for every client on the Linux GNOME host. Mutter sends a pointer shape only when it changes, so a client that connected later had none until something changed it. The shape is now kept and sent to each new client, with an arrow until Mutter has sent one. Reading the real client's pointer through XFixes: the kit's binary before, the second and third clients got the plain X pointer; with the fix, every client got it in 4 runs (freerdp-34's report). The kit has no pointer check of its own yet.
+
 ## 2026-11-06
 
 - **`freerdp`, `freerdp_host`, `freerdp_mac_host`, `freerdp_linux_host` `20261106.13`** (`9a22b9740`, freerdp-34, 聪哥's go): sound on the Linux host. The capture stream was connected inactive and activated with the first client; if the sink already played by then, its links stayed in `init` and the client got silence while everything looked alive. The stream is now made with the first client and destroyed with the last. On a real session, an app playing first: capture stuck in `init` with peak 0 before, `active` with peak about 1700 after; connecting first still works. Thincast not run. `test/linux-host/inside.sh` gains a check with a tone already playing when the first client connects; it has not been run against the old code.
