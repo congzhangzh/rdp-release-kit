@@ -13,6 +13,8 @@ toolchain) gets an entry here in the same commit.
 
 ## 2026-11-07
 
+- **`xrdp` `20261107.2`** (`b04ac0d8`, xrdp-cq, 聪哥's go): constrained quality for AV1 and AV2, best quality limited by the bandwidth. `rate_control = "q" | "cq" | "cbr" | "vbr"` in `[AV1.*]` and `[AV2.*]` of gfx.toml (env `XRDP_GFX_AV1_RATE_CONTROL`, `XRDP_GFX_AV2_RATE_CONTROL`); cq takes the quality from `cq_level` / `qp` and the ceiling from `target_bitrate`; AV2 applies its qp in cq mode too (libavm's CQ ignored it otherwise, as in FreeRDP `20261107.6`). Unset keeps the old behaviour (CBR with a target, q without), so existing configs don't change; cq, cbr or vbr without a target warns and runs q. With xrdp's own encoder on the 1600x900 4:4:4 clips: AV1 cq 16 under 12000 kbit/s peaked at +1.3% over the cap on full-screen video, AV2 qp 100 under 10000 at +5%; text against the old defaults: AV1 51.1 to 54.5 dB, AV2 37.3 to 43.3 dB, for 11% and 19% more bits; a still screen sits a few dB below pure q. `make check` 297/297, e2e sway 42/42 (xrdp-cq). The server log names the rate control, e.g. "rate control cq, cq-level 16 up to 12000 kbps".
+
 - **`freerdp`, `freerdp_host`, `freerdp_mac_host`, `freerdp_linux_host` `20261107.6`** (`a4f9ce1f3`, freerdp-cd, 聪哥's go: "best quality, limited by bandwidth: AV1 12M, AV2 10M"): new shadow encoder defaults, constrained quality: AV1 cq-level 16 under 12000 kbit/s, AV2 qp 100 under 10000 kbit/s (were cq 20 under 8000, qp 120 under 6000). freerdp-cd's codec API bench, 1600x900 4:4:4, kbit/s and dB:
 
   | Setting | still | scrolling code | video in a window | full-screen video |

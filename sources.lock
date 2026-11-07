@@ -168,7 +168,7 @@ libpng      1.6.59   git+https://github.com/pnggroup/libpng.git                 
 # picked as release-<YYYYMMDD>.<N>: xrdp devel plus our branches on their
 # way upstream (pins.notes says what). Its submodules by the commits it
 # uses; xorgxrdp's development commit, whose module interface it needs.
-xrdp        20261107.1 git+https://github.com/congzhangzh/xrdp.git                                          ed0192ba6ffddd6d1de077ee9ac57be1f62df2c5
+xrdp        20261107.2 git+https://github.com/congzhangzh/xrdp.git                                          b04ac0d8a93616db3e3acad0acd541dc4c3205fe
 librfxcodec      0badc06  git+https://github.com/neutrinolabs/librfxcodec.git                                  0badc062e96d170af57870480a4aa7cf469302b0
 libpainter       379b8fb  git+https://github.com/neutrinolabs/libpainter.git                                   379b8fbf40f309829364bf3414d721f9ba77766d
 xorgxrdp    20261018.1 git+https://github.com/neutrinolabs/xorgxrdp.git                                     59d0735c4321b5baff3feaa980a01f78a1c1e96f
