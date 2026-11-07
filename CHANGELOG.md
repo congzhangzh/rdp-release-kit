@@ -13,6 +13,8 @@ toolchain) gets an entry here in the same commit.
 
 ## 2026-11-07
 
+- **`freerdp`, `freerdp_host`, `freerdp_mac_host`, `freerdp_linux_host` `20261107.2`** (`d3fc398b6`, freerdp-34, picked by freerdp-cd, 聪哥's go): file copy through the clipboard on the shadow server and the web client, both ways. The web client also tells the page whether the server takes files. The kit's page does not use it yet: that is page `20261106.6` or the next free number, tested on this release's `web-*` client. Native Linux clients stay without FUSE, so they can send files but not paste a server's; the mount fixes wait for the static `libfuse` round. On a real GNOME session through sesman, files went both ways and arrived intact (freerdp-34's report, local build). freerdp-cd's dry run: clean picks, ctest 182/182 on the base, 183/183 with these and the FUSE fix, one new test; no end-to-end file copy test in ctest. The new web functions are `EMSCRIPTEN_KEEPALIVE`; this round's build is their first in the kit.
+
 - **`freerdp`, `freerdp_host`, `freerdp_mac_host`, `freerdp_linux_host` `20261107.1`** (`df8cc012b`, freerdp-34, 聪哥's go): a pointer for every client on the Linux GNOME host. Mutter sends a pointer shape only when it changes, so a client that connected later had none until something changed it. The shape is now kept and sent to each new client, with an arrow until Mutter has sent one. Reading the real client's pointer through XFixes: the kit's binary before, the second and third clients got the plain X pointer; with the fix, every client got it in 4 runs (freerdp-34's report). The kit has no pointer check of its own yet.
 
 ## 2026-11-06
