@@ -203,6 +203,24 @@ cmake_dep sdl3 -DSDL_SHARED=OFF -DSDL_STATIC=ON -DSDL_TESTS=OFF -DSDL_EXAMPLES=O
 cmake_dep sdl3_ttf -DSDLTTF_VENDORED=OFF -DSDLTTF_HARFBUZZ=OFF -DSDLTTF_PLUTOSVG=OFF \
     -DSDLTTF_SAMPLES=OFF
 
+# libfuse, for pasting a server's files: the library alone. Symbol versions off: a
+# static library has no version script to resolve them. fusermount3 comes from the
+# host: libfuse tries its bindir, then the PATH (--bindir, so no build path of ours
+# is run on a user's machine); with none, or no /dev/fuse, the client logs it and
+# offers no files
+if ! built libfuse; then
+    src=$(unpack libfuse)
+    rm -rf "$WORK/build/libfuse"
+    {
+        meson setup "$WORK/build/libfuse" "$src" --prefix="$DEPS" --libdir=lib --bindir=/usr/bin \
+            --buildtype=release \
+            --default-library=static -Dutils=false -Dexamples=false -Dtests=false \
+            -Denable-io-uring=false -Ddisable-libc-symbol-version=true
+        ninja -C "$WORK/build/libfuse" -j"$JOBS" install
+    } > "$WORK/log/libfuse.log" 2>&1
+    stamp libfuse
+fi
+
 # FreeRDP: only the SDL3 client. Its native X11/Wayland helpers would make
 # libX11 and libwayland-client hard dependencies, so they are hidden (the
 # client then uses SDL's own window handling for RAIL moves). MD4 and RC4
@@ -243,7 +261,7 @@ configure "$WORK/build/freerdp" env PKG_CONFIG_LIBDIR="$DEPS/lib/pkgconfig" \
     -DWITH_SDL_LINK_SHARED=OFF -DWITH_X11=OFF -DWITH_WAYLAND=OFF \
     -DWITH_SERVER=OFF -DWITH_SAMPLE=OFF \
     -DWITH_PULSE=ON -DWITH_ALSA=OFF -DWITH_OSS=OFF -DWITH_CUPS=OFF -DWITH_PCSC=OFF \
-    -DWITH_KRB5=OFF -DWITH_FUSE=OFF -DWITH_FFMPEG=OFF -DWITH_SWSCALE=OFF \
+    -DWITH_KRB5=OFF -DWITH_FUSE=ON -DWITH_FFMPEG=OFF -DWITH_SWSCALE=OFF \
     -DWITH_OPENH264=OFF -DWITH_GFX_AV1=ON -DWITH_DAV1D=ON -DWITH_OPUS=ON \
     -DWITH_GFX_AV2=ON -DWITH_AVM=ON \
     -DWITH_SYSTEMD=OFF -DWITH_UNICODE_BUILTIN=ON -DWITH_INTERNAL_MD4=ON \
@@ -262,7 +280,9 @@ rm -rf "$WORK/pkg"
 mkdir -p "$PKG/bin" "$PKG/licenses"
 cp "$STAGE/opt/freerdp/bin/sdl-freerdp" "$PKG/bin/"
 strip --strip-debug "$PKG/bin/sdl-freerdp"
-licenses "$PKG/licenses" freerdp sdl3 sdl3_ttf freetype openssl opus dav1d avm zlib jansson
+licenses "$PKG/licenses" freerdp sdl3 sdl3_ttf freetype openssl opus dav1d avm zlib jansson libfuse
+# its LICENSE points at this file, which licenses() does not match
+cp "$WORK/src/libfuse/LGPL2.txt" "$PKG/licenses/libfuse/"
 # shellcheck source=build/launcher.sh
 . "$KIT/build/launcher.sh"
 add_launcher "$PKG" linux "$ARCH"
@@ -275,7 +295,7 @@ check_launcher "$PKG"
     [ "${DEV[0]:-}" != -DCMAKE_INTERPROCEDURAL_OPTIMIZATION=OFF ] || echo "LTO off (local build)"
     echo
     echo "sources (sources.lock):"
-    for name in freerdp sdl3 sdl3_ttf freetype openssl opus dav1d avm zlib jansson; do
+    for name in freerdp sdl3 sdl3_ttf freetype openssl opus dav1d avm zlib jansson libfuse; do
         printf '  %-9s %-8s %s\n' "$name" "${VERSION[$name]}" "${SHA[$name]}"
     done
     echo "$LAUNCHER_MANIFEST"

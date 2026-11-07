@@ -64,6 +64,7 @@
 # 20261102.2: integration-all rebuilt on FreeRDP master c6d2998da (3.33.0 and 15 of our PRs merged
 # upstream), from the current PR branches with their review fixes (freerdp-d2)
 # 20261103.2: .1 + several shadow subsystems in one build, the first with a monitor wins (freerdp-ce)
+# 20261107.3: 20261107.2 + the client mounts FUSE only at the clipboard's first connect, once for reconnects, and offers no file paths without a mount (freerdp-cd)
 # 20261107.2: 20261107.1 + file copy through the shadow server and the page, both ways (freerdp-34, picked by freerdp-cd)
 # 20261107.1: 20261106.13 + every client gets a pointer on the Mutter host, the last shape kept for each new client, an arrow until Mutter sent one (freerdp-34)
 # 20261106.13: .12 + sound from a sink that already plays when the first client connects, the capture stream made with that client (freerdp-34)
@@ -87,7 +88,7 @@
 # 20261103.1: .4 + the input race fix (#14020), WinPR's 8 MiB default stack (#14004), the Mutter review fixes
 # 20261102.4: integration-all rebuilt on master 9f9d97e81 (#13934, #13948, #13974 merged upstream), with the
 # DXGI cleanup and the Linux GNOME (Mutter) shadow backend incl. its no-spin and end-on-Stop fixes (freerdp-d2, freerdp-ce)
-freerdp     20261107.2  git+https://github.com/congzhangzh/FreeRDP.git                                      d3fc398b6dabb589b95805d35843df13cdd5af29
+freerdp     20261107.3  git+https://github.com/congzhangzh/FreeRDP.git                                      6110b7ddefdd7a217055d704ca5923fca99d92fc
 # FreeRDP for the Windows host (freerdp-shadow-cli, freerdp-shadow-service),
 # not for the clients: our release-20261030.7, picked from the fork's
 # integration-shadow-win, FreeRDP master 2a508c725 (2026-10-31) plus our pull
@@ -106,7 +107,7 @@ freerdp     20261107.2  git+https://github.com/congzhangzh/FreeRDP.git          
 # 20261031.8: the keys a client leaves held are let go when it leaves or sends a
 # Synchronize (#13958; before, a client dropped mid-shortcut left Win/Alt down)
 # 20261031.11: integration-all, the one FreeRDP the clients and the Mac host build too
-freerdp_host 20261107.2  git+https://github.com/congzhangzh/FreeRDP.git                                      d3fc398b6dabb589b95805d35843df13cdd5af29
+freerdp_host 20261107.3  git+https://github.com/congzhangzh/FreeRDP.git                                      6110b7ddefdd7a217055d704ca5923fca99d92fc
 # FreeRDP for the macOS host (FreeRDP-Shadow.app, build-macos-client.sh HOST=1):
 # freerdp-d0's release-20261031.4, picked from the fork's integration-shadow-mac,
 # FreeRDP master dae0390a4 plus the AV2 extension (#13925), the shadow server's
@@ -119,13 +120,13 @@ freerdp_host 20261107.2  git+https://github.com/congzhangzh/FreeRDP.git         
 # lookup), rdpsnd's server no longer pads Opus waves (#13952), and -sec-nla also
 # turns EXT off (#13953); 20261031.11: integration-all, the one FreeRDP the clients and
 # the Windows host build too
-freerdp_mac_host 20261107.2  git+https://github.com/congzhangzh/FreeRDP.git                                 d3fc398b6dabb589b95805d35843df13cdd5af29
+freerdp_mac_host 20261107.3  git+https://github.com/congzhangzh/FreeRDP.git                                 6110b7ddefdd7a217055d704ca5923fca99d92fc
 # FreeRDP for the Linux host (freerdp-shadow-cli, build.sh HOST=1): the same
 # release-20261103.2 of integration-all, whose shadow server builds the Mutter
 # subsystem (GNOME, X11 or Wayland: Mutter's ScreenCast and RemoteDesktop APIs,
 # freerdp-ce's FreeRDP#14006 with its no-spin and end-on-Stop fixes) and the X11
 # one together and takes the first that finds a monitor (c6d03209e)
-freerdp_linux_host 20261107.2  git+https://github.com/congzhangzh/FreeRDP.git                               d3fc398b6dabb589b95805d35843df13cdd5af29
+freerdp_linux_host 20261107.3  git+https://github.com/congzhangzh/FreeRDP.git                               6110b7ddefdd7a217055d704ca5923fca99d92fc
 sdl3        3.4.18   https://github.com/libsdl-org/SDL/releases/download/release-3.4.18/SDL3-3.4.18.tar.gz        9c75cf16330322c217dedd2e0609f1124f1b54b8633e763467b4684d0f4334a3
 sdl3_ttf    3.2.2    https://github.com/libsdl-org/SDL_ttf/releases/download/release-3.2.2/SDL3_ttf-3.2.2.tar.gz   63547d58d0185c833213885b635a2c0548201cc8f301e6587c0be1a67e1e045d
 freetype    2.15.0   https://download.savannah.gnu.org/releases/freetype/freetype-2.15.0.tar.xz                   93cd47eb719c325107f2d3cf087d06299e944c3b48a40b55537302304dea1dd5
@@ -149,6 +150,10 @@ aom         3.15.2   https://storage.googleapis.com/aom-releases/libaom-3.15.2.t
 avm         20261106.1 git+https://github.com/congzhangzh/avm.git                                            5bebfad2eef8918e8ff4f44d0d3cce87203c690d
 zlib        1.3.2    https://github.com/madler/zlib/releases/download/v1.3.2/zlib-1.3.2.tar.gz                    bb329a0a2cd0274d05519d61c667c062e06990d72e125ee2dfa8de64f0119d16
 jansson     2.15.1   https://github.com/akheron/jansson/releases/download/v2.15.1/jansson-2.15.1.tar.gz           0c7114dc0b2d22a670724a1f95922029d7077c19dbf79a584cb8084d2f267f2f
+# libfuse, the Linux client's paste of a server's files: a folder that fetches each
+# file when it is read. Static, its library only (LGPL 2.1, licenses/libfuse/); the
+# host's fusermount3 does the mounting, and without it the client pastes no files
+libfuse     3.18.3   https://github.com/libfuse/libfuse/releases/download/fuse-3.18.3/fuse-3.18.3.tar.gz      bcd19582c5e30f7fe45dd86a5540e998590aa01903afc7ebcbeea6c8ac5421ee
 # libei, the Linux host's input through GNOME's RemoteDesktop (ConnectToEIS):
 # its client library, static (AlmaLinux 9 has none), by its release tag's commit
 libei       1.6.0    git+https://gitlab.freedesktop.org/libinput/libei.git                                   8a46bf3d4b6af7f25a61be53386cf618218114ef
