@@ -13,6 +13,17 @@ toolchain) gets an entry here in the same commit.
 
 ## 2026-11-07
 
+- **`freerdp`, `freerdp_host`, `freerdp_mac_host`, `freerdp_linux_host` `20261107.5`** (`e6676aa77`, freerdp-cd, 聪哥's go): the shadow server's AV1 and AV2 encoders tuned, on all three hosts. Constrained quality by default: AV1 cq-level 20 under 8000 kbit/s, AV2 qp 120 under 6000 kbit/s, 4 threads, AV2 with 2 tile columns and 4 reference frames (as xrdp `20261107.1`). Before: AV1 VBR at 3000 kbit/s, AV2 VBR at 500 kbit/s with one thread. `FREERDP_SHADOW_AV1_RATE_CONTROL` / `FREERDP_SHADOW_AV2_RATE_CONTROL` = `q|cq|cbr|vbr` and a variable for every value (quality, target, speed, threads, tiles, references); unset means cq with a target and q without one; a bad value is logged and the default kept. sesman passes them to its shadow servers (a drop-in `Environment=` on `freerdp-shadow-sesman.service`). freerdp-cd's codec API bench, 1600x900 4:4:4, 60 frames at 30 fps, synthetic clips, kbit/s and dB:
+
+  | Setting | still | scrolling code | video in a window | full-screen video |
+  |---|---|---|---|---|
+  | AV1 vbr 3000 (before) | 232, 47.2 | 740, 47.2 | 3072, 36.8 | 4429, 27.6 |
+  | AV1 cq 20 under 8000 | 232, 47.2 | 682, 47.0 | 6963, 41.1 | 8107, 30.9 |
+  | AV2 vbr 500 (before) | 103, 46.5 | 468, 38.5 | 664, 34.1 | 1170, 26.9 |
+  | AV2 cq 120 under 6000 | 112, 47.5 | 894, 44.5 | 4758, 40.8 | 5907, 31.5 |
+
+  Busy screens cost more; for a slow link, `FREERDP_SHADOW_AV1_TARGET_BITRATE=4000` keeps code at 47 dB and costs window video 38.1 dB. AV2 at qp 120 is slower than at 160: scrolling text in GNOME at 1280x800 ran 16-24 fps. ctest 181/181, a GNOME 50 container 10/10 (freerdp-cd). Windows, Mac and aarch64 first run in this round.
+
 - **`freerdp`, `freerdp_host`, `freerdp_mac_host`, `freerdp_linux_host` `20261107.4`** (`583bf66fc`, freerdp-cd, 聪哥's go): less memory in the shadow server. The capabilities test makes every AV encoder the server enables, before the client has chosen, and nothing freed the others: a server with both AV1 and AV2 (`/gfx-av1 /gfx-av2`, as sesman starts them) kept an AV2 encoder for an AV1 client. At the capabilities confirm the one the client did not choose goes; a codec a later frame needs is made again. A fresh server in a headless GNOME 50 at 1280x800, one AV1 client: peak RSS 285 MB before, 218 MB after (freerdp-cd's report, on the tuned branch; this release has the fix alone, without the encoder tuning).
 
 - **`xrdp` `20261107.1`** (`ed0192ba6`, xrdp-ae, 聪哥's go): less memory for AV2. A new `[AV2] dpb_size` (1-16, env `XRDP_GFX_AV2_DPB_SIZE`), 4 by default, is passed to libavm (`dpb-size`) before the first frame; a libavm that refuses it keeps its default of 8, with a warning. Each reference slot is a whole 16-bit frame with a border (about 38 MB at 2560x1440 4:4:4), and libavm held about 1.3 GB of the live server's 1.8 GB. avmenc with xrdp's settings on a desktop recording (1080p 4:4:4, 510 frames, qp 160, cpu-used 10): dpb 8 = 665,676 B, 41.92 dB, 1007 MB; dpb 4 = +0.7% bits, 41.94 dB, 913 MB; at 1440p 4:4:4 1287 to 1147 MB; dpb 2 costs +23% bits. The AV2 stream changes (not bit-exact with dpb 8). xrdp `make check` 294/294 (xrdp-ae). The server log's encoder line now ends with `dpb-size 4)`.
