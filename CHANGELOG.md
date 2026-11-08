@@ -13,6 +13,8 @@ toolchain) gets an entry here in the same commit.
 
 ## 2026-11-08
 
+- **`freerdp`, `freerdp_host`, `freerdp_mac_host`, `freerdp_linux_host` `20261108.1`** (`aa26cb516`, freerdp-review-g2, 聪哥's go): the SDL client says why it can't start. When SDL can't start (a desktop with no monitor: "The video driver did not add any displays"), the client logged nothing and exited 255; now it logs SDL's error. A display of size 0x0 (a monitorless Xwayland) aborted the client on an assertion; now it is skipped, with an error when no display is usable. `/list:monitor` exits 0 after listing (it always exited 255). The same commits as FreeRDP#14089 and #14090, merged upstream on 2026-11-08 (milestone 3.33.1).
+
 - **`freerdp_tk` `20261108.1`** (`645b86fdb`, freerdp-tk-g2, 聪哥's go; was `20261107.3`): "(auto)" takes the client in the package first, then one on PATH, so the kit's own client is what a user gets, and an installed client stays one pick away; a choice between several monitors as separate screens (`/multimon`) or one big one (`/multimon /span`); the window is titled "freerdp-tk <version>" (was "FreeRDP") and has an About window; release notes in the package. Its `uv.lock` is unchanged, so the launcher's Python packages stay the same. The client demo finds the window by either title (`test/client-demo/hook/drive.py`).
 
 ## 2026-11-07
