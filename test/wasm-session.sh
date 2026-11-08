@@ -333,7 +333,8 @@ if [ -n "${CLIENT_DEMO:-}" ]; then
     # shellcheck disable=SC2034 # both read by checks below
     ascii="glyphs: .*'dots': '\.\.\.'"
     # shellcheck disable=SC2034
-    own_first="clients: \['/home/demo/[^']*/bin/[^']*', '/usr/bin/sdl-freerdp3'"
+    # the release's own client is in its bin/; the wheel's (uvx) in freerdp_tk/client/
+    own_first="clients: \['/home/demo/[^']*/(bin|freerdp_tk/client)/[^']*', '/usr/bin/sdl-freerdp3'"
     # Tk without Xft (uv's Python, the release's): ASCII instead of … and •
     check "freerdp-tk shows ASCII glyphs, its Tk has no Xft" 'grep -q "$ascii" "$OUT/client/driver.log"'
     check "the second visit logged in from the saved connection, with no password asked" \
@@ -345,7 +346,7 @@ if [ -n "${CLIENT_DEMO:-}" ]; then
     # installed too, comes after it: the session is AV1 or AV2, not H.264
     # (the videos' titles name the codec)
     check "(auto) takes the kit's own client first, Debian's after it" \
-        'grep -q "$own_first" "$OUT/client/driver.log"'
+        'grep -qE "$own_first" "$OUT/client/driver.log"'
     xc=$("$ENGINE" exec "$NAME" grep -a -q -- "--enable-av2" /usr/sbin/xrdp 2> /dev/null && echo AV2 || echo AV1)
     check "xrdp encodes the session in $xc" \
         '"$ENGINE" exec "$NAME" grep -q "starting $xc codec session" /var/log/xrdp.log'
