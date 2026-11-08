@@ -333,7 +333,8 @@ class Driver:
             yield self.key("Return")
             yield 22.0
         # back to freerdp-tk: disconnect, then quit it
-        tkwin = self.io.find("^FreeRDP$")
+        # its title: "FreeRDP" up to 20261107.3, "freerdp-tk <version>" after it
+        tkwin = self.io.find("^(FreeRDP|freerdp-tk( .*)?)$")
         if tkwin:
             self.io.activate(tkwin)
         yield 1.0
