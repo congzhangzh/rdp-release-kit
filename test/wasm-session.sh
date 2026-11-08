@@ -340,20 +340,18 @@ if [ -n "${CLIENT_DEMO:-}" ]; then
         'grep -q "phase 2" "$OUT/client/driver.log" && [ "$(grep -c "session window" "$OUT/client/driver.log")" = 2 ]'
     check "sesman started GNOME for tester (GNOME Shell)" \
         '"$ENGINE" exec "$NAME" pgrep -u tester -x gnome-shell > /dev/null'
-    # the kit's client offers AV1; Debian's does not, and xrdp falls back to H.264
+    # both carry the kit's client (the release's own; in the wheel since freerdp-tk
+    # 20261107.x, taken first by (auto) since 20261108.1), and Debian's sdl-freerdp3,
+    # installed too, comes after it: the session is AV1 or AV2, not H.264
     # (the videos' titles name the codec)
-    if [ "$CLIENT_DEMO" = release ]; then
-        # Debian's sdl-freerdp3 is installed too, and comes first by name
-        check "(auto) takes the release's own client first, Debian's after it" \
-            'grep -q "$own_first" "$OUT/client/driver.log"'
-        xc=$("$ENGINE" exec "$NAME" grep -a -q -- "--enable-av2" /usr/sbin/xrdp 2> /dev/null && echo AV2 || echo AV1)
-        check "xrdp encodes the session in $xc" \
-            '"$ENGINE" exec "$NAME" grep -q "starting $xc codec session" /var/log/xrdp.log'
-    else
+    check "(auto) takes the kit's own client first, Debian's after it" \
+        'grep -q "$own_first" "$OUT/client/driver.log"'
+    xc=$("$ENGINE" exec "$NAME" grep -a -q -- "--enable-av2" /usr/sbin/xrdp 2> /dev/null && echo AV2 || echo AV1)
+    check "xrdp encodes the session in $xc" \
+        '"$ENGINE" exec "$NAME" grep -q "starting $xc codec session" /var/log/xrdp.log'
+    if [ "$CLIENT_DEMO" != release ]; then
         check "plain uvx: freerdp-tk started again with uv's own Python" \
             '[ "$(grep -c "python: .*/uv/python/" "$OUT/client/driver.log")" = 2 ]'
-        check "xrdp encodes the session in H.264 (Debian's client has no AV1)" \
-            '"$ENGINE" exec "$NAME" grep -q "starting h264 codec session" /var/log/xrdp.log'
     fi
     check "the video is there" '[ -s "$DEMO_VIDEO" ]'
     "$ENGINE" exec "$NAME" sh -c 'tail -n 200 /var/log/xrdp.log /var/log/xrdp-sesman.log' > "$OUT/server.log" 2>&1

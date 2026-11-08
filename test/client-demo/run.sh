@@ -3,7 +3,7 @@
 # shares the server's network: rdp-gnome is the server's own 127.0.0.1.
 #
 #   run.sh release <client archive>    unpack the kit's client, ./freerdp-tk
-#   run.sh uvx                         uvx freerdp-tk, with Debian's client
+#   run.sh uvx                         uvx freerdp-tk, with the client in its package
 #
 # Debian's FreeRDP client stays installed for both: the release's freerdp-tk
 # must still take its own (PATH order, since freerdp-tk 0.3.1). As root it

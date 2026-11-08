@@ -12,7 +12,7 @@ CLIENT_DEMO_DIR holds its state: phase (1: fill in the form, save, connect,
 work in GNOME, disconnect, quit; 2, freerdp-tk started again: double-click
 the saved connection, which logs in with the password from the keyring),
 driver.log, and the files run.sh waits for (phase1-done, done, failed).
-CLIENT_DEMO_MODE: release (the kit's client, AV1) or uvx (Debian's client),
+CLIENT_DEMO_MODE: release (the kit's client, AV1) or uvx (freerdp-tk from PyPI, its own client),
 both to GNOME; windows (the kit's Windows client, to Windows' own Remote
 Desktop on the same PC, a session of its own for the demo's user).
 """
