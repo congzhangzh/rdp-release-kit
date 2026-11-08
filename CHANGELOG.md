@@ -11,6 +11,10 @@ from right now, and what our own changes to a source fix:
 Every change that alters what is built (a pin, a build option, a patch, a
 toolchain) gets an entry here in the same commit.
 
+## 2026-11-08
+
+- **`freerdp_tk` `20261108.1`** (`645b86fdb`, freerdp-tk-g2, 聪哥's go; was `20261107.3`): "(auto)" takes the client in the package first, then one on PATH, so the kit's own client is what a user gets, and an installed client stays one pick away; a choice between several monitors as separate screens (`/multimon`) or one big one (`/multimon /span`); the window is titled "freerdp-tk <version>" (was "FreeRDP") and has an About window; release notes in the package. Its `uv.lock` is unchanged, so the launcher's Python packages stay the same. The client demo finds the window by either title (`test/client-demo/hook/drive.py`).
+
 ## 2026-11-07
 
 - **`freerdp_tk` `20261107.3`** (`876fd3cf5`, freerdp-tk-g2, 聪哥's go; was `0.3.2`): the connection window catches up six releases. Fixes: the client's hotkeys move off Right Shift on first run, so a capital D typed with Right Shift no longer ends the session (`0.4.0`); a client whose version can't be read (a busy PC) is tried, not refused; a desktop with no monitor gets a reason in the window, not a silent exit 255 (`20261107.3`). New: unsaved changes are shown and asked about before they are lost (`0.5.0`); the before command can wait for a port, an output line or a time (`0.5.0`); the window in Chinese, Japanese and French (`20261107.2`); AV2 (`AV2:i444`, `AV2:i420`) in the graphics codec list (`20261107.3`). Its releases now use dated tags and publish only what `test.yml` saw green on that commit. Its `uv.lock` is unchanged since `0.3.2`, so the launcher's Python packages stay the same.
