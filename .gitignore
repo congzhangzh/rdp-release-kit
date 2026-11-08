@@ -1,2 +1,5 @@
 dist/
 sources.local
+# never commit compiled Python: it carries the absolute path it was built from
+__pycache__/
+*.pyc

@@ -168,10 +168,18 @@ class Driver:
 
     # ---- freerdp-tk's widgets ---------------------------------------------
 
-    def field(self, var):
+    def field(self, var, choices=None):
         for w in walk(self.root):
             if w.winfo_class() in ("TEntry", "TCombobox") and str(w.cget("textvariable")) == str(var):
                 return w
+        # freerdp-tk 20261107.2 and later show a list's choices in the window's language
+        # through a variable of their own (app._choices), so the form's variable is not
+        # the box's: find the box by its choices instead (as shown in an English window)
+        if choices is not None:
+            for w in walk(self.root):
+                if w.winfo_class() == "TCombobox" and \
+                        list(self.root.tk.splitlist(w.cget("values"))) == list(choices):
+                    return w
         raise LookupError(f"no field for {var}")
 
     def button(self, text):
@@ -211,7 +219,7 @@ class Driver:
     def choose(self, var, value, choices):
         """A read-only list: click it, then Down to the value, and Return."""
         current = choices.index(var.get())
-        yield self.to(self.field(var))
+        yield self.to(self.field(var, choices))
         yield self.click()
         yield 0.6
         yield self.key(*["Down"] * (choices.index(value) - current), "Return")
