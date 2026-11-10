@@ -225,7 +225,7 @@ Set-Content -Path $sam -Value (& "$HostDir\winpr-hash.exe" -u $user -p $pass -f 
 $env:WINPR_NATIVE_SSPI = "0"
 $env:WLOG_FILEAPPENDER_OUTPUT_FILE_NAME = "server-sam.wlog"
 $server = Start-Process -FilePath "$HostDir\freerdp-shadow-cli.exe" -PassThru -NoNewWindow `
-    -ArgumentList "/bind-address:127.0.0.1", "/port:$port", "/sam-file:$sam", "/gfx-av1"
+    -ArgumentList "/bind-address:127.0.0.1", "/port:$port", "/sam-file:$sam", "/gfx-av1", "/gfx-av2:off"
 for ($i = 0; $i -lt 30 -and -not (Listening $port) -and -not $server.HasExited; $i++) { Start-Sleep -Seconds 1 }
 Check "by hand: the server listens on 127.0.0.1:$port" (Listening $port)
 Logins "sam-file"
@@ -235,7 +235,7 @@ Remove-Item Env:\WINPR_NATIVE_SSPI
 $sock = "$env:TEMP\shadow-kit.sock"
 $env:WLOG_FILEAPPENDER_OUTPUT_FILE_NAME = "server-ipc.wlog"
 $server = Start-Process -FilePath "$HostDir\freerdp-shadow-cli.exe" -PassThru -NoNewWindow `
-    -ArgumentList "/ipc-socket:$sock", "/gfx-av1"
+    -ArgumentList "/ipc-socket:$sock", "/gfx-av1", "/gfx-av2:off"
 for ($i = 0; $i -lt 20 -and -not (Test-Path $sock) -and -not $server.HasExited; $i++) { Start-Sleep -Seconds 1 }
 Check "ipc: the server made its socket file" (Test-Path $sock)
 if (Test-Path $sock) {

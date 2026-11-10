@@ -63,7 +63,8 @@ it again: systemctl --user start freerdp-shadow when you want it back. A crash d
 
 AV2 is on: the clients that offer it (the kit's FreeRDP clients and FreeRDP Web) get AV2,
 the others AV1; AV2 costs this computer more processor time (libavm, AV2's reference
-encoder). AV1 only: remove /gfx-av2 from the unit's ExecStart, then
+encoder). AV1 only: in the unit's ExecStart, change /gfx-av2 to /gfx-av2:off (AV2 is
+on by default since FreeRDP 20261110.3), then
 systemctl --user daemon-reload && systemctl --user restart freerdp-shadow. There is no H.264
 encoder in it: a client without AV1 or AV2 (Windows' own Remote Desktop client, most
 others) gets RemoteFX or the older bitmap codecs.

@@ -21,7 +21,8 @@ Install the service (in an administrator's PowerShell, in this folder)
 AV2 goes to the clients that offer it (the kit's FreeRDP clients and FreeRDP
 Web), AV1 to the others. Smaller frames for the same picture, for more processor
 time on both sides: this PC encodes with libavm, and FreeRDP Web decodes in the
-page, in software. AV1 only: leave out /gfx-av2.
+page, in software. AV1 only: /gfx-av2:off instead of /gfx-av2 (AV2 is on by
+default since FreeRDP 20261110.3).
 
 H.264 goes to the clients without AV1 or AV2 (Windows' own Remote Desktop client, most
 others) as AVC420: this PC encodes it with Windows' own Media Foundation encoder, no
@@ -43,7 +44,7 @@ it only when services could not send Ctrl+Alt+Del before).
 
 Or, without a service, for the logged-on user's desktop only:
 
-  .\freerdp-shadow-cli.exe /bind-address:127.0.0.1 /gfx-av1
+  .\freerdp-shadow-cli.exe /bind-address:127.0.0.1 /gfx-av1 /gfx-av2
 
 Connect
 -------

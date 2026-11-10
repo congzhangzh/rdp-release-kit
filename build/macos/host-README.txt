@@ -27,7 +27,8 @@ developer certificate (ad hoc), so macOS knows it only by its exact build. Remov
 FreeRDP Shadow from both lists (the minus button), then allow the new one.
 
 AV2 is on: the clients that offer it (the kit's FreeRDP clients and FreeRDP Web) get AV2,
-the others AV1. AV1 only: remove <string>/gfx-av2</string> from the plist, and restart.
+the others AV1. AV1 only: change <string>/gfx-av2</string> in the plist to
+<string>/gfx-av2:off</string> (AV2 is on by default since FreeRDP 20261110.3), and restart.
 
 H.264 goes to the clients without AV1 or AV2 (Windows' own Remote Desktop client, most
 others), encoded by the Mac's own VideoToolbox (in hardware where the Mac has it), as

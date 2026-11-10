@@ -128,7 +128,7 @@ else
     size=$(awk '/^now / { print $2 }' "$OUT/web-display.txt"); SW=${size%x*}; SH=${size#*x}
     case "$SW$SH" in *[!0-9]* | "") SW=1024; SH=768 ;; esac
     WLOG_FILEAPPENDER_OUTPUT_FILE_NAME=server-web.wlog "$SERVER" /bind-address:127.0.0.1 /port:4490 \
-        /sec:tls /gfx-av1 -gfx-avc444 -auth > "$OUT/server-web.out" 2>&1 &
+        /sec:tls /gfx-av1 /gfx-av2:off -gfx-avc444 -auth > "$OUT/server-web.out" 2>&1 &
     SRV=$!
     W=$(mktemp -d); mkdir -p "$OUT/web" "$W/site" "$W/ff"
     python3 -m venv "$W/venv" && "$W/venv/bin/pip" install --quiet websockify > "$OUT/web/pip.log" 2>&1
