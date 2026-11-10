@@ -103,6 +103,14 @@ DEV=()
 if overridden freerdp; then
     DEV=(-DCMAKE_EXE_LINKER_FLAGS_RELEASE="-Wl,--thinlto-cache-dir=$WORK/thinlto")
 fi
+# The SDL3 client reports its errors with C++ exceptions (throw ErrorMsg, caught
+# in sdl_run). Without exception support every throw aborts the whole program
+# ("Aborted(undefined)") instead of ending the client. WebAssembly's own
+# exceptions, on the C++ objects and at the link: they are caught under JSPI and
+# Asyncify alike, and work in every current browser; Emscripten's JS-based
+# -fexceptions puts JS frames on the stack, which JSPI cannot suspend
+# ("SuspendError: trying to suspend JS frames"). Probed with Emscripten 6.0.13.
+WASM_EH=-fwasm-exceptions
 # freerdp_link <engine's link flags>: the client linked for one way of
 # suspending WebAssembly (both are link options: the objects are the same)
 freerdp_link() {
@@ -121,7 +129,8 @@ configure "$WORK/build/freerdp" \
     -DWITH_SIMD=OFF -DWITH_MANPAGES=OFF -DWITH_TIMEZONE_ICU=OFF -DWITH_UNICODE_BUILTIN=ON \
     -DUSE_UNWIND=OFF -DWITH_OPUS=ON -DWITH_GFX_AV1=ON -DWITH_DAV1D=ON \
     -DWITH_GFX_AV2=ON -DWITH_AVM=ON -DWITH_AVM_ENCODER=OFF \
-    -DCMAKE_EXE_LINKER_FLAGS="-pthread $1 \
+    -DCMAKE_CXX_FLAGS="$CXXFLAGS $WASM_EH" \
+    -DCMAKE_EXE_LINKER_FLAGS="-pthread $WASM_EH $1 \
 -sALLOW_MEMORY_GROWTH=1 -sINITIAL_MEMORY=134217728 -sMAXIMUM_MEMORY=1073741824 \
 -sSTACK_SIZE=1048576 -sPTHREAD_POOL_SIZE=32 -sWEBSOCKET_SUBPROTOCOL=binary \
 -sENVIRONMENT=web,worker -sINVOKE_RUN=0 -sEXIT_RUNTIME=1 -sFORCE_FILESYSTEM=1 \
