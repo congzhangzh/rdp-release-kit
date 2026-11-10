@@ -22,9 +22,19 @@ WORK=/work
 
 # shellcheck source=build/lib.sh
 . "$KIT/build/lib.sh"
-export CFLAGS="-pthread -O2"
-export CXXFLAGS="-pthread -O2"
+# The client is linked with WebAssembly exceptions (WASM_EH, below), and with
+# them Emscripten's setjmp/longjmp must be WebAssembly's too: a C object built
+# with the default (JS-based, emscripten_longjmp) longjmp does not link
+# (freetype and libavm call longjmp), and SUPPORT_LONGJMP=emscripten is refused
+# next to -fwasm-exceptions. So every library is compiled with it; it is in the
+# dependencies' stamps, so a change rebuilds them. Probed with Emscripten
+# 6.0.13 under JSPI and Asyncify: longjmp and a C++ catch both work.
+WASM_SJLJ=-sSUPPORT_LONGJMP=wasm
+export CFLAGS="-pthread -O2 $WASM_SJLJ"
+export CXXFLAGS="-pthread -O2 $WASM_SJLJ"
 export LDFLAGS="-pthread"
+TOOLCHAIN_ID="$(emcc --version | head -1) $WASM_SJLJ"
+export TOOLCHAIN_ID
 export PKG_CONFIG_PATH=$DEPS/lib/pkgconfig
 export PKG_CONFIG_LIBDIR=$DEPS/lib/pkgconfig
 mkdir -p "$OUT"
@@ -69,7 +79,7 @@ wasm_dep sdl3_ttf -DSDLTTF_VENDORED=OFF -DSDLTTF_HARFBUZZ=OFF -DSDLTTF_PLUTOSVG=
 # its own avmenc and avmdec whatever ENABLE_EXAMPLES says: they need more than
 # Emscripten's default memory; the kit uses the library only
 wasm_dep avm -DAVM_TARGET_CPU=x86 -DCONFIG_MULTITHREAD=1 -DCONFIG_AV2_ENCODER=0 \
-    -DCMAKE_C_FLAGS="-pthread -O2" -DCMAKE_CXX_FLAGS="-pthread -O2" \
+    -DCMAKE_C_FLAGS="$CFLAGS" -DCMAKE_CXX_FLAGS="$CXXFLAGS" \
     -DCMAKE_EXE_LINKER_FLAGS="-sINITIAL_MEMORY=67108864 -sALLOW_MEMORY_GROWTH=1" -DENABLE_TESTS=0 \
     -DENABLE_EXAMPLES=0 -DENABLE_DOCS=0 -DENABLE_TOOLS=0 \
     -DCONFIG_ML_PART_SPLIT=0 -DCONFIG_DIP_EXT_PRUNING=0
@@ -129,7 +139,7 @@ configure "$WORK/build/freerdp" \
     -DWITH_SIMD=OFF -DWITH_MANPAGES=OFF -DWITH_TIMEZONE_ICU=OFF -DWITH_UNICODE_BUILTIN=ON \
     -DUSE_UNWIND=OFF -DWITH_OPUS=ON -DWITH_GFX_AV1=ON -DWITH_DAV1D=ON \
     -DWITH_GFX_AV2=ON -DWITH_AVM=ON -DWITH_AVM_ENCODER=OFF \
-    -DCMAKE_CXX_FLAGS="$CXXFLAGS $WASM_EH" \
+    -DCMAKE_C_FLAGS="$CFLAGS" -DCMAKE_CXX_FLAGS="$CXXFLAGS $WASM_EH" \
     -DCMAKE_EXE_LINKER_FLAGS="-pthread $WASM_EH $1 \
 -sALLOW_MEMORY_GROWTH=1 -sINITIAL_MEMORY=134217728 -sMAXIMUM_MEMORY=1073741824 \
 -sSTACK_SIZE=1048576 -sPTHREAD_POOL_SIZE=32 -sWEBSOCKET_SUBPROTOCOL=binary \
