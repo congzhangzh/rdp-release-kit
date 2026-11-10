@@ -319,7 +319,7 @@ Stop $server
 if ($H264Client) {
     $env:WLOG_FILEAPPENDER_OUTPUT_FILE_NAME = "server-h264.wlog"
     $h264server = Start-Process -FilePath "$HostDir\freerdp-shadow-cli.exe" -PassThru -NoNewWindow `
-        -ArgumentList "/bind-address:127.0.0.1", "/port:4493", "/gfx-av1:off", "-gfx-avc444", "/gfx-avc420"
+        -ArgumentList "/bind-address:127.0.0.1", "/port:4493", "/gfx-av1:off", "/gfx-av2:off", "-gfx-avc444", "/gfx-avc420"
     for ($i = 0; $i -lt 30 -and -not (Listening 4493) -and -not $h264server.HasExited; $i++) { Start-Sleep -Seconds 1 }
     Check "h264: the server listens on 127.0.0.1:4493" (Listening 4493)
     $env:WLOG_FILEAPPENDER_OUTPUT_FILE_NAME = "h264-session.wlog"
@@ -341,7 +341,7 @@ if ($H264Client) {
     # FreeRDP 20261101.5 (AVC444v2 from a changed region put its chroma in the wrong columns)
     $env:WLOG_FILEAPPENDER_OUTPUT_FILE_NAME = "server-avc444.wlog"
     $h444server = Start-Process -FilePath "$HostDir\freerdp-shadow-cli.exe" -PassThru -NoNewWindow `
-        -ArgumentList "/bind-address:127.0.0.1", "/port:4494", "/gfx-av1:off"
+        -ArgumentList "/bind-address:127.0.0.1", "/port:4494", "/gfx-av1:off", "/gfx-av2:off"
     for ($i = 0; $i -lt 30 -and -not (Listening 4494) -and -not $h444server.HasExited; $i++) { Start-Sleep -Seconds 1 }
     $env:WLOG_FILEAPPENDER_OUTPUT_FILE_NAME = "avc444-session.wlog"
     $env:WLOG_FILTER = "com.freerdp.channels.rdpgfx.client:TRACE"
@@ -368,7 +368,7 @@ $port = 4489
 $port = 4490
 $logs = "$Out\service"
 & "$HostDir\freerdp-shadow-service.exe" install --log $logs --allow-sas -- `
-    /bind-address:127.0.0.1 /port:$port /gfx-av1 -gfx-avc444 /log-level:DEBUG 2>&1 | Tee-Object "$Out\install.txt"
+    /bind-address:127.0.0.1 /port:$port /gfx-av1 /gfx-av2:off -gfx-avc444 /log-level:DEBUG 2>&1 | Tee-Object "$Out\install.txt"
 Check "service: install" ($LASTEXITCODE -eq 0) "exit $LASTEXITCODE"
 $svc = Get-Service FreeRDPShadow -ErrorAction SilentlyContinue
 Check "service: running" ($svc -and $svc.Status -eq "Running") "$($svc.Status)"

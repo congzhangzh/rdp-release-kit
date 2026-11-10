@@ -34,7 +34,7 @@ $env:WLOG_APPENDER = "FILE"
 $env:WLOG_FILEAPPENDER_OUTPUT_FILE_PATH = $Out
 $env:WLOG_FILEAPPENDER_OUTPUT_FILE_NAME = "$Tag-server.wlog"
 $server = Start-Process -FilePath "$HostDir\freerdp-shadow-cli.exe" -PassThru -NoNewWindow `
-    -ArgumentList "/bind-address:127.0.0.1", "/port:$Port", "-auth", "-sec-nla", "/gfx"
+    -ArgumentList "/bind-address:127.0.0.1", "/port:$Port", "-auth", "-sec-nla", "/gfx", "/gfx-av2:off"
 Start-Sleep 3
 $env:WLOG_FILEAPPENDER_OUTPUT_FILE_NAME = "$Tag-client.wlog"
 $client = Start-Process -FilePath $Client -PassThru `
