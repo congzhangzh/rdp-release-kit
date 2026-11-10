@@ -63,8 +63,15 @@ session() {  # session <name> <codec expected> [client options...]
     kill -0 $c 2> /dev/null && held=1 || held=0
     kill $c 2> /dev/null; sleep 2
     check "$name: the session holds 20 s" $held
-    n=$(grep -c "Got GFX RDPGFX_CODECID_$want\b" "$OUT/$name.wlog" 2> /dev/null || true)
-    all=$(grep -ohE "Got GFX RDPGFX_CODECID_[A-Z0-9_]+" "$OUT/$name.wlog" 2> /dev/null | sort | uniq -c | tr '\n' ' ')
+    # since FreeRDP's AV2 as merged (#13925, aa9940f24) AV2 comes under the AV1 codec ID; the
+    # confirmed caps version tells them apart: FRDP_2 = AV2 (kit run 42827825178 counted 0 AV2)
+    id=$want
+    if grep -q "RecvCapsConfirmPdu: version: RDPGFX_CAPVERSION_FRDP_2" "$OUT/$name.wlog" 2> /dev/null; then
+        case $want in AV2) id=AV1 ;; AV1) id=NONE ;; esac
+    fi
+    n=$(grep -c "Got GFX RDPGFX_CODECID_$id\b" "$OUT/$name.wlog" 2> /dev/null || true)
+    all=$(grep -ohE "Got GFX RDPGFX_CODECID_[A-Z0-9_]+|RecvCapsConfirmPdu: version: RDPGFX_CAPVERSION_[A-Z0-9_]+" \
+        "$OUT/$name.wlog" 2> /dev/null | sed 's/RecvCapsConfirmPdu: version: //' | sort | uniq -c | tr '\n' ' ')
     # AV2 is libavm, AV2's reference encoder: about 1 frame a second on the runner's 3 cores
     # at 1024x768 (kit run 41393786845: 20 in 20 s), AV1 25-30
     min=30; [ "$want" = AV2 ] && min=10

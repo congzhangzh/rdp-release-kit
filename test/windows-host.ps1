@@ -195,7 +195,18 @@ function Logins([string]$Way) {
 function Codecs([string]$Log) {
     Select-String -Path "$Out\$Log.wlog" -Pattern "Got GFX (RDPGFX_CODECID_\w+)" -ErrorAction SilentlyContinue |
         ForEach-Object { $_.Matches[0].Groups[1].Value } | Group-Object | ForEach-Object { "$($_.Name) x$($_.Count)" }
+    if (Frdp2 $Log) { "RDPGFX_CAPVERSION_FRDP_2" }
 }
+# since FreeRDP's AV2 as merged (#13925, aa9940f24) AV2 comes under the AV1 codec ID; the
+# confirmed caps version tells them apart: FRDP_2 = AV2, else AV1 (kit run 42827825178)
+function Frdp2([string]$Log) {
+    [bool](Select-String -Path "$Out\$Log.wlog" -Pattern "RecvCapsConfirmPdu: version: RDPGFX_CAPVERSION_FRDP_2" -Quiet -ErrorAction SilentlyContinue)
+}
+function GotAv2([string]$Log) {
+    $c = (Codecs $Log) -join " "
+    ($c -match "RDPGFX_CODECID_AV2") -or ((Frdp2 $Log) -and ($c -match "RDPGFX_CODECID_AV1"))
+}
+function GotAv1([string]$Log) { (-not (Frdp2 $Log)) -and (((Codecs $Log) -join " ") -match "RDPGFX_CODECID_AV1") }
 # the bytes per codec of a session, from the client's TRACE line for each GFX surface command
 # (rdpgfx_main.c: "RecvWireToSurface1Pdu: … codecId: <codec> … bitmapDataLength: <N>"); with
 # WLOG_FILTER=com.freerdp.channels.rdpgfx.client:TRACE on that client only
@@ -268,7 +279,7 @@ Start-Sleep -Seconds 20
 Shot "av2"
 Check "av2: a session holds 20 s" (-not $s.HasExited)
 $codecs = Codecs "av2-session"
-Check "av2: the frames came in AV2" (($codecs -join " ") -match "RDPGFX_CODECID_AV2") ($codecs -join ", ")
+Check "av2: the frames came in AV2" (GotAv2 "av2-session") ($codecs -join ", ")
 Stop $s
 
 # the web client on the same AV2 server: the page decodes with libavm (no browser
@@ -608,7 +619,7 @@ Start-Sleep -Seconds 15
 Shot "desktop"
 Check "native: an AV1 session holds 15 s" (-not $session.HasExited)
 $codecs = Codecs "session"
-Check "native: the frames came in AV1" (($codecs -join " ") -match "RDPGFX_CODECID_AV1") ($codecs -join ", ")
+Check "native: the frames came in AV1" (GotAv1 "session") ($codecs -join ", ")
 # its sound channel (a report: the desktop plays nothing now, so no samples need come)
 "native rdpsnd: " + ((Select-String -Path "$Out\session.wlog" -Pattern "rdpsnd" -ErrorAction SilentlyContinue |
     Select-Object -First 12 | ForEach-Object { $_.Line }) -join " | ") | Out-File -Append "$Out\notes.txt"

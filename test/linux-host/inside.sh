@@ -70,8 +70,20 @@ connect() {
     CPID=$!
 }
 # frames <name> <codec>: how many frames the client got in that codec
-frames() { grep -c "Got GFX RDPGFX_CODECID_$2\b" "$OUT/$1.wlog" 2> /dev/null || true; }
-codecs() { grep -ohE "Got GFX RDPGFX_CODECID_[A-Z0-9_]+" "$OUT/$1.wlog" 2> /dev/null | sort | uniq -c | tr '\n' ' '; }
+# frames <session> <AV1|AV2|…>: the frames of that codec in the client's log. Since FreeRDP's
+# AV2 as merged (#13925, aa9940f24) AV2 comes under the AV1 codec ID and the confirmed caps
+# version tells them apart: FRDP_2 = AV2, FRDP_1 = AV1 (kit run 42827825178 counted 0 AV2)
+frames() {
+    local id=$2
+    if grep -q "RecvCapsConfirmPdu: version: RDPGFX_CAPVERSION_FRDP_2" "$OUT/$1.wlog" 2> /dev/null; then
+        case $id in AV2) id=AV1 ;; AV1) echo 0; return ;; esac
+    fi
+    grep -c "Got GFX RDPGFX_CODECID_$id\b" "$OUT/$1.wlog" 2> /dev/null || true
+}
+codecs() {
+    grep -ohE "Got GFX RDPGFX_CODECID_[A-Z0-9_]+|RecvCapsConfirmPdu: version: RDPGFX_CAPVERSION_[A-Z0-9_]+" \
+        "$OUT/$1.wlog" 2> /dev/null | sed 's/RecvCapsConfirmPdu: version: //' | sort | uniq -c | tr '\n' ' '
+}
 # cpu <pid> <seconds>: the process's CPU use over that time, in % of one core
 cpu() {
     local t0 t1
