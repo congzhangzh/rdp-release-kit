@@ -140,6 +140,9 @@ if [ "$MODE" = gnome ]; then
     check "GNOME Shell is up (org.gnome.Mutter.RemoteDesktop)" 'has_name org.gnome.Mutter.RemoteDesktop'
 
     install_host
+    # the Mutter backend's DEBUG lines (its libei devices: which keyboard it takes, RESUMED or
+    # not), next to the unit's INFO: GNOME 51 dropped every key (kit run 42975835360)
+    as "mkdir -p ~/.config/systemd/user/freerdp-shadow.service.d && printf '[Service]\\nEnvironment=WLOG_FILTER=com.freerdp.server.shadow.mutter:DEBUG\\n' > ~/.config/systemd/user/freerdp-shadow.service.d/debug.conf"
     as "systemctl --user daemon-reload && systemctl --user enable --now freerdp-shadow.service" \
         >> "$OUT/install.log" 2>&1
     # the server's lines as its user reads them: the unit's own journal
@@ -179,9 +182,11 @@ if [ "$MODE" = gnome ]; then
     WID=$(DISPLAY=:99 xdotool search --pid $CPID | tail -1)
     DISPLAY=:99 xdotool mousemove --window "$WID" 640 400 click 1
     sleep 1
+    DISPLAY=:99 import -window root "$OUT/keys-click.png" 2> /dev/null
     DISPLAY=:99 xdotool type --delay 80 'echo kit-typed-$((6*7)) > /tmp/typed.txt'
     DISPLAY=:99 xdotool key Return
     sleep 2
+    DISPLAY=:99 import -window root "$OUT/keys-typed.png" 2> /dev/null
     check "keys reach GNOME (typed into foot)" 'grep -qx kit-typed-42 /tmp/typed.txt'
     as "pkill -x foot"
     kill $CPID 2> /dev/null; sleep 2
