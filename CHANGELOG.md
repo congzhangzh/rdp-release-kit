@@ -11,6 +11,10 @@ from right now, and what our own changes to a source fix:
 Every change that alters what is built (a pin, a build option, a patch, a
 toolchain) gets an entry here in the same commit.
 
+## 2026-11-11
+
+- **`freerdp`, `freerdp_host`, `freerdp_mac_host`, `freerdp_linux_host` `20261111.1`** (`adc7c364a`, freerdp-review-g2, heavy-g1, release manager; 聪哥's go): integration-all rebuilt on upstream master `ff80027b6`. Five of our pull requests were merged on 2026-11-10 and drop out: the Mutter backend's part 3 (#14094), the resize by Reset Graphics (#14129), several shadow subsystems in one build (#14021), RTT and bandwidth for the client (#14125) and the GDI clip by cropping (#14126). New: FreeRDP#14133's fix for master's `9e14a884d`, whose new parse of `FREERDP_SHADOW_MUTTER_VIRTUAL` read the height from the `x` (`1920x1080` gave 0) and so refused every size: our session manager sets it for every GNOME session without a real screen. #14124 (GNOME logins: master still gives getpwuid_r an 8-byte size) stays first while it is open. 61 commits; ctest 225/225, pr-gate clean.
+
 ## 2026-11-10
 
 - **`xrdp` `20261110.1`** (`2e975a4e`, xrdp-cq, release manager; 聪哥's "push forward"): xrdp sends AV2 the way FreeRDP merged it (#13925): under the AV1 codec ID, told apart by the confirmed caps version FRDP_2, instead of codec ID 2, which FreeRDP's merged client no longer knows (it closed the graphics channel: "Unknown RDPGFX_SURFACE_COMMAND::codecId 2", a blank screen). make check 297/297; an AV2 session against FreeRDP 20261110.3 (with our codec-2 compatibility) and 20261110.2 (merged form only) 23/23 each; the old xrdp against 20261110.2 fails as expected (17/23).
