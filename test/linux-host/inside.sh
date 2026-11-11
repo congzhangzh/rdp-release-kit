@@ -179,6 +179,12 @@ if [ "$MODE" = gnome ]; then
     WID=$(DISPLAY=:99 xdotool search --pid $CPID | tail -1)
     DISPLAY=:99 xdotool mousemove --window "$WID" 640 400 click 1
     sleep 1
+    # and once more, as a user on GNOME 51 must: the session starts in the overview, and
+    # gnome-shell 51.0 gives the key focus back to the hidden overview when it is left, so
+    # the first window gets no keys until it is clicked again (GNOME/gnome-shell#9441, fix
+    # MR !4486; not FreeRDP: freerdp-server-g3's repro, kit runs 42975835360 and PR #29)
+    DISPLAY=:99 xdotool mousemove --window "$WID" 640 400 click 1
+    sleep 1
     DISPLAY=:99 xdotool type --delay 80 'echo kit-typed-$((6*7)) > /tmp/typed.txt'
     DISPLAY=:99 xdotool key Return
     sleep 2
