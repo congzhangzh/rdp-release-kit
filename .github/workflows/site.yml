@@ -13,8 +13,9 @@ name: site
 # The site is the release's web client and page, its demo videos with their
 # lasting addresses (build/site-anchors.json), and RELEASE (build/site.sh).
 # Before it goes live: freerdp-web's own page test at the page's commit
-# (test-page.mjs), and a browser login from exactly these files to the
-# release's xrdp, with each build of the client. It goes to freerdp-web's
+# (test-page.mjs), a browser login from exactly these files to the
+# release's xrdp, with each build of the client, and the page reaching
+# "Connect" in Firefox, WebKit (iPhone, Safari) and Chromium. It goes to freerdp-web's
 # branch gh-pages, which its Pages serve, as a commit of its own (every site
 # that was ever live stays in that branch's history), pushed with a deploy
 # key for that repository alone (secret FREERDP_WEB_PAGES_KEY). Then a login
@@ -134,9 +135,42 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
+  # the page in the other browsers people open it with, from exactly the files going live, served
+  # as Pages serves them: Firefox, WebKit as an iPhone and as the desktop's Safari, Chromium reach
+  # "Connect" with no page error (test/site-browsers.mjs; #368: an iPhone never got past
+  # "Loading…" for weeks). Playwright's image has the browsers and their libraries.
+  browsers:
+    needs: [site]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    container:
+      image: mcr.microsoft.com/playwright:v1.50.1-noble
+      # the runner's user: Firefox refuses to start as root in a home that is not root's
+      options: --user 1001 --ipc=host
+    env:
+      HOME: /tmp/home
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        with:
+          name: site
+          path: site
+      - name: Playwright's package, the image's version (its browsers are in the image)
+        run: mkdir -p "$HOME" "$RUNNER_TEMP/pw" && cd "$RUNNER_TEMP/pw" && npm init -y > /dev/null && npm install --no-audit --no-fund playwright@1.50.1
+      - name: The page in Firefox, WebKit (iPhone, Safari) and Chromium
+        run: PLAYWRIGHT="$RUNNER_TEMP/pw/node_modules/playwright" node test/site-browsers.mjs site
+      - name: Keep the screenshots and the pages' consoles
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-browsers
+          path: dist/test/browsers/
+          if-no-files-found: ignore
+          retention-days: 7
+
   deploy:
     if: inputs.publish
-    needs: [site, login]
+    needs: [site, login, browsers]
     runs-on: ubuntu-24.04
     outputs:
       # both set only if this run changed the live site: what a rollback needs
