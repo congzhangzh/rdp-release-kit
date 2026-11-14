@@ -1,0 +1,89 @@
+From 1b840256dec8c108654af34987255ce466b29b2a Mon Sep 17 00:00:00 2001
+From: Alessandro Bono <alessandro.bono369@gmail.com>
+Date: Mon, 26 Oct 2026 15:00:13 +0100
+Subject: [PATCH 5/5] eis-client: Keep high resolution discrete scroll values
+
+The libei protocol says that ei_scroll.scroll_discrete can carry a
+fraction of a wheel click where 120 is one click. It also says the EIS
+implementation must emulate smooth scroll events from it. [1]
+
+But the values were divided by 120 and the rest was thrown away. So a
+scroll smaller than one click did nothing and a bigger scroll lost its
+extra part. No smooth scroll events were emulated either.
+
+Send discrete scroll through the same path that high resolution mouse
+wheels use. This emits smooth scroll events and adds up small values
+into wheel clicks.
+
+[1] https://libinput.pages.freedesktop.org/libei/interfaces/ei_scroll/index.html#ei_scrollscroll_discrete
+---
+ src/backends/meta-eis-client.c | 50 +++++++---------------------------
+ 1 file changed, 10 insertions(+), 40 deletions(-)
+
+diff --git a/src/backends/meta-eis-client.c b/src/backends/meta-eis-client.c
+index 72a2d38f5..177e1104b 100644
+--- a/src/backends/meta-eis-client.c
++++ b/src/backends/meta-eis-client.c
+@@ -575,49 +575,19 @@ handle_scroll_discrete (MetaEisClient    *client,
+ {
+   struct eis_device *eis_device = eis_event_get_device (event);
+   MetaEisDevice *device = eis_device_get_user_data (eis_device);
+-  int dx, dy;
++  double dx, dy;
+ 
+-  /* FIXME: need to handle the remainders here for high-resolution scrolling */
+-  dx = eis_event_scroll_get_discrete_dx (event) / 120;
+-  dy = eis_event_scroll_get_discrete_dy (event) / 120;
++  dx = eis_event_scroll_get_discrete_dx (event) * CLUTTER_DISCRETE_SCROLL_STEP / 120.0;
++  dy = eis_event_scroll_get_discrete_dy (event) * CLUTTER_DISCRETE_SCROLL_STEP / 120.0;
+ 
+-  /* Intentionally interleaved */
+-  while (dx || dy)
+-    {
+-      if (dx > 0)
+-        {
+-          clutter_virtual_input_device_notify_discrete_scroll (device->device,
+-                                                               g_get_monotonic_time (),
+-                                                               CLUTTER_SCROLL_RIGHT,
+-                                                               CLUTTER_SCROLL_SOURCE_WHEEL);
+-          dx--;
+-        }
+-      else if (dx < 0)
+-        {
+-          clutter_virtual_input_device_notify_discrete_scroll (device->device,
+-                                                               g_get_monotonic_time (),
+-                                                               CLUTTER_SCROLL_LEFT,
+-                                                               CLUTTER_SCROLL_SOURCE_WHEEL);
+-          dx++;
+-        }
++  if (dx == 0.0 && dy == 0.0)
++    return;
+ 
+-      if (dy > 0)
+-        {
+-          clutter_virtual_input_device_notify_discrete_scroll (device->device,
+-                                                               g_get_monotonic_time (),
+-                                                               CLUTTER_SCROLL_DOWN,
+-                                                               CLUTTER_SCROLL_SOURCE_WHEEL);
+-          dy--;
+-        }
+-      else if (dy < 0)
+-        {
+-          clutter_virtual_input_device_notify_discrete_scroll (device->device,
+-                                                               g_get_monotonic_time (),
+-                                                               CLUTTER_SCROLL_UP,
+-                                                               CLUTTER_SCROLL_SOURCE_WHEEL);
+-          dy++;
+-        }
+-    }
++  clutter_virtual_input_device_notify_scroll_continuous (device->device,
++                                                         g_get_monotonic_time (),
++                                                         dx, dy,
++                                                         CLUTTER_SCROLL_SOURCE_WHEEL,
++                                                         CLUTTER_SCROLL_FINISHED_NONE);
+ }
+ 
+ static void
+-- 
+2.53.0
+

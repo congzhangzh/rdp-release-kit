@@ -1,0 +1,30 @@
+From b886c6528fd28b8fce0a8311e2dbe072e458fc9e Mon Sep 17 00:00:00 2001
+From: Alessandro Bono <alessandro.bono369@gmail.com>
+Date: Mon, 26 Oct 2026 15:00:13 +0100
+Subject: [PATCH 4/5] backends/native: Use CLUTTER_DISCRETE_SCROLL_STEP
+
+The 120 / 10 here turns continuous wheel scroll into value120. The seat
+later turns value120 back using CLUTTER_DISCRETE_SCROLL_STEP. So this 10
+is the same value and must stay in sync with it.
+---
+ src/backends/native/meta-virtual-input-device-native.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/src/backends/native/meta-virtual-input-device-native.c b/src/backends/native/meta-virtual-input-device-native.c
+index 0d6b8f269..cbe04eca6 100644
+--- a/src/backends/native/meta-virtual-input-device-native.c
++++ b/src/backends/native/meta-virtual-input-device-native.c
+@@ -764,8 +764,8 @@ notify_scroll_continuous_in_impl (GTask *task)
+       meta_seat_impl_notify_discrete_scroll_in_impl (seat,
+                                                      virtual_native->impl_state->device,
+                                                      event->time_us,
+-                                                     event->dx * (120.0 / 10.0),
+-                                                     event->dy * (120.0 / 10.0),
++                                                     event->dx * (120.0 / CLUTTER_DISCRETE_SCROLL_STEP),
++                                                     event->dy * (120.0 / CLUTTER_DISCRETE_SCROLL_STEP),
+                                                      event->scroll_source);
+     }
+   else
+-- 
+2.53.0
+

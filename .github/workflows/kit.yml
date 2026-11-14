@@ -584,7 +584,7 @@ jobs:
           notes=$(build/release-notes.sh "PipeWire's xrdp module (the sink and source that carry an xrdp session's sound and microphone), release v$version of neutrinolabs/pipewire-module-xrdp ($sha), unpatched, built by rdp-release-kit $GITHUB_SHA for Fedora $fedora, which does not package it. Debian 12 (backports), 13 and Ubuntu 24.04 and newer package it themselves (apt install pipewire-module-xrdp). Published once, never replaced; a new one only when its inputs change." xrdp)$'\n\n'"<!-- kit-key: $key -->"
           build/publish-prerelease.sh "$tag" "$title" "$notes" upload/*
 
-  # GNOME's Mutter for Fedora 45 with our fix (build/build-mutter.sh), an
+  # GNOME's Mutter for Fedora 45 with our fixes (build/build-mutter.sh), an
   # opt-in of the rolling release: built only when its inputs change, else
   # the packages of the pre-release that has them
   mutter:
@@ -641,7 +641,7 @@ jobs:
           tag=$(build/prerelease-tag.sh mutter "$key")
           title="Mutter for Fedora 45 $tag"
           (cd upload && sha256sum -- *.rpm > SHA256SUMS)
-          notes=$(build/release-notes.sh "GNOME's Mutter for Fedora 45, Fedora's own package with our fix for a Wayland window that lands on the wrong monitor when the monitor layout moves its monitor (GNOME/mutter#5162, merge request !5438), built and checked (installed with Fedora's gnome-shell) by rdp-release-kit $GITHUB_SHA, x86_64 and ARM64. An opt-in: Fedora's next mutter update replaces it, and the fix with it. Published once, never replaced; a new one only when its inputs change." xrdp)$'\n\n'"<!-- kit-key: $key -->"
+          notes=$(build/release-notes.sh "GNOME's Mutter for Fedora 45, Fedora's own package with our fix for a Wayland window that lands on the wrong monitor when the monitor layout moves its monitor (GNOME/mutter#5162, merge request !5438) and upstream's open fix for touchpad scrolling through libei, which dropped every scroll step smaller than a wheel notch (merge request !5431), built and checked (installed with Fedora's gnome-shell) by rdp-release-kit $GITHUB_SHA, x86_64 and ARM64. An opt-in: Fedora's next mutter update replaces it, and the fix with it. Published once, never replaced; a new one only when its inputs change." xrdp)$'\n\n'"<!-- kit-key: $key -->"
           build/publish-prerelease.sh "$tag" "$title" "$notes" upload/*
 
   # The web client builds at once; only its login test waits for xrdp

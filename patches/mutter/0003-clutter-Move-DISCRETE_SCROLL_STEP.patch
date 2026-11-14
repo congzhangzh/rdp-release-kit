@@ -1,0 +1,86 @@
+From d3d3baf74d2c2ab5671e27f924c5f5d200cb40d9 Mon Sep 17 00:00:00 2001
+From: Alessandro Bono <alessandro.bono369@gmail.com>
+Date: Mon, 26 Oct 2026 14:37:28 +0100
+Subject: [PATCH 3/5] clutter: Move DISCRETE_SCROLL_STEP
+
+One discrete scroll step is 10 units of continuous scroll. Only the native
+seat can use this value today because it is a private define there.
+
+Move it to clutter-mutter.h and give it a CLUTTER_ prefix so code outside
+the native seat can use it too.
+---
+ clutter/clutter/clutter-mutter.h     |  2 ++
+ src/backends/native/meta-seat-impl.c | 14 ++++++--------
+ 2 files changed, 8 insertions(+), 8 deletions(-)
+
+diff --git a/clutter/clutter/clutter-mutter.h b/clutter/clutter/clutter-mutter.h
+index f61ac9a81..f1be9ce66 100644
+--- a/clutter/clutter/clutter-mutter.h
++++ b/clutter/clutter/clutter-mutter.h
+@@ -48,6 +48,8 @@
+  * various matrix calculations. */
+ #define CLUTTER_COORDINATE_EPSILON (1.0 / 256.0)
+ 
++#define CLUTTER_DISCRETE_SCROLL_STEP 10.0
++
+ /**
+  * clutter_create_context: (skip)
+  */
+diff --git a/src/backends/native/meta-seat-impl.c b/src/backends/native/meta-seat-impl.c
+index c45173abd..776bd1b36 100644
+--- a/src/backends/native/meta-seat-impl.c
++++ b/src/backends/native/meta-seat-impl.c
+@@ -59,8 +59,6 @@
+ 
+ #define AUTOREPEAT_VALUE 2
+ 
+-#define DISCRETE_SCROLL_STEP 10.0
+-
+ struct _MetaEventSource
+ {
+   GSource source;
+@@ -1164,7 +1162,7 @@ notify_scroll (ClutterInputDevice       *input_device,
+   /* libinput pointer axis events are in pointer motion coordinate space.
+    * To convert to Xi2 discrete step coordinate space, multiply the factor
+    * 1/10. */
+-  scroll_factor = 1.0 / DISCRETE_SCROLL_STEP;
++  scroll_factor = 1.0 / CLUTTER_DISCRETE_SCROLL_STEP;
+ 
+   modifiers = xkb_state_serialize_mods (seat_impl->xkb, XKB_STATE_MODS_EFFECTIVE);
+ 
+@@ -1251,9 +1249,9 @@ check_notify_discrete_scroll (MetaSeatImpl       *seat_impl,
+   int i, n_xscrolls, n_yscrolls;
+ 
+   n_xscrolls = (int) floor ((fabs (seat_impl->accum_scroll_dx) + DBL_EPSILON) /
+-                            DISCRETE_SCROLL_STEP);
++                            CLUTTER_DISCRETE_SCROLL_STEP);
+   n_yscrolls = (int) floor ((fabs (seat_impl->accum_scroll_dy) + DBL_EPSILON) /
+-                            DISCRETE_SCROLL_STEP);
++                            CLUTTER_DISCRETE_SCROLL_STEP);
+ 
+   for (i = 0; i < n_xscrolls; i++)
+     {
+@@ -1272,9 +1270,9 @@ check_notify_discrete_scroll (MetaSeatImpl       *seat_impl,
+     }
+ 
+   seat_impl->accum_scroll_dx =
+-    fmodf (seat_impl->accum_scroll_dx, DISCRETE_SCROLL_STEP);
++    fmodf (seat_impl->accum_scroll_dx, CLUTTER_DISCRETE_SCROLL_STEP);
+   seat_impl->accum_scroll_dy =
+-    fmodf (seat_impl->accum_scroll_dy, DISCRETE_SCROLL_STEP);
++    fmodf (seat_impl->accum_scroll_dy, CLUTTER_DISCRETE_SCROLL_STEP);
+ }
+ 
+ void
+@@ -1341,7 +1339,7 @@ meta_seat_impl_notify_discrete_scroll_in_impl (MetaSeatImpl        *seat_impl,
+   double dx = 0, dy = 0;
+   int low_res_value = 0;
+ 
+-  /* Convert into DISCRETE_SCROLL_STEP range. 120/DISCRETE_SCROLL_STEP = 12.0 */
++  /* Convert into CLUTTER_DISCRETE_SCROLL_STEP range. 120/CLUTTER_DISCRETE_SCROLL_STEP = 12.0 */
+   dx = dx_value120 / 12.0;
+   dy = dy_value120 / 12.0;
+ 
+-- 
+2.53.0
+

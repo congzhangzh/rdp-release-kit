@@ -1,7 +1,10 @@
 #!/bin/bash
 # GNOME's Mutter for Fedora 45 with our fix for a Wayland window that lands
 # on the wrong monitor when the monitor layout moves its monitor
-# (GNOME/mutter#5162, merge request !5438): Fedora's own source package (the
+# (GNOME/mutter#5162, merge request !5438, patches 0001-0002) and upstream's
+# open fix for touchpad scrolling through libei, which dropped every scroll
+# step smaller than a wheel notch (merge request !5431, patches 0003-0005):
+# Fedora's own source package (the
 # mutter line of sources.lock, checked against its SHA-256), the patches in
 # patches/mutter/, rebuilt for this machine's architecture as release
 # <Fedora's>.0kit<N>, which sorts after Fedora's own and before its next
@@ -22,7 +25,8 @@ set -euo pipefail
 KIT=$(cd "$(dirname "$0")/.." && pwd)
 # the kit's build number of one Fedora release: up when the patches or this
 # build change what is built
-N=1
+# 2: !5431's scroll fix (patches 0003-0005)
+N=2
 read -r version url sha < <(awk '$1 == "mutter" { print $2, $3, $4 }' "$KIT/sources.lock")
 # Fedora's release number (51.0-1.fc45: 1); its spec computes it (%autorelease)
 rel=${version#*-}
