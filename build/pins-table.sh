@@ -26,12 +26,23 @@ tables() {
         return "`" substr(SHA[name], 1, 9) "`"
     }
     # the version, and the commit of a git pin (alone when the version is that commit)
-    # owner/repo#N ... as links, named repo#N
-    function refs(list,   n, r, i, out, parts) {
+    # owner/repo#N (an issue) and owner/repo!N (a GitLab merge request) ... as
+    # links, named repo#N / repo!N; GNOME/... lives on gitlab.gnome.org, the
+    # rest on GitHub; "—" stays plain
+    function refs(list,   n, r, i, out, parts, sep, host, path) {
         n = split(list, r, " "); out = ""
         for (i = 1; i <= n; i++) {
-            split(r[i], parts, "#")
-            out = out (i > 1 ? " " : "") "[" substr(parts[1], index(parts[1], "/") + 1) "#" parts[2] "](https://github.com/" parts[1] "/issues/" parts[2] ")"
+            if (r[i] == "—") continue
+            sep = index(r[i], "!") ? "!" : "#"
+            split(r[i], parts, sep)
+            if (parts[1] ~ /^GNOME\//) {
+                host = "https://gitlab.gnome.org/"
+                path = sep == "!" ? "/-/merge_requests/" : "/-/issues/"
+            } else {
+                host = "https://github.com/"
+                path = sep == "!" ? "/pull/" : "/issues/"
+            }
+            out = out (out == "" ? "" : " ") "[" substr(parts[1], index(parts[1], "/") + 1) sep parts[2] "](" host parts[1] path parts[2] ")"
         }
         return out == "" ? "—" : out
     }
