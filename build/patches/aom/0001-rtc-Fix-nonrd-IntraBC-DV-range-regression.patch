@@ -1,0 +1,53 @@
+From b57fd4438bf9db9c48b6c9743e7bcdc53ad9aac8 Mon Sep 17 00:00:00 2001
+From: Ihor Buhaiov <freedbrt@gmail.com>
+Date: Sun, 11 Oct 2026 10:09:20 +0200
+Subject: [PATCH] rtc: Fix nonrd IntraBC DV range regression
+
+Kit note: upstream libaom commit b57fd4438b on main (2026-10-12), in no release
+yet (not 3.15.2, not 3.15.3). Only its code change is carried; its test change
+(test/encode_api_test.cc) does not apply to 3.15.2 and the kit builds libaom
+without tests. Why the kit carries it: with real-time screen content at
+cpu-used 10, libaom 3.15.x writes intra block copy vectors the decoder rejects
+on frames wider than about 2300 px (every AV1 frame fails, the picture stops),
+and reads past the end of its dv_costs table (ASan heap-buffer-overflow in
+mv_cost, av1/encoder/mcomp.c:299). Drop this patch when the pinned libaom
+release contains b57fd4438b.
+
+Upstream message:
+
+    rtc: Fix nonrd IntraBC DV range regression
+    
+    Regression from 4a527cabbb ("rtc: Implement intrabc for nonrd
+    pickmode"). av1_search_intrabc_nonrd() sets the search limits to the
+    tile bounds, which drops the MV range clamp from
+    av1_make_default_fullpel_ms_params(). On frames wider or taller than
+    2048 pixels the hash search can then return a DV of 2048 pixels or more.
+    
+    The DV cost lookup in mv_cost() indexes the dv_costs table with the
+    difference to the reference DV. For such a DV the index is outside the
+    table, which is a heap buffer overflow read. The cost then comes from
+    whatever memory follows the table, so the output is not deterministic.
+    If the far DV wins, the encoder writes a DV the decoder rejects as
+    invalid, or asserts in av1_get_mv_class() when the difference to the
+    reference DV needs more than MV_CLASS_10.
+    
+    Call av1_set_mv_search_range() after setting the tile bounds, as the rd
+    IntraBC search does. Add tests with a far copy to the left, above and
+    above right. The above right one is reported by ASan as a heap buffer
+    overflow without the fix.
+    
+    Change-Id: I1cbd0ef09ab764e7424b679393985262ab7f4fbc
+    
+---
+diff --git a/av1/encoder/nonrd_pickmode.c b/av1/encoder/nonrd_pickmode.c
+index 7bf0a93fcb..0034f1292f 100644
+--- a/av1/encoder/nonrd_pickmode.c
++++ b/av1/encoder/nonrd_pickmode.c
+@@ -1647,6 +1647,7 @@ static void av1_search_intrabc_nonrd(AV1_COMP *cpi, MACROBLOCK *x,
+   fullms_params.mv_limits.row_min = (xd->tile.mi_row_start - mi_row) * MI_SIZE;
+   fullms_params.mv_limits.row_max =
+       (xd->tile.mi_row_end - mi_row) * MI_SIZE - block_size_high[bsize];
++  av1_set_mv_search_range(&fullms_params.mv_limits, &dv_ref.as_mv);
+   int_mv best_mv;
+   int bestsme = INT_MAX;
+   if (!cpi->sf.mv_sf.hash_max_8x8_intrabc_blocks || bsize <= BLOCK_8X8) {
