@@ -347,9 +347,11 @@ if [ -n "${CLIENT_DEMO:-}" ]; then
     # (the videos' titles name the codec)
     check "(auto) takes the kit's own client first, Debian's after it" \
         'grep -qE "$own_first" "$OUT/client/driver.log"'
-    xc=$("$ENGINE" exec "$NAME" grep -a -q -- "--enable-av2" /usr/sbin/xrdp 2> /dev/null && echo AV2 || echo AV1)
-    check "xrdp encodes the session in $xc" \
-        '"$ENGINE" exec "$NAME" grep -q "starting $xc codec session" /var/log/xrdp.log'
+    # the driver picks "AV1:i444" (hook/drive.py); since FreeRDP 20261115.1 a pick offers that
+    # codec only (AV1), an older client still offered AV2 next to it (and xrdp took AV2):
+    # either is right here, H.264 is not
+    xc=$("$ENGINE" exec "$NAME" grep -a -o -m1 -E "starting AV[12] codec session" /var/log/xrdp.log 2> /dev/null | grep -o -E "AV[12]")
+    check "xrdp encodes the session in AV1 or AV2 (here: ${xc:-none})" '[ -n "$xc" ]'
     if [ "$CLIENT_DEMO" != release ]; then
         check "plain uvx: freerdp-tk started again with uv's own Python" \
             '[ "$(grep -c "python: .*/uv/python/" "$OUT/client/driver.log")" = 2 ]'
@@ -452,13 +454,7 @@ pass=0; fail=0
 check() { if eval "$2"; then echo "PASS  $1"; pass=$((pass + 1)); else echo "FAIL  $1"; fail=$((fail + 1)); fi; }
 # the codec xrdp picks for the kit's clients: AV2 first where the packages have it (they
 # record --enable-av2 in xrdp's binary), else AV1
-# the codec xrdp should start: AV2 first when it has AV2, but a freerdp-tk demo (CLIENT_DEMO)
-# picks "AV1:i444" (test/client-demo/hook/drive.py), and since FreeRDP 20261115.1 a pick
-# offers that codec only (before, /gfx:AV1 still offered AV2 and xrdp took it)
-xcodec() {
-    [ -z "${CLIENT_DEMO:-}" ] || { echo AV1; return; }
-    "$ENGINE" exec "$NAME" grep -a -q -- "--enable-av2" /usr/sbin/xrdp 2> /dev/null && echo AV2 || echo AV1
-}
+xcodec() { "$ENGINE" exec "$NAME" grep -a -q -- "--enable-av2" /usr/sbin/xrdp 2> /dev/null && echo AV2 || echo AV1; }
 # since freerdp_web 20261104.3 the page's log masks the user like the password; the client
 # still gets /u:tester, and the login checks below prove it
 check "the page started the client with a user" 'grep -Eq -- " /u:(tester|\*\*\*) " "$OUT/page.log"'
