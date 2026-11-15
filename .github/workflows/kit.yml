@@ -1151,10 +1151,10 @@ jobs:
         if: steps.publish.outputs.tag != ''
         continue-on-error: true
         env:
-          GH_TOKEN: ${{ secrets.DOWNSTREAM_DISPATCH_TOKEN }}
+          GH_TOKEN: ${{ secrets.DOWNSTREAM_FREERDP_TK_DISPATCH_TOKEN }}
           RELEASE: ${{ steps.publish.outputs.tag }}
         run: |
-          [ -n "$GH_TOKEN" ] || { echo "no DOWNSTREAM_DISPATCH_TOKEN secret: freerdp-tk not told"; exit 0; }
+          [ -n "$GH_TOKEN" ] || { echo "no DOWNSTREAM_FREERDP_TK_DISPATCH_TOKEN secret: freerdp-tk not told"; exit 0; }
           freerdp=$(awk '$1 == "freerdp" { print $2 }' sources.lock)
           gh api repos/congzhangzh/freerdp-tk/dispatches -f event_type=kit-release \
             -f "client_payload[release]=$RELEASE" -f "client_payload[freerdp]=$freerdp"
