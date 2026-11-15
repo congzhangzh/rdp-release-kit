@@ -1143,6 +1143,22 @@ jobs:
           [ -n "$RELEASE" ] || { echo "no release tag from Publish" >&2; exit 1; }
           gh workflow run site.yml -R "$GITHUB_REPOSITORY" --ref main -f release="$RELEASE" -f publish=true
           echo "### The site: started from release $RELEASE, page $PAGE" >> "$GITHUB_STEP_SUMMARY"
+      # downstream, phase 1 (聪哥 2026-11-15): a fully green Latest (this job needs every job,
+      # the demos included) tells freerdp-tk, whose own workflow pins these clients, runs its
+      # tests and publishes by its own rule. Without the secret it says so and does nothing;
+      # it never fails the release
+      - name: Tell freerdp-tk about this release
+        if: steps.publish.outputs.tag != ''
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.DOWNSTREAM_DISPATCH_TOKEN }}
+          RELEASE: ${{ steps.publish.outputs.tag }}
+        run: |
+          [ -n "$GH_TOKEN" ] || { echo "no DOWNSTREAM_DISPATCH_TOKEN secret: freerdp-tk not told"; exit 0; }
+          freerdp=$(awk '$1 == "freerdp" { print $2 }' sources.lock)
+          gh api repos/congzhangzh/freerdp-tk/dispatches -f event_type=kit-release \
+            -f "client_payload[release]=$RELEASE" -f "client_payload[freerdp]=$freerdp"
+          echo "### freerdp-tk: told of release $RELEASE (FreeRDP $freerdp)" >> "$GITHUB_STEP_SUMMARY"
       # the release page keeps the kit's releases and the newest 3 per-round pre-releases of
       # each kind; the rest go, their unique files archived first (build/prune-prereleases.sh).
       # Never fails the release: a hiccup here only leaves a few more for the next round
