@@ -11,6 +11,10 @@ from right now, and what our own changes to a source fix:
 Every change that alters what is built (a pin, a build option, a patch, a
 toolchain) gets an entry here in the same commit.
 
+## 2026-11-16
+
+- **`freerdp_web` `20261116.1`** (`775fcdfe7`, comp-web-g3; was `20261115.6`; 聪哥's go: "release it when green"): fill the window, the page's own full screen. Firefox and Safari have no Keyboard Lock, so Esc ended the browser's full screen and never reached the remote desktop; there (and on the iPhone, which has no page full screen) the toolbar's Full screen now fills the browser's window and Esc is an ordinary key, while the browser's own full screen makes it the whole screen. Chrome and Edge keep real full screen with Keyboard Lock. Drivable from outside: `?fill=1`, `freerdpWeb.setFill` / `.fill`, the event `freerdpfillchange`. iPhone: the safe areas (viewport-fit=cover, 100dvh) and a round button for the hidden toolbar (tap toggles, drag moves). test-fill in Chromium, Firefox, WebKit and an iPhone; freerdp-web CI 43946537760 green. Not machine-tested: that Esc doesn't end each browser's own full screen (F11 / Ctrl+Cmd+F).
+
 ## 2026-11-15
 
 - **`freerdp`, `freerdp_host`, `freerdp_mac_host`, `freerdp_linux_host` `20261115.4`** (`5be282e0a`, comp-sdl-g1) and **`freerdp_web` `20261115.6`** (`df22b95eb`, comp-web-g3): the web client's surface rows fill again (the web build has no FreeRDP timers, timer.c:30-32, so 20261115.3's once-a-second copy never ran; the graphics channel's own thread now copies the surfaces after a frame, at most once a second; TestClientStats fails without it); desktop Safari's first visit gets to Connect (20261115.5 stopped at the site gate, run 43740474401: WebKit held coi-serviceworker's reload longer than the page's 8 s wait; the page now waits while a reload it asked for is pending, up to 45 s; test-mixed makes the late reload deterministic: red on .5, green on .6).
