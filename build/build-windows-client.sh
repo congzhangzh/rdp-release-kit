@@ -179,6 +179,7 @@ if [ -n "${HOST:-}" ]; then
         echo "toolchain: llvm-mingw ${VERSION[llvm_mingw]} (clang, libc++, UCRT)"
         echo
         manifest_kit_line
+        manifest_upstream_line
         echo "sources (sources.lock):"
         for name in freerdp_host libressl opus dav1d aom avm zlib jansson llvm_mingw; do
             printf '  %-12s %-10s %s %s\n' "$name" "${VERSION[$name]}" "${SHA[$name]}" "$(manifest_url "$name")"
@@ -216,6 +217,7 @@ add_launcher "$PKG" windows "$ARCH"
     echo "toolchain: llvm-mingw ${VERSION[llvm_mingw]} (clang, libc++, UCRT)"
     echo
     manifest_kit_line
+    manifest_upstream_line
     echo "sources (sources.lock):"
     for name in freerdp sdl3 sdl3_ttf freetype libressl opus dav1d avm zlib jansson llvm_mingw; do
         printf '  %-10s %-8s %s %s\n' "$name" "${VERSION[$name]}" "${SHA[$name]}" "$(manifest_url "$name")"

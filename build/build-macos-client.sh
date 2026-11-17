@@ -239,6 +239,7 @@ if [ -n "${HOST:-}" ]; then
         echo "minimum macOS: $MACOS_MIN"
         echo
         manifest_kit_line
+        manifest_upstream_line
         echo "sources (sources.lock):"
         for name in freerdp_mac_host openssl opus dav1d aom avm zlib jansson; do
             printf '  %-16s %-10s %s %s\n' "$name" "${VERSION[$name]}" "${SHA[$name]}" "$(manifest_url "$name")"
@@ -281,6 +282,7 @@ fi
     echo "minimum macOS: $MACOS_MIN"
     echo
     manifest_kit_line
+    manifest_upstream_line
     echo "sources (sources.lock):"
     for name in freerdp sdl3 sdl3_ttf freetype openssl opus dav1d avm zlib jansson; do
         printf '  %-9s %-8s %s %s\n' "$name" "${VERSION[$name]}" "${SHA[$name]}" "$(manifest_url "$name")"

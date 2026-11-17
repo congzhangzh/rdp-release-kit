@@ -167,6 +167,7 @@ licenses "$OUT/web/licenses" freerdp sdl3_wasm sdl3_ttf freetype libressl opus d
     override_manifest
     echo
     manifest_kit_line
+    manifest_upstream_line
     echo "sources (sources.lock):"
     for name in freerdp sdl3_wasm sdl3_ttf freetype libressl opus dav1d avm zlib jansson; do
         printf '  %-16s %-9s %s %s\n' "$name" "${VERSION[$name]}" "${SHA[$name]}" "$(manifest_url "$name")"

@@ -199,6 +199,15 @@ manifest_url() {
     local u=${URL[$1]#git+}
     echo "${u%.git}"
 }
+# the MANIFEST's freerdp-upstream line: the upstream master commit our FreeRDP pin branches from and how many
+# of our commits sit on top, from pins.notes' base column ("FreeRDP master @ <sha> (<date>) +<N>"; the RM keeps
+# it current at each pin: the build fetches FreeRDP without history, so it cannot work it out)
+manifest_upstream_line() {
+    local base
+    base=$(awk -F'|' '$1 ~ /^change freerdp +$/ { print $2; exit }' "$KIT/pins.notes")
+    [[ $base =~ master\ @\ ([0-9a-f]{40})\ \(([0-9-]+)\)\ \+([0-9]+) ]] || return 0
+    echo "freerdp-upstream: master ${BASH_REMATCH[1]} +${BASH_REMATCH[3]}"
+}
 override_manifest() {
     local name var
     for name in ${OVERRIDES:-}; do

@@ -184,6 +184,7 @@ if [ -n "${HOST:-}" ]; then
         [ "${DEV[0]:-}" != -DCMAKE_INTERPROCEDURAL_OPTIMIZATION=OFF ] || echo "LTO off (local build)"
         echo
         manifest_kit_line
+        manifest_upstream_line
         echo "sources (sources.lock):"
         for name in "$FREERDP" openssl opus dav1d aom avm libei libpng zlib jansson; do
             printf '  %-18s %-10s %s %s\n' "$name" "${VERSION[$name]}" "${SHA[$name]}" "$(manifest_url "$name")"
@@ -296,6 +297,7 @@ check_launcher "$PKG"
     [ "${DEV[0]:-}" != -DCMAKE_INTERPROCEDURAL_OPTIMIZATION=OFF ] || echo "LTO off (local build)"
     echo
     manifest_kit_line
+    manifest_upstream_line
     echo "sources (sources.lock):"
     for name in freerdp sdl3 sdl3_ttf freetype openssl opus dav1d avm zlib jansson libfuse; do
         printf '  %-9s %-8s %s %s\n' "$name" "${VERSION[$name]}" "${SHA[$name]}" "$(manifest_url "$name")"
