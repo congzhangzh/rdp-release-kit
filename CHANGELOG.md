@@ -11,6 +11,10 @@ from right now, and what our own changes to a source fix:
 Every change that alters what is built (a pin, a build option, a patch, a
 toolchain) gets an entry here in the same commit.
 
+## 2026-11-17
+
+- **`freerdp`, `freerdp_host`, `freerdp_mac_host`, `freerdp_linux_host` `20261117.1`** (`3205b9523`, comp-sdl-g1) and **`freerdp_web` `20261117.1`** (`41113cf07`, comp-web-g3): the web client no longer reads the session's settings on the browser's main thread (batch B's server rows read context->settings and the remote settings there, while a connect, auto-reconnect or redirection frees and replaces them: a use-after-free, live since 20261115.2); the server values and strings are now copied with the surfaces on the graphics channel's thread and the page reads only the copies (TestClientStats swaps the settings while reading; a reader like .4's fails it). 🔎 Not yet shown to be 聪哥's crash of 2026-11-16 15:47 (AV2 at 5500x2330 is the other candidate). The page: the toolbar hides under Capture, freerdp-tk linked on Get a server, the AV chroma from RDPGFX_CODECID_AV1_CHROMA once a client has it (until then the page's own reading).
+
 ## 2026-11-16
 
 - **The clients' MANIFEST names its kit commit and each source's address** (freerdp-tk N2, 聪哥's "a SHA beside every version"): a line `kit: rdp-release-kit <kit commit>` before the sources (GITHUB_SHA in CI; the release number is picked later, at publish, so a consumer takes it from its own pin), and a fourth column on each source line: its sources.lock URL, a git source's without "git+" and ".git" (its repository's web address), a tarball's its download URL (build/lib.sh manifest_kit_line, manifest_url; all client and host MANIFESTs and the web one). And `freerdp-upstream: master <sha> +<N>` (聪哥: "as we are downstream of FreeRDP, include the upstream commit too"): the upstream master commit our FreeRDP pin branches from and how many of our commits sit on top, from pins.notes' base column, which now carries the full commit and the count (the RM updates it at each pin; the build fetches FreeRDP without history).
