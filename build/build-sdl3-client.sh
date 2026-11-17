@@ -183,9 +183,10 @@ if [ -n "${HOST:-}" ]; then
         override_manifest
         [ "${DEV[0]:-}" != -DCMAKE_INTERPROCEDURAL_OPTIMIZATION=OFF ] || echo "LTO off (local build)"
         echo
+        manifest_kit_line
         echo "sources (sources.lock):"
         for name in "$FREERDP" openssl opus dav1d aom avm libei libpng zlib jansson; do
-            printf '  %-18s %-10s %s\n' "$name" "${VERSION[$name]}" "${SHA[$name]}"
+            printf '  %-18s %-10s %s %s\n' "$name" "${VERSION[$name]}" "${SHA[$name]}" "$(manifest_url "$name")"
         done
         echo
         echo "from the host (readelf -d bin/freerdp-shadow-cli):"
@@ -294,9 +295,10 @@ check_launcher "$PKG"
     override_manifest
     [ "${DEV[0]:-}" != -DCMAKE_INTERPROCEDURAL_OPTIMIZATION=OFF ] || echo "LTO off (local build)"
     echo
+    manifest_kit_line
     echo "sources (sources.lock):"
     for name in freerdp sdl3 sdl3_ttf freetype openssl opus dav1d avm zlib jansson libfuse; do
-        printf '  %-9s %-8s %s\n' "$name" "${VERSION[$name]}" "${SHA[$name]}"
+        printf '  %-9s %-8s %s %s\n' "$name" "${VERSION[$name]}" "${SHA[$name]}" "$(manifest_url "$name")"
     done
     echo "$LAUNCHER_MANIFEST"
     echo

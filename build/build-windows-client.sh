@@ -178,9 +178,10 @@ if [ -n "${HOST:-}" ]; then
         echo "FreeRDP's shadow server for Windows ${VERSION[freerdp_host]}, $ARCH, built $(date -u +%F)"
         echo "toolchain: llvm-mingw ${VERSION[llvm_mingw]} (clang, libc++, UCRT)"
         echo
+        manifest_kit_line
         echo "sources (sources.lock):"
         for name in freerdp_host libressl opus dav1d aom avm zlib jansson llvm_mingw; do
-            printf '  %-12s %-10s %s\n' "$name" "${VERSION[$name]}" "${SHA[$name]}"
+            printf '  %-12s %-10s %s %s\n' "$name" "${VERSION[$name]}" "${SHA[$name]}" "$(manifest_url "$name")"
         done
         override_manifest
     } > "$PKG/MANIFEST"
@@ -214,9 +215,10 @@ add_launcher "$PKG" windows "$ARCH"
     echo "$(basename "$EXE") ${VERSION[freerdp]} for Windows $ARCH, built $(date -u +%F)"
     echo "toolchain: llvm-mingw ${VERSION[llvm_mingw]} (clang, libc++, UCRT)"
     echo
+    manifest_kit_line
     echo "sources (sources.lock):"
     for name in freerdp sdl3 sdl3_ttf freetype libressl opus dav1d avm zlib jansson llvm_mingw; do
-        printf '  %-10s %-8s %s\n' "$name" "${VERSION[$name]}" "${SHA[$name]}"
+        printf '  %-10s %-8s %s %s\n' "$name" "${VERSION[$name]}" "${SHA[$name]}" "$(manifest_url "$name")"
     done
     echo "$LAUNCHER_MANIFEST"
     override_manifest

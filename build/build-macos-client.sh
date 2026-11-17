@@ -238,9 +238,10 @@ if [ -n "${HOST:-}" ]; then
             "$("$CC" --version | head -1), SDK $(xcrun --show-sdk-version)"
         echo "minimum macOS: $MACOS_MIN"
         echo
+        manifest_kit_line
         echo "sources (sources.lock):"
         for name in freerdp_mac_host openssl opus dav1d aom avm zlib jansson; do
-            printf '  %-16s %-10s %s\n' "$name" "${VERSION[$name]}" "${SHA[$name]}"
+            printf '  %-16s %-10s %s %s\n' "$name" "${VERSION[$name]}" "${SHA[$name]}" "$(manifest_url "$name")"
         done
     } > "$PKG/MANIFEST"
     "$KIT/build/check-macos.sh" "$APP/Contents/MacOS/freerdp-shadow-cli" "$MACOS_MIN"
@@ -279,9 +280,10 @@ fi
         "$("$CC" --version | head -1), SDK $(xcrun --show-sdk-version)"
     echo "minimum macOS: $MACOS_MIN"
     echo
+    manifest_kit_line
     echo "sources (sources.lock):"
     for name in freerdp sdl3 sdl3_ttf freetype openssl opus dav1d avm zlib jansson; do
-        printf '  %-9s %-8s %s\n' "$name" "${VERSION[$name]}" "${SHA[$name]}"
+        printf '  %-9s %-8s %s %s\n' "$name" "${VERSION[$name]}" "${SHA[$name]}" "$(manifest_url "$name")"
     done
     echo "$LAUNCHER_MANIFEST"
     echo

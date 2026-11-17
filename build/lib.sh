@@ -186,6 +186,19 @@ sync_override() {
 }
 
 # override_manifest: one line per overridden source, for the MANIFEST
+# the MANIFEST's kit line: the kit commit this build came from (GITHUB_SHA in CI, else git, else unknown);
+# the release number is chosen later, at publish time, so a consumer reads it from its own pin
+manifest_kit_line() {
+    local c=${GITHUB_SHA:-}
+    [ -n "$c" ] || c=$(git -C "$KIT" rev-parse HEAD 2> /dev/null) || c=unknown
+    echo "kit: rdp-release-kit $c"
+}
+# a source's URL for the MANIFEST: sources.lock's, with a git source's "git+" and ".git" dropped, so it
+# is the repository's own web address (a tarball keeps its download URL)
+manifest_url() {
+    local u=${URL[$1]#git+}
+    echo "${u%.git}"
+}
 override_manifest() {
     local name var
     for name in ${OVERRIDES:-}; do
