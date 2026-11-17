@@ -59,7 +59,7 @@ for arch in "${ARCHES[@]}"; do
     echo "### windows $arch"
     # the single quotes are for the container's shell
     # shellcheck disable=SC2016
-    if ! "$ENGINE" run --rm -v "$KIT":/kit:ro -v "$SOURCES":/sources -v "$OUT":/out \
+    if ! "$ENGINE" run --rm -e GITHUB_SHA="${GITHUB_SHA:-$(git -C "$KIT" rev-parse HEAD 2> /dev/null)}" -v "$KIT":/kit:ro -v "$SOURCES":/sources -v "$OUT":/out \
             -v "$work":/work "${CACHE[@]}" "${OVERRIDE[@]}" -e OWNER="$(owner)" -e ARCH="$arch" \
             -e HOST="${HOST:-}" \
             "$IMAGE" \

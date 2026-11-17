@@ -46,7 +46,7 @@ if [ -n "${PAGE_SRC:-}" ]; then
 fi
 # the single quotes are for the container's shell
 # shellcheck disable=SC2016
-"$ENGINE" run --rm -v "$KIT":/kit:ro -v "$SOURCES":/sources -v "$OUT":/out -v "$WORK":/work \
+"$ENGINE" run --rm -e GITHUB_SHA="${GITHUB_SHA:-$(git -C "$KIT" rev-parse HEAD 2> /dev/null)}" -v "$KIT":/kit:ro -v "$SOURCES":/sources -v "$OUT":/out -v "$WORK":/work \
     "${PAGE[@]}" "${CACHE[@]}" "${OVERRIDE[@]}" -e OWNER="$(owner)" "$IMAGE" \
     bash -c '[ -n "${KIT_TOOLS:-}" ] || /kit/build/tools.sh /kit wasm
              /kit/build/build-wasm-client.sh /kit /sources /out; rc=$?
