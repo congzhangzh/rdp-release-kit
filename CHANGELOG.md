@@ -11,6 +11,10 @@ from right now, and what our own changes to a source fix:
 Every change that alters what is built (a pin, a build option, a patch, a
 toolchain) gets an entry here in the same commit.
 
+## 2026-11-18
+
+- **`freerdp`, `freerdp_host`, `freerdp_mac_host`, `freerdp_linux_host` `20261118.1`** (`5380d8fea`, freerdp-4e): the Mac client decodes AV1 with Apple's VideoToolbox, in hardware on M3/A17 Pro and later; dav1d stays the decoder where VideoToolbox cannot (M1/M2, Intel Macs, 4:4:4, streams under 64 pixels high). Measured on an M5 at 1080p: 0.07 ms of CPU per frame against dav1d's ~3 ms, bit-exact with the reference decoder for 4:2:0. The kit's Mac build already turns on AV1 and dav1d, and WITH_AV1_VIDEOTOOLBOX is on by default, so no build change. One YUV-to-RGB conversion now serves both decoders. The kit's macOS runners likely have no AV1 hardware, so the round tests the software path.
+
 ## 2026-11-17
 
 - **`freerdp`, `freerdp_host`, `freerdp_mac_host`, `freerdp_linux_host` `20261117.7`** (`cf806d1a4`, comp-shadow-g4): the shadow asks for up to 60 frames per second, not 32 (X11, Windows) or 30 (macOS's ScreenCaptureKit interval). The pacing is the same: it starts at 16, adds 2 per frame acknowledged in time, and drops while frames wait for the client, now to 20 rather than 10 with two waiting. The Mutter (GNOME) shadow had no cap. The study behind it: at 1440p the AV1 encode thread, not the client's decode, was the ceiling (~30 ms per frame, ~28 fps); an X11 test at 720p went from at most 31 to 36 fps on a loaded host. The real rate is the lower of 60 and what the encoder keeps up with.
