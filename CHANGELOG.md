@@ -11,6 +11,10 @@ from right now, and what our own changes to a source fix:
 Every change that alters what is built (a pin, a build option, a patch, a
 toolchain) gets an entry here in the same commit.
 
+## 2026-11-19
+
+- **`avm` `20261119.4`** (`01defdb0e`, avm-rel, comp-avm-g1; replaces 20261118.2, whose round failed only on a GitHub API timeout): everything since 20261118.2. The typing fix: a static block keeps its two copy modes (reference 0's NEARMV and GLOBALMV) searchable, when a neighbour's motion had made the mode-skip mask drop them and the block fell back to one intra DC block. On a 1440p desktop session at QP 100: -11 % bytes, +1.1 dB; its typing part -58 % bytes, no frame under 55 dB. Cheaper realtime key frames at speed 10 and up (smooth/Paeth off, a reduced transform set, SDP off). Reduced TMVP for screen content, decoder parse speed-ups, a parallel intraBC hash build for key frames, a CDEF-context race fix across tiles, and Arm CRC32C. Realtime encoder output changes; the decoders and the API do not.
+
 ## 2026-11-18
 
 - **`avm` `20261118.2`** (`567a8dcff`, rel-avm): NEON dual horizontal deblocking, bit-exact (M5 decode +2.4-4.5 %); avmdec gains --row-mt (a tool flag, off by default). No API change.
