@@ -58,7 +58,7 @@ if [ -n "${HOST:-}" ]; then
 fi
 # the single quotes are for the container's shell
 # shellcheck disable=SC2016
-"$ENGINE" run --rm -v "$KIT":/kit:ro -v "$SOURCES":/sources -v "$OUT":/out -v "$WORK":/work \
+"$ENGINE" run --rm -e GITHUB_SHA="${GITHUB_SHA:-$(git -C "$KIT" rev-parse HEAD 2> /dev/null)}" -v "$KIT":/kit:ro -v "$SOURCES":/sources -v "$OUT":/out -v "$WORK":/work \
     "${CACHE[@]}" "${OVERRIDE[@]}" -e OWNER="$(owner)" -e HOST="${HOST:-}" "$IMAGE" \
     bash -c '/kit/build/build-sdl3-client.sh /kit /sources /out; rc=$?;
              [ -z "$OWNER" ] || chown -R "$OWNER" /out /work ${CCACHE_DIR:-}; exit $rc'
