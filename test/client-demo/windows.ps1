@@ -81,7 +81,10 @@ try {
     Hands front "^PowerShell$"
     Hands type "dir"; Hands key Return
     Start-Sleep -Seconds 1.5
-    Hands type "Expand-Archive $name.zip ."; Hands key Return
+    # unpack with Windows' own bsdtar: PowerShell 7.6.10's Archive module (runner image 20261116)
+    # throws "Cannot find an overload for ExtractToDirectory ... argument count: 3" and unpacks
+    # nothing (run 44776437983, seen in its recording; shadow-comp-g4)
+    Hands type "tar -xf $name.zip"; Hands key Return
     # unpacked when the launcher, freerdp-tk's package and Python are there and the folder
     # stops growing (a zip's order varies: the round's own zip had freerdp-tk.cmd before
     # lib\, and the hook's copy failed, run 41184572213)
