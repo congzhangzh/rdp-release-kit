@@ -11,6 +11,10 @@ from right now, and what our own changes to a source fix:
 Every change that alters what is built (a pin, a build option, a patch, a
 toolchain) gets an entry here in the same commit.
 
+## 2026-11-20
+
+- **`avm` `20261119.6`** (`060f61204`, avm-rel): three bit-exact decoder parse speed-ups (20261119.5) and the realtime key frame's CfL alpha search without repeats (encoder only, byte-identical; key-frame instructions -10 to -19 % at QP 130-150). Realtime output is the same as 20261119.4's.
+
 ## 2026-11-19
 
 - **build-wasm-client.sh: the web client's FreeRDP is built with wasm SIMD** (Boss Cong's choice "A": one SIMD build): `-DWITH_SIMD=ON -DWITH_AVX2=OFF` and `-msimd128` for FreeRDP only (SDL, dav1d, opus and the rest keep their flags), so FreeRDP's SSE primitives run as wasm SIMD (WinPR reports SSE to SSE4.1 under `__wasm_simd128__`). rdp-comp-g1 measured it in headless Chrome on 1440p AV2: bit-exact in all 18 runs; the 16→8 narrowing 7.0-7.5 → 2.2-2.5 ms and YUV→RGB 12.9-13.9 → 7.1-7.9 ms per frame, about 10.7 ms less; whole frames: typing 29-39 → 18-26 ms, motion 41-45 → 30-38 ms. The page now needs a browser with wasm SIMD: Safari 16.4 / iOS 16.4 (it needed Safari 14.1 / iOS 14.5 for threads), Chrome 91, Firefox 89; an older browser cannot compile the module.
