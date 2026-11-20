@@ -105,6 +105,9 @@ if overridden freerdp; then
 fi
 # freerdp_link <engine's link flags>: the client linked for one way of
 # suspending WebAssembly (both are link options: the objects are the same)
+# FreeRDP with wasm SIMD (Boss Cong 2026-11-19, "A"): its SSE primitives built with -msimd128
+# (WinPR reports SSE..SSE4.1 under __wasm_simd128__): bit-exact, ~10.7 ms less per 1440p AV2 frame
+# (16->8 narrowing 3.1x, YUV->RGB 1.8x). Needs Safari 16.4 / iOS 16.4, Chrome 91, Firefox 89.
 freerdp_link() {
 configure "$WORK/build/freerdp" \
     emcmake cmake -G Ninja -S "$src" -B "$WORK/build/freerdp" -DCMAKE_BUILD_TYPE=Release \
@@ -118,10 +121,11 @@ configure "$WORK/build/freerdp" \
     -DWITH_PULSE=OFF -DWITH_OSS=OFF -DWITH_CUPS=OFF -DWITH_PCSC=OFF -DWITH_KRB5=OFF \
     -DWITH_FUSE=OFF -DWITH_SYSTEMD=OFF -DWITH_FFMPEG=OFF -DWITH_SWSCALE=OFF \
     -DWITH_DSP_FFMPEG=OFF -DWITH_OPENH264=OFF -DCHANNEL_URBDRC=OFF -DCHANNEL_RDPECAM=OFF \
-    -DWITH_SIMD=OFF -DWITH_MANPAGES=OFF -DWITH_TIMEZONE_ICU=OFF -DWITH_UNICODE_BUILTIN=ON \
+    -DWITH_SIMD=ON -DWITH_AVX2=OFF -DWITH_MANPAGES=OFF -DWITH_TIMEZONE_ICU=OFF -DWITH_UNICODE_BUILTIN=ON \
     -DUSE_UNWIND=OFF -DWITH_OPUS=ON -DWITH_GFX_AV1=ON -DWITH_DAV1D=ON \
     -DWITH_GFX_AV2=ON -DWITH_AVM=ON -DWITH_AVM_ENCODER=OFF \
-    -DCMAKE_EXE_LINKER_FLAGS="-pthread $1 \
+    -DCMAKE_C_FLAGS="-pthread -O2 -msimd128" -DCMAKE_CXX_FLAGS="-pthread -O2 -msimd128" \
+    -DCMAKE_EXE_LINKER_FLAGS="-pthread -msimd128 $1 \
 -sALLOW_MEMORY_GROWTH=1 -sINITIAL_MEMORY=134217728 -sMAXIMUM_MEMORY=1073741824 \
 -sSTACK_SIZE=1048576 -sPTHREAD_POOL_SIZE=32 -sWEBSOCKET_SUBPROTOCOL=binary \
 -sENVIRONMENT=web,worker -sINVOKE_RUN=0 -sEXIT_RUNTIME=1 -sFORCE_FILESYSTEM=1 \
