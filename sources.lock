@@ -128,7 +128,7 @@
 # 20261103.1: .4 + the input race fix (#14020), WinPR's 8 MiB default stack (#14004), the Mutter review fixes
 # 20261102.4: integration-all rebuilt on master 9f9d97e81 (#13934, #13948, #13974 merged upstream), with the
 # DXGI cleanup and the Linux GNOME (Mutter) shadow backend incl. its no-spin and end-on-Stop fixes (freerdp-d2, freerdp-ce)
-freerdp     20261121.5  git+https://github.com/congzhangzh/FreeRDP.git                                      bfcfcba90a7162ede1de1ece90defcf6a20a239a
+freerdp     20261121.99  git+https://github.com/congzhangzh/FreeRDP.git                                      4df56b65203808de31b02fedecac567d3180c105
 # FreeRDP for the Windows host (freerdp-shadow-cli, freerdp-shadow-service),
 # not for the clients: our release-20261030.7, picked from the fork's
 # integration-shadow-win, FreeRDP master 2a508c725 (2026-10-31) plus our pull
