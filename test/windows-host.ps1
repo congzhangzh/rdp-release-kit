@@ -274,10 +274,25 @@ $server = Start-Process -FilePath "$HostDir\freerdp-shadow-cli.exe" -PassThru -N
 for ($i = 0; $i -lt 30 -and -not (Listening 4492) -and -not $server.HasExited; $i++) { Start-Sleep -Seconds 1 }
 Check "av2: the server listens on 127.0.0.1:4492" (Listening 4492)
 $port = 4492
-$s = Client @("/p:$pass", "/gfx:AV2:on", "/size:1280x720") "av2-session" 0 -Window
+$s = Client @("/p:$pass", "/gfx:AV2:on", "/size:1280x720", "/sdl-stats-ipc") "av2-session" 0 -Window
 Start-Sleep -Seconds 20
 Shot "av2"
 Check "av2: a session holds 20 s" (-not $s.HasExited)
+# the client's stats IPC (/sdl-stats-ipc) on Windows: AF_UNIX through Winsock, which Wine
+# lacks, so this round is its only runtime check: one JSON line from the client's socket
+$ipc = Select-String -Path "$Out\av2-session.wlog" -Pattern "/sdl-stats-ipc: the statistics go to (.+)$" -ErrorAction SilentlyContinue | Select-Object -Last 1
+$ipcLine = ""
+if ($ipc) {
+    try {
+        $sock = [System.Net.Sockets.Socket]::new([System.Net.Sockets.AddressFamily]::Unix, [System.Net.Sockets.SocketType]::Stream, [System.Net.Sockets.ProtocolType]::Unspecified)
+        $sock.Connect([System.Net.Sockets.UnixDomainSocketEndPoint]::new($ipc.Matches[0].Groups[1].Value.Trim()))
+        $reader = [System.IO.StreamReader]::new([System.Net.Sockets.NetworkStream]::new($sock, $true))
+        $ipcLine = $reader.ReadLine()
+        $reader.Dispose()
+    } catch { $ipcLine = "error: $($_.Exception.Message)" }
+}
+$ipcLine | Out-File "$Out\stats-ipc.json"
+Check "av2: the client's stats IPC answers one JSON reading" ($ipcLine -match '"schema":"freerdp-sdl-stats"') "$(if ($ipc) { $ipc.Matches[0].Groups[1].Value.Trim() } else { 'no socket line in the log' }); $($ipcLine.Length) chars"
 $codecs = Codecs "av2-session"
 Check "av2: the frames came in AV2" (GotAv2 "av2-session") ($codecs -join ", ")
 Stop $s

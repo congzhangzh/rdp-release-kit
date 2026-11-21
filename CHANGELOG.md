@@ -11,6 +11,11 @@ from right now, and what our own changes to a source fix:
 Every change that alters what is built (a pin, a build option, a patch, a
 toolchain) gets an entry here in the same commit.
 
+## 2026-11-21
+
+- **`freerdp`, `freerdp_host`, `freerdp_mac_host`, `freerdp_linux_host` `20261121.1`** (`69a08ad84`, freerdp-sdl-comp-g2, freerdp-shadow-comp-g4): **the client's stats on a local socket**: `/sdl-stats-ipc[:<path>]` (off by default) makes sdl-freerdp answer its overlay's numbers as JSON lines, one per second, on a per-user AF_UNIX socket (every OS; Windows 10 1803+ Winsock), read-only, the local user only (peer credentials, mode 0600), even with the overlay hidden; schema `freerdp-sdl-stats` v1 (raw client_stats counters + the overlay's rows); reader `client/SDL/SDL3/tools/sdl-stats-ipc.py` (`--once`, `--follow`, `--get`, `--rate`). An agent changes one thing and measures the real client, no screenshots. **Frames in flight sized to the link**, once a second from 8 to 32: grow by 2 while the ack delay stays within 5/4 of the lowest and the window was reached; drop to the acked rate × the base delay + 2 when the delay passes 3/2 (a queue). RTT 300 ms: 15 → 30-37 fps; a 1500 kbit/s link stays at 8 (no bloat). FREERDP_SHADOW_GFX_FRAMES_IN_FLIGHT still fixes it (0 = off).
+- **Windows test: the stats IPC's first runtime check**: the AV2 session runs with /sdl-stats-ipc, and the test reads one JSON line from the client's socket with .NET's UnixDomainSocketEndPoint (Wine has no AF_UNIX, so this round is the only Windows check).
+
 ## 2026-11-20
 
 - **Windows test: a focus loss is a failure, not a skip**: the freerdp-tk demo's "could not bring PowerShell to the front" SKIP hid for three rounds that the demo never ran (44632298183, 44652675950, 44678408172), the PowerShell 7.6.10 Expand-Archive break among them; it is now a FAIL, so the round's rerun retries it and it never passes silently. wininput.py also hides and closes every "New notification" window before each focus attempt (two kept the front in 44652675950), not only the one in front.
