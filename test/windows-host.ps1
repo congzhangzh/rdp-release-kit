@@ -595,8 +595,9 @@ if ($ClientZip -and $site) {
     if (-not $tkDone -and $tkLog -match "not in front" -and $tkLog -match "unpacked: -1 files") {
         # nothing typed reached PowerShell: the test could not focus its window (a toast kept
         # the front), so freerdp-tk was never started; the harness, not the product
-        "SKIP  demo: freerdp-tk to Windows' own Remote Desktop: the test could not bring PowerShell to the front" |
-            Tee-Object -FilePath "$Out\checks.txt" -Append
+        # a FAIL, not a SKIP: a SKIP hid for three rounds that this demo never ran (kit rounds
+        # 44632298183, 44652675950, 44678408172), the PowerShell 7.6.10 Expand-Archive break among it
+        Check "demo: freerdp-tk to Windows' own Remote Desktop: PowerShell in front for the test" $false "a toast or another window kept the front"
     } else {
         Check "demo: freerdp-tk to Windows' own Remote Desktop, both visits and a video" `
             ($tkDone -and (Test-Path "$Out\freerdp-tk-windows.mp4") -and (Test-Path "$Out\freerdp-tk-windows.jpg")) `

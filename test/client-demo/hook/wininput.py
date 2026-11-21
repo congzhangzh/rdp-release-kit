@@ -176,6 +176,25 @@ class WinInput:
         user32.GetWindowRect(hwnd, ctypes.byref(r))
         return r.left, r.top, r.right - r.left, r.bottom - r.top
 
+    def close_toasts(self):
+        """Hide and close every "New notification" window, not only the one in front:
+        two toasts kept the front through activate() in kit run 44652675950."""
+        found = []
+        proc = ctypes.WINFUNCTYPE(ctypes.c_bool, ctypes.c_void_p, ctypes.c_void_p)
+
+        def each(hwnd, _):
+            title = ctypes.create_unicode_buffer(200)
+            user32.GetWindowTextW(hwnd, title, 200)
+            if title.value == "New notification":
+                found.append(hwnd)
+            return True
+
+        user32.EnumWindows(proc(each), 0)
+        for hwnd in found:
+            user32.ShowWindow(hwnd, 0)                # SW_HIDE
+            user32.PostMessageW(hwnd, 0x0010, 0, 0)   # WM_CLOSE
+        return len(found)
+
     def activate(self, hwnd):
         """To the front. Windows lets a process bring a window forward only
         right after input: an Alt press first, as tools that do this do. When
@@ -184,6 +203,7 @@ class WinInput:
         for a moment, which lifts that lock, and tries again."""
         alt = NAMED["alt"][0]
         for _ in range(5):
+            self.close_toasts()
             _send(_scan(alt), _scan(alt, up=True))
             user32.ShowWindow(hwnd, 9)   # SW_RESTORE
             front = user32.GetForegroundWindow()
