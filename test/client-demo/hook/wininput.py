@@ -100,6 +100,8 @@ class Job(threading.Thread):
 
 
 class WinInput:
+    _toast_owners_said = set()   # pids of toast owners already named in run.log
+
     def where(self):
         p = wintypes.POINT()
         user32.GetCursorPos(ctypes.byref(p))
@@ -228,6 +230,32 @@ class WinInput:
                 _send(_scan(NAMED["Escape"][0]), _scan(NAMED["Escape"][0], up=True))
                 user32.ShowWindow(front, 0)                # SW_HIDE
                 user32.PostMessageW(front, 0x0010, 0, 0)   # WM_CLOSE
+                self.end_toast_owner(front)
+
+    def end_toast_owner(self, hwnd):
+        """A toast that stays through Escape, SW_HIDE and WM_CLOSE (kit run 44883216006: 30 s
+        of tries, twice): say whose it is, and when that is the shell's notification host
+        (ShellExperienceHost.exe, which Windows starts again) end it, on this throwaway runner."""
+        pid = wintypes.DWORD()
+        user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
+        kernel32.OpenProcess.restype = ctypes.c_void_p
+        h = kernel32.OpenProcess(0x1000 | 0x0001, False, pid.value)  # QUERY_LIMITED_INFORMATION | TERMINATE
+        if not h:
+            print(f"toast owner pid {pid.value}: cannot open it ({ctypes.get_last_error()})")
+            return
+        try:
+            path = ctypes.create_unicode_buffer(520)
+            size = wintypes.DWORD(520)
+            kernel32.QueryFullProcessImageNameW(ctypes.c_void_p(h), 0, path, ctypes.byref(size))
+            exe = path.value.rsplit("\\", 1)[-1]
+            if exe.lower() == "shellexperiencehost.exe":
+                ended = kernel32.TerminateProcess(ctypes.c_void_p(h), 1)
+                print(f"toast owner {exe} (pid {pid.value}): ended ({bool(ended)})")
+            elif pid.value not in self._toast_owners_said:
+                self._toast_owners_said.add(pid.value)
+                print(f"toast owner {path.value} (pid {pid.value}): left running")
+        finally:
+            kernel32.CloseHandle(ctypes.c_void_p(h))
 
 
 # For test/client-demo/windows.ps1, which types into its PowerShell window as
