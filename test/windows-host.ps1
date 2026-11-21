@@ -284,9 +284,17 @@ $ipc = Select-String -Path "$Out\av2-session.wlog" -Pattern "/sdl-stats-ipc: the
 $ipcLine = ""
 if ($ipc) {
     try {
-        $sock = [System.Net.Sockets.Socket]::new([System.Net.Sockets.AddressFamily]::Unix, [System.Net.Sockets.SocketType]::Stream, [System.Net.Sockets.ProtocolType]::Unspecified)
-        $sock.Connect([System.Net.Sockets.UnixDomainSocketEndPoint]::new($ipc.Matches[0].Groups[1].Value.Trim()))
-        $reader = [System.IO.StreamReader]::new([System.Net.Sockets.NetworkStream]::new($sock, $true))
+        $where = $ipc.Matches[0].Groups[1].Value.Trim()
+        if ($where -like '\\.\pipe\*') {
+            # a named pipe on Windows (Boss Cong's choice, FreeRDP 5c3e01960): outbound only, so In
+            $pipe = [System.IO.Pipes.NamedPipeClientStream]::new(".", $where.Substring(9), [System.IO.Pipes.PipeDirection]::In)
+            $pipe.Connect(5000)
+            $reader = [System.IO.StreamReader]::new($pipe)
+        } else {
+            $sock = [System.Net.Sockets.Socket]::new([System.Net.Sockets.AddressFamily]::Unix, [System.Net.Sockets.SocketType]::Stream, [System.Net.Sockets.ProtocolType]::Unspecified)
+            $sock.Connect([System.Net.Sockets.UnixDomainSocketEndPoint]::new($where))
+            $reader = [System.IO.StreamReader]::new([System.Net.Sockets.NetworkStream]::new($sock, $true))
+        }
         $ipcLine = $reader.ReadLine()
         $reader.Dispose()
     } catch { $ipcLine = "error: $($_.Exception.Message)" }
