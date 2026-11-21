@@ -202,7 +202,9 @@ class WinInput:
         run 41204726933), this thread joins the front window's input queue
         for a moment, which lifts that lock, and tries again."""
         alt = NAMED["alt"][0]
-        for _ in range(5):
+        # a toast shows for several seconds and a new one may follow (kit run 44877608626:
+        # "New notification" kept the front through 5 tries in 2.5 s, twice): try for 30 s
+        for _ in range(60):
             self.close_toasts()
             _send(_scan(alt), _scan(alt, up=True))
             user32.ShowWindow(hwnd, 9)   # SW_RESTORE
@@ -222,6 +224,8 @@ class WinInput:
             title = ctypes.create_unicode_buffer(200)
             user32.GetWindowTextW(front, title, 200)
             if front and title.value == "New notification":
+                # it has the keyboard: Escape dismisses a toast as a person would
+                _send(_scan(NAMED["Escape"][0]), _scan(NAMED["Escape"][0], up=True))
                 user32.ShowWindow(front, 0)                # SW_HIDE
                 user32.PostMessageW(front, 0x0010, 0, 0)   # WM_CLOSE
 
