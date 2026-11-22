@@ -35,6 +35,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           mkdir -p ref && cd ref && echo '<!doctype html><title>blank</title>' > blank.html
+          gh run download 44977112074 -R "$GITHUB_REPOSITORY" -n wasm-build -D wasm && cp -R wasm/web/. . && rm -rf wasm
           gh run download 44996738257 -R "$GITHUB_REPOSITORY" -n web-safari-av1-diag -D dl
           cp dl/web-i420/safari-firstkey.obu freerdp-safari-1600x900.obu; cp dl/web-i420/chrome-firstkey.obu freerdp-chrome-1600x900.obu; rm -rf dl
           for s in 1600x900 640x360; do
@@ -46,8 +47,11 @@ jobs:
         run: |
           sudo -n safaridriver --enable || true
           (cd ref && exec python3 -m http.server 8090 --bind 127.0.0.1 > ../http.log 2>&1) &
+          python3 test/coi-http.py 8082 ref > coi.log 2>&1 &
           sleep 2
-          node test/safari-av1-ref.mjs http://127.0.0.1:8090 $(cd ref && ls *.obu) | tee safari.txt
+          # plain and cross-origin isolated, a blank page and FreeRDP's page (not connected), each twice
+          P=http://127.0.0.1:8090/blank.html,http://127.0.0.1:8082/blank.html,http://127.0.0.1:8082/index.html,http://127.0.0.1:8090/blank.html,http://127.0.0.1:8090/index.html,http://127.0.0.1:8082/blank.html
+          node test/safari-av1-ref.mjs $P freerdp-safari-1600x900.obu svt-640x360.obu | tee safari.txt
       - uses: actions/upload-artifact@v7
         if: always()
         with:
@@ -55,5 +59,5 @@ jobs:
           path: |
             vt.txt
             safari.txt
-            ref
+            ref/*.obu
           retention-days: 7
