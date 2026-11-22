@@ -3,8 +3,6 @@ name: web-i420-probe
 # Branch only, never for main: test/mac-host.sh (with test/web-av1-i420.mjs, backlog row C) on
 # macos-15 arm64 with the products of a finished kit run, so the test runs without a rebuild.
 on:
-  push:
-    branches: [web-safari-av1-diag]
   workflow_dispatch:
 
 permissions:

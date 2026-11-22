@@ -1,0 +1,59 @@
+name: safari-av1-ref
+
+# Branch only, never for main: does Safari's WebCodecs decode any AV1 on macos-15 arm64 (FreeRDP's
+# key frame from run 44996738257 beside ffmpeg's libaom and SVT-AV1 key frames), and what does
+# VideoToolbox say about AV1 hardware decoding on this machine?
+on:
+  push:
+    branches: [web-safari-av1-diag]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  safari:
+    runs-on: macos-15
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - name: The machine
+        run: sw_vers; sysctl -n machdep.cpu.brand_string hw.model; system_profiler SPDisplaysDataType | sed -n 1,12p
+      - name: VideoToolbox
+        run: swift test/vt-av1.swift 2>&1 | tee vt.txt
+      - name: ffmpeg
+        env:
+          HOMEBREW_NO_AUTO_UPDATE: 1
+          HOMEBREW_NO_INSTALL_CLEANUP: 1
+        run: command -v ffmpeg || brew install --quiet ffmpeg
+      - name: Key frames
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p ref && cd ref && echo '<!doctype html><title>blank</title>' > blank.html
+          gh run download 44996738257 -R "$GITHUB_REPOSITORY" -n web-safari-av1-diag -D dl
+          cp dl/web-i420/safari-firstkey.obu freerdp-safari-1600x900.obu; cp dl/web-i420/chrome-firstkey.obu freerdp-chrome-1600x900.obu; rm -rf dl
+          for s in 1600x900 640x360; do
+            ffmpeg -v error -f lavfi -i testsrc2=s=$s:r=1 -frames:v 1 -pix_fmt yuv420p -c:v libaom-av1 -cpu-used 8 -f obu aom-$s.obu || true
+            ffmpeg -v error -f lavfi -i testsrc2=s=$s:r=1 -frames:v 1 -pix_fmt yuv420p -c:v libsvtav1 -f obu svt-$s.obu || true
+          done
+          ls -l
+      - name: Safari decodes them
+        run: |
+          sudo -n safaridriver --enable || true
+          (cd ref && exec python3 -m http.server 8090 --bind 127.0.0.1 > ../http.log 2>&1) &
+          sleep 2
+          node test/safari-av1-ref.mjs http://127.0.0.1:8090 $(cd ref && ls *.obu) | tee safari.txt
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: safari-av1-ref
+          path: |
+            vt.txt
+            safari.txt
+            ref
+          retention-days: 7
