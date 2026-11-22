@@ -22,7 +22,7 @@
 // Safari needs `safaridriver --enable` once (sudo) and allows one WebDriver session at a time;
 // it cannot run headless, the others do.
 import { spawn } from "node:child_process";
-import { existsSync, mkdirSync, openSync, readSync, fstatSync, closeSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, openSync, readSync, fstatSync, closeSync, writeFileSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
 const [PAGE, GATEWAY, BROWSER] = process.argv.slice(2);
@@ -119,6 +119,9 @@ try {
   info(`VideoDecoder.isConfigSupported(av01.0.13M.08): ${support}`);
   check("the page is ready, cross-origin isolated", ready && env.isolated, JSON.stringify(env));
   if (!ready) await done(1);
+  // branch only (web-safari-av1-diag): record the WebCodecs glue's decoders in the page's own world
+  const DIAG = readFileSync(new URL("./av1-diag.js", import.meta.url), "utf8");
+  info(`diagnosis injected: ${await js("const s = document.createElement('script'); s.textContent = arguments[0]; document.head.appendChild(s); return !!window.__av1diag", DIAG).catch((e) => e.message)}`);
   await type("#pass", PASSWORD);
   await click("#go");
   const session = await waitFor(async () => js("return document.body.classList.contains('session') && !!document.getElementById('canvas').width"), 45000);
@@ -140,6 +143,33 @@ try {
       webcodecs: reg ? [...reg.decoders.values()].map((d) => ({ state: d.decoder ? d.decoder.state : null, profile: d.profile })) : null,
       decoderLines: log.split("\\n").filter((l) => /AV1 decoder:|using dav1d|needs dav1d|av1-webcodecs/.test(l)).slice(-6),
       log: log.slice(-20000) });`));
+  // branch only: the diagnosis, then the first key chunk again in other configurations
+  const diag = JSON.parse(await js("const D = window.__av1diag; return JSON.stringify(D ? { console: D.console, uncaught: D.uncaught, decoders: D.decoders, firstKey: D.firstKey } : null)").catch((e) => JSON.stringify({ failed: e.message })));
+  await wd("POST", `/session/${sid}/timeouts`, { script: 180000 }).catch(() => {});
+  const base = { codec: "av01.0.13M.08" };
+  const replayConfigs = [
+    { ...base, optimizeForLatency: true, hardwareAcceleration: "no-preference" }, // FreeRDP's own
+    { ...base },
+    { ...base, hardwareAcceleration: "prefer-software" },
+    { ...base, hardwareAcceleration: "prefer-hardware" },
+    { ...base, optimizeForLatency: false },
+    { ...base, codedWidth: 1600, codedHeight: 900 },
+    { codec: "av01.0.08M.08" }, { codec: "av01.0.12M.08" }, { codec: "av01.0.13H.08" },
+  ];
+  const replay = await wd("POST", `/session/${sid}/execute/async`, { args: [replayConfigs], script: `const done = arguments[arguments.length - 1];
+    if (!window.__av1diagReplay) return done("no replay");
+    window.__av1diagReplay(arguments[0]).then((r) => done(JSON.stringify(r)), (e) => done("replay failed: " + e));` }).catch((e) => e.message);
+  if (diag && diag.decoders) {
+    for (const d of diag.decoders)
+      info(`diag decoder ${d.id}: configs ${JSON.stringify(d.configs)}; chunks ${d.chunks}, outputs ${d.outputs}; errors ${JSON.stringify(d.errors)}; first chunks ${JSON.stringify(d.firstChunks.map(({ head, ...c }) => c))}; frames ${JSON.stringify(d.frames.slice(0, 1))}`);
+    for (const l of diag.console.filter((l) => /av1|webcodecs|VideoDecoder|decod/i.test(l)).slice(0, 12)) info(`diag console: ${l}`);
+    for (const l of diag.uncaught.slice(0, 6)) info(`diag uncaught: ${l}`);
+  } else info(`diag: ${JSON.stringify(diag)}`);
+  info(`diag replay of the first key chunk (${diag?.firstKey?.bytes ?? 0} bytes): ${replay}`);
+  if (OUT) {
+    writeFileSync(join(OUT, `${BROWSER}-av1diag.json`), JSON.stringify({ ...diag, firstKey: diag?.firstKey ? { bytes: diag.firstKey.bytes } : null, replay }, null, 1));
+    if (diag?.firstKey) writeFileSync(join(OUT, `${BROWSER}-firstkey.obu`), Buffer.from(diag.firstKey.b64, "base64"));
+  }
   // the session ends; the server's last encoder lines land in its log
   await wd("POST", `/session/${sid}/url`, { url: "about:blank" }).catch(() => {});
   for (const p of motionProcs) p.kill();
