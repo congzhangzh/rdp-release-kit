@@ -311,7 +311,11 @@ $webAv2 = "$Out\web-av2"
 New-Item -ItemType Directory -Force -Path $webAv2 | Out-Null
 $http = Start-Process -FilePath python -PassThru -NoNewWindow -RedirectStandardOutput "$webAv2\http.log" -RedirectStandardError "$webAv2\http.err" `
     -ArgumentList "-m", "http.server", "8081", "--bind", "127.0.0.1", "--directory", $WebDir
-& python -m pip install --quiet websockify 2>&1 | Out-File "$webAv2\pip.log"
+# websockify without its dependencies: they serve only its token plugins, and one of them
+# (cryptography) has no wheel for Windows on ARM's Python, so pip failed to build it there and
+# installed nothing (kit run 44976734348); numpy only speeds it up, best effort
+& python -m pip install --quiet --no-deps websockify 2>&1 | Out-File "$webAv2\pip.log"
+& python -m pip install --quiet numpy 2>&1 | Out-File -Append "$webAv2\pip.log"
 $gw = Start-Process -FilePath python -PassThru -NoNewWindow -RedirectStandardOutput "$webAv2\websockify.log" -RedirectStandardError "$webAv2\websockify.err" `
     -ArgumentList "-m", "websockify", "127.0.0.1:3391", "127.0.0.1:4492"
 for ($i = 0; $i -lt 20 -and -not ((Listening 8081) -and (Listening 3391)); $i++) { Start-Sleep -Seconds 1 }
@@ -441,7 +445,8 @@ $web = "$Out\web"
 New-Item -ItemType Directory -Force -Path $web | Out-Null
 $http = Start-Process -FilePath python -PassThru -NoNewWindow -RedirectStandardOutput "$web\http.log" -RedirectStandardError "$web\http.err" `
     -ArgumentList "-m", "http.server", "8080", "--bind", "127.0.0.1", "--directory", $WebDir
-& python -m pip install --quiet websockify 2>&1 | Out-File "$web\pip.log"
+& python -m pip install --quiet --no-deps websockify 2>&1 | Out-File "$web\pip.log"
+& python -m pip install --quiet numpy 2>&1 | Out-File -Append "$web\pip.log"
 $gw = Start-Process -FilePath python -PassThru -NoNewWindow -RedirectStandardOutput "$web\websockify.log" -RedirectStandardError "$web\websockify.err" `
     -ArgumentList "-m", "websockify", "127.0.0.1:3390", "127.0.0.1:$port"
 # the demos' page, from a server that sends COOP/COEP itself (test/coi-http.py): isolated at
