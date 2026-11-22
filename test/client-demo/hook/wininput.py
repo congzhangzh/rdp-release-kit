@@ -225,6 +225,10 @@ class WinInput:
             # 41214959835, after toasts were turned off): it is closed
             title = ctypes.create_unicode_buffer(200)
             user32.GetWindowTextW(front, title, 200)
+            if front and title.value == "Start":
+                # the Start menu kept the front on the Windows 11 on ARM runner (kit run
+                # 44980394687, 30 s): Escape closes it, as it would for a person
+                _send(_scan(NAMED["Escape"][0]), _scan(NAMED["Escape"][0], up=True))
             if front and title.value == "New notification":
                 # it has the keyboard: Escape dismisses a toast as a person would
                 _send(_scan(NAMED["Escape"][0]), _scan(NAMED["Escape"][0], up=True))
