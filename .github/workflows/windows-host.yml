@@ -1,8 +1,10 @@
 # The Windows host: FreeRDP's shadow server and freerdp-shadow-service
-# (build-windows.sh with HOST=1), tested on a Windows Server 2025 runner with
-# the kit's Windows client and its web client (test/windows-host.ps1). kit.yml
-# calls it with this run's client and web client (from_run); pushed alone,
-# on the branch windows-host, it takes them from the kit's latest release and
+# (build-windows.sh with HOST=1), for x86_64 and ARM64, each tested on a
+# Windows runner of its own architecture (Windows Server 2025, Windows 11 on
+# ARM) with the kit's Windows client of that architecture and its web client
+# (test/windows-host.ps1). kit.yml calls it with this run's client and web
+# client (from_run); pushed alone, on the branch windows-host or a
+# windows-host-<topic> branch, it takes them from the kit's latest release and
 # publishes nothing.
 name: windows-host
 
@@ -13,13 +15,17 @@ on:
         type: boolean
         default: false
   push:
-    branches: [windows-host]
+    branches: [windows-host, 'windows-host-*']
 
 permissions:
   contents: read
 
 jobs:
   build:
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [x86_64, aarch64]
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
@@ -34,56 +40,75 @@ jobs:
         uses: actions/cache@v6
         with:
           path: ~/.cache/rdp-release-kit/ccache
-          key: ccache-windows-host-${{ github.sha }}
+          # one cache per architecture; the client's (kit.yml's windows job) holds
+          # most of the same objects
+          key: ccache-windows-host-${{ matrix.arch }}-${{ github.sha }}
           restore-keys: |
-            ccache-windows-host-
-            ccache-windows-x86_64-
+            ccache-windows-host-${{ matrix.arch }}-
+            ccache-windows-${{ matrix.arch }}-
 
       - name: Build
         env:
           CCACHE_MAXSIZE: 1G
           HOST: "1"
-        run: ./build-windows.sh x86_64
+        run: ./build-windows.sh ${{ matrix.arch }}
 
       - uses: actions/upload-artifact@v7
         with:
-          name: freerdp-host-windows-x86_64
+          name: freerdp-host-windows-${{ matrix.arch }}
           path: dist/freerdp-host-*.zip
           if-no-files-found: error
           retention-days: 3
       # the H.264 test client (not shipped): its own artifact, so the release's
-      # freerdp-host-windows-x86_64 holds only the host
+      # freerdp-host-windows-<arch> holds only the host
       - uses: actions/upload-artifact@v7
         with:
-          name: h264-test-client-windows-x86_64
-          path: dist/h264-test-client-windows-x86_64.exe
+          name: h264-test-client-windows-${{ matrix.arch }}
+          path: dist/h264-test-client-windows-${{ matrix.arch }}.exe
           if-no-files-found: error
           retention-days: 3
 
       # the media the demo plays (Big Buck Bunny, the WebGL Aquarium), from
-      # demo.yml's cache (fetched once on a miss), for the Windows job
+      # demo.yml's cache (fetched once on a miss), for both Windows jobs: one
+      # artifact, from the x86_64 build
       - name: Cache the media the demo plays
+        if: matrix.arch == 'x86_64'
         uses: actions/cache@v6
         with:
           path: ~/.cache/rdp-release-kit/demo
           key: demo-media-${{ hashFiles('test/demo-assets.sh') }}
       - name: The demo media
+        if: matrix.arch == 'x86_64'
         run: |
           dir=$(test/demo-assets.sh)
           mkdir -p dist/demo-media
           cp "$dir/bunny.webm" dist/demo-media/
           rsync -a --exclude .git "$dir/webgl" dist/demo-media/
           du -sh dist/demo-media
-      - uses: actions/upload-artifact@v7
+      - if: matrix.arch == 'x86_64'
+        uses: actions/upload-artifact@v7
         with:
           name: windows-host-demo-media
           path: dist/demo-media
           if-no-files-found: error
           retention-days: 1
 
+  # each architecture on its own runner: the ARM64 host and client run natively
+  # on Windows 11 on ARM; the x86_64 artifacts keep their names (kit.yml and the
+  # demos take them), the ARM64 ones end in -aarch64
   test:
     needs: build
-    runs-on: windows-2025
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x86_64
+            runner: windows-2025
+            suffix: ''
+          - arch: aarch64
+            runner: windows-11-arm
+            suffix: -aarch64
+    runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v5
@@ -92,7 +117,7 @@ jobs:
 
       - uses: actions/download-artifact@v8
         with:
-          name: freerdp-host-windows-x86_64
+          name: freerdp-host-windows-${{ matrix.arch }}
           path: dl/host
       - uses: actions/download-artifact@v8
         with:
@@ -100,13 +125,13 @@ jobs:
           path: dl/media
       - uses: actions/download-artifact@v8
         with:
-          name: h264-test-client-windows-x86_64
+          name: h264-test-client-windows-${{ matrix.arch }}
           path: dl/h264
       # this run's Windows client and web client, or the latest release's
       - if: inputs.from_run
         uses: actions/download-artifact@v8
         with:
-          name: sdl3-freerdp-windows-x86_64
+          name: sdl3-freerdp-windows-${{ matrix.arch }}
           path: dl/client
       - if: inputs.from_run
         uses: actions/download-artifact@v8
@@ -119,7 +144,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         shell: pwsh
         run: |
-          gh release download -R $env:GITHUB_REPOSITORY -D dl/client -p 'sdl3-freerdp-*-windows-x86_64.zip'
+          gh release download -R $env:GITHUB_REPOSITORY -D dl/client -p 'sdl3-freerdp-*-windows-${{ matrix.arch }}.zip'
           gh release download -R $env:GITHUB_REPOSITORY -D dl/webzip -p 'freerdp-web-*.zip'
           Expand-Archive (Get-ChildItem dl/webzip/*.zip | Select-Object -First 1).FullName -DestinationPath dl/wasm/web
 
@@ -161,13 +186,13 @@ jobs:
       - uses: actions/upload-artifact@v7
         if: always()
         with:
-          name: windows-host-test
+          name: windows-host-test${{ matrix.suffix }}
           path: out
           retention-days: 7
       # the demo video of the web client on the Windows host, for the release
       - uses: actions/upload-artifact@v7
         with:
-          name: windows-host-demo
+          name: windows-host-demo${{ matrix.suffix }}
           path: |
             out/windows-host.mp4
             out/windows-host.jpg

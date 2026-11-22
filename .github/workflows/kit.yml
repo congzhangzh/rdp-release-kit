@@ -954,10 +954,12 @@ jobs:
         with:
           name: wasm-build
           path: dist
+      # the Windows host, both architectures
       - uses: actions/download-artifact@v8
         with:
-          name: freerdp-host-windows-x86_64
+          pattern: freerdp-host-windows-*
           path: dist
+          merge-multiple: true
       # the macOS host, both architectures
       - uses: actions/download-artifact@v8
         with:
@@ -1056,6 +1058,7 @@ jobs:
           freerdp=$(awk '$1 == "freerdp" { print $2 }' sources.lock)
           freerdp_commit=$(awk '$1 == "freerdp" { print $4 }' sources.lock)
           host=$(cd upload && ls freerdp-host-*-windows-x86_64.zip)
+          host_arm=$(cd upload && ls freerdp-host-*-windows-aarch64.zip)
           linux_host=$(cd upload && ls freerdp-host-*-linux-x86_64.tar.xz)
           linux_host_arm=$(cd upload && ls freerdp-host-*-linux-aarch64.tar.xz)
           xrdp=$(awk '$1 == "xrdp" { print $2 }' sources.lock)
@@ -1119,6 +1122,7 @@ jobs:
           | macOS host Apple Silicon | \`$(cd upload && ls freerdp-host-*-macos-arm64.zip)\` | share a Mac's own screen (AV2, AV1 and H.264, its sound): unzip, copy \`FreeRDP-Shadow.app\` to /Applications and the LaunchAgent \`org.freerdp.shadow.plist\` to ~/Library/LaunchAgents, \`launchctl bootstrap gui/\$(id -u) ~/Library/LaunchAgents/org.freerdp.shadow.plist\`, then allow Screen & System Audio Recording and Accessibility (README.txt; signed ad hoc, so each update asks again; not tested on CI, which cannot grant those) |
           | macOS host Intel | \`$(cd upload && ls freerdp-host-*-macos-x86_64.zip)\` | the same |
           | Windows host x86_64 | \`$host\` | share a Windows PC's own screen (logon and lock screens included, AV2 and AV1, its sound): unzip, then in an administrator's PowerShell \`.\\freerdp-shadow-service.exe install --allow-sas -- /bind-address:127.0.0.1 /gfx-av1 /gfx-av2 -gfx-avc444\` (AV1 only: leave out \`/gfx-av2\`; README.txt) |
+          | Windows host ARM64 | \`$host_arm\` | the same, on Windows 11 on ARM (Snapdragon PCs) |
           | Linux host x86_64 | \`$linux_host\` | share a Linux desktop's own screen (GNOME on Wayland or X11 through Mutter, any other X11 desktop; AV2 and AV1, its sound): \`tar -xJf\` it, move the folder to \`~/.local/opt/freerdp-host\`, copy its \`freerdp-shadow.service\` to \`~/.config/systemd/user/\`, then \`systemctl --user daemon-reload && systemctl --user enable --now freerdp-shadow.service\`. It listens on 127.0.0.1 only: keep it there and reach it over SSH (\`ssh -L 13389:127.0.0.1:3389 user@server\`); the login is the desktop owner's own account (README.txt) |
           | Linux host ARM64 | \`$linux_host_arm\` | the same, on an ARM64 Linux (aarch64) |
 
