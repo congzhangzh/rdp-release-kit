@@ -170,7 +170,21 @@ else
         node "$KIT_TEST/wasm-demo.mjs" http://127.0.0.1:8082/index.html 127.0.0.1:3390 probe probe \
         "$OUT/web" "$OUT/web/raw.mp4" > "$OUT/web/driver.log" 2>&1
     echo "web demo driver: exit $?"; tail -n 8 "$OUT/web/driver.log"
-    pkill -x firefox 2> /dev/null; kill $MOT $MH $COI $GW 2> /dev/null
+    pkill -x firefox 2> /dev/null; kill $MOT $MH 2> /dev/null
+    # AV1 4:2:0 in each browser (backlog row C): Safari itself (safaridriver), Chrome and Firefox
+    # (their WebDriver, headless), one session each to this server; the server's own log proves
+    # 4:4:4 off and I420 per session, the page names its decoder (WebCodecs or dav1d)
+    sudo -n safaridriver --enable > "$OUT/web/safaridriver-enable.log" 2>&1 ||
+        echo "INFO  safaridriver --enable: $(tail -1 "$OUT/web/safaridriver-enable.log")"
+    for b in chrome firefox safari; do
+        SERVER_LOG="$OUT/server-web.wlog" OUT="$OUT/web-i420" CHROME="$CHROME_BIN" FIREFOX="$FIREFOX" \
+            node "$KIT_TEST/web-av1-i420.mjs" http://127.0.0.1:8082/index.html 127.0.0.1:3390 $b \
+            > "$OUT/web-i420-$b.log" 2>&1 && ok=1 || ok=0
+        grep -E '^(PASS|FAIL|INFO|RESULT) ' "$OUT/web-i420-$b.log"
+        check "web AV1 4:2:0 in $b: $(grep -m1 '^RESULT ' "$OUT/web-i420-$b.log" | cut -d: -f2- | sed 's/^ //')" $ok \
+            "$(grep -c '^PASS ' "$OUT/web-i420-$b.log") of $(grep -cE '^(PASS|FAIL) ' "$OUT/web-i420-$b.log") checks"
+    done
+    pkill -x firefox 2> /dev/null; kill $COI $GW 2> /dev/null
     if [ -s "$OUT/web/raw.mp4" ]; then
         # as the site's other videos (test/record-demos.sh): 720p, H.264 CRF 28, AAC 96 kbit/s,
         # a poster from 70 %
