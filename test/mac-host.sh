@@ -101,6 +101,17 @@ fi
 alive() { kill -0 $SRV 2> /dev/null; }
 alive && ok=1 || ok=0
 check "the host is still running after the AV1 session" $ok
+# AV1 4:2:0 (AV1 profile 0): the client asks for it (/gfx:AV1:i420: FRDP_1 with
+# AV1_I444_DISABLED), the server confirms 4:4:4 off and encodes I420; its encoder's own
+# numbers at the end name it ("AV1 WxH I420: N frames", every other session is 4:4:4 or AV2)
+if alive; then
+    session av1-i420 AV1 /gfx:AV2:off,AV1:i420
+    grep -q "RecvCapsConfirmPdu: version: RDPGFX_CAPVERSION_FRDP_1 .*AV1_I444_DISABLED" "$OUT/av1-i420.wlog" \
+        2> /dev/null && ok=1 || ok=0
+    check "av1-i420: the server confirms 4:4:4 off (AV1_I444_DISABLED)" $ok
+else
+    echo "SKIP  av1-i420: the host is gone"
+fi
 if alive; then
     # a client that offers AV2 (the kit's own, by default) gets AV2; before FreeRDP
     # 20261101.20's 8 MiB client thread stack, that crashed the host (kit run 41370598608)
@@ -189,5 +200,8 @@ ls "$OUT/crash"
 kill $SRV 2> /dev/null; sleep 1
 grep -ohE "AV[12] [0-9]+x[0-9]+ (I420|I444): [0-9]+ frames in .*" "$OUT/server.wlog" > "$OUT/encoder-stats.txt" 2> /dev/null || true
 cat "$OUT/encoder-stats.txt"
+grep -qE "^AV1 [0-9]+x[0-9]+ I420: [0-9]+ frames" "$OUT/encoder-stats.txt" && ok=1 || ok=0
+check "av1-i420: the server encodes AV1 4:2:0 (its log: AV1 WxH I420)" $ok \
+    "$(grep -E '^AV1 [0-9]+x[0-9]+ I420' "$OUT/encoder-stats.txt" | tail -1 | cut -d, -f1)"
 echo "$fails failed"
 [ $fails = 0 ]

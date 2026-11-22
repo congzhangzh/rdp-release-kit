@@ -84,6 +84,25 @@ codecs() {
     grep -ohE "Got GFX RDPGFX_CODECID_[A-Z0-9_]+|RecvCapsConfirmPdu: version: RDPGFX_CAPVERSION_[A-Z0-9_]+" \
         "$OUT/$1.wlog" 2> /dev/null | sed 's/RecvCapsConfirmPdu: version: //' | sort | uniq -c | tr '\n' ' '
 }
+# i420 <command printing the server's log>: an AV1 4:2:0 session (AV1 profile 0). The client
+# asks for it (/gfx:AV1:i420: FRDP_1 with AV1_I444_DISABLED), the server confirms 4:4:4 off and
+# encodes I420, which its encoder's own numbers name: "AV1 WxH I420: N frames in …" (codec.av1
+# at DEBUG through WLOG_FILTER; every other session here is 4:4:4 or AV2). Something on the
+# screen must change meanwhile.
+i420() {
+    local log=$1
+    connect av1-i420 /gfx:AV2:off,AV1:i420
+    sleep 20
+    n=$(frames av1-i420 AV1)
+    check "av1-i420: the session holds" 'kill -0 $CPID'
+    check "av1-i420: at least 30 frames in AV1" '[ "${n:-0}" -ge 30 ]' "$(codecs av1-i420)"
+    check "av1-i420: the server confirms 4:4:4 off (AV1_I444_DISABLED)" \
+        'grep -q "RecvCapsConfirmPdu: version: RDPGFX_CAPVERSION_FRDP_1 .*AV1_I444_DISABLED" "$OUT/av1-i420.wlog"'
+    kill $CPID 2> /dev/null; sleep 2
+    check "av1-i420: the server encodes AV1 4:2:0 (its log: AV1 WxH I420)" \
+        '$log | grep -qE "AV1 [0-9]+x[0-9]+ I420: [0-9]+ frames"' \
+        "$($log | grep -ohE 'AV1 [0-9]+x[0-9]+ I420: [0-9]+ frames in [^,]*' | tail -1)"
+}
 # cpu <pid> <seconds>: the process's CPU use over that time, in % of one core
 cpu() {
     local t0 t1
@@ -140,6 +159,8 @@ if [ "$MODE" = gnome ]; then
     check "GNOME Shell is up (org.gnome.Mutter.RemoteDesktop)" 'has_name org.gnome.Mutter.RemoteDesktop'
 
     install_host
+    # codec.av1 at DEBUG for the 4:2:0 check (i420), everything else as the unit says (INFO)
+    as "systemctl --user set-environment WLOG_FILTER=com.freerdp.codec.av1:DEBUG" >> "$OUT/install.log" 2>&1
     as "systemctl --user daemon-reload && systemctl --user enable --now freerdp-shadow.service" \
         >> "$OUT/install.log" 2>&1
     # the server's lines as its user reads them: the unit's own journal
@@ -201,6 +222,11 @@ if [ "$MODE" = gnome ]; then
     check "av2: the session holds" 'kill -0 $CPID'
     check "av2: at least 10 frames in AV2" '[ "${n:-0}" -ge 10 ]' "$(codecs av2)"
     kill $CPID 2> /dev/null; sleep 2
+    as "pkill -x foot"
+
+    # AV1 4:2:0, the clock changing
+    as "nohup foot sh -c '$CLOCK' > /tmp/foot-clock.log 2>&1 &"
+    i420 journal
     as "pkill -x foot"
 
     # sound: what the session plays (the tone, 4 s) reaches the client in Opus, as it
@@ -403,7 +429,7 @@ else
         'grep -q "\* X11: [1-9]" "$OUT/subsystem-list.txt" && grep -q "  Mutter: 0" "$OUT/subsystem-list.txt"' \
         "$(grep -ohE '[* ] [A-Za-z0-9]+: [0-9]+ monitor' "$OUT/subsystem-list.txt" | tr '\n' ',')"
     as "WLOG_LEVEL=INFO WLOG_APPENDER=FILE WLOG_FILEAPPENDER_OUTPUT_FILE_PATH=$OUT \
-        WLOG_FILEAPPENDER_OUTPUT_FILE_NAME=server.log nohup $ARGS /subsystem:x11 > $OUT/server.out 2>&1 &"
+        WLOG_FILEAPPENDER_OUTPUT_FILE_NAME=server.log WLOG_FILTER=com.freerdp.codec.av1:DEBUG nohup $ARGS /subsystem:x11 > $OUT/server.out 2>&1 &"
     for _ in $(seq 30); do grep -q "Listening on" "$OUT/server.log" 2> /dev/null && break; sleep 1; done
     SPID=$(pgrep -u tester -f "freerdp-shadow-cli /bind-address" | head -1)
     check "it listens on 127.0.0.1:3389 only" '[ "$(listeners)" = "0100007F:0D3D" ]' "$(listeners | tr '\n' ' ')"
@@ -420,6 +446,8 @@ else
         '[ "$(convert "$OUT/av1.png" -format "%k" info: 2> /dev/null)" -gt 1 ]'
     echo "INFO  the server's CPU with one client and a changing xterm: $(cpu "$SPID" 5) %"
     kill $CPID 2> /dev/null; sleep 2
+    # AV1 4:2:0, the xterm's clock changing
+    i420 "cat $OUT/server.log"
     # (the X11 subsystem checks the login after the activation: what counts is
     # the refusal, and that no frame reached the client)
     before=$(wc -l < "$OUT/server.log")

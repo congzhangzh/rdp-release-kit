@@ -387,6 +387,32 @@ if ($H264Client) {
 }
 $port = 4489
 
+# AV1 4:2:0 (AV1 profile 0): the server started by hand with /gfx-av1, the client asking for
+# 4:2:0 (/gfx:AV1:i420: FRDP_1 with AV1_I444_DISABLED). The server confirms 4:4:4 off and
+# encodes I420, which its encoder's own numbers name ("AV1 WxH I420: N frames in ...", every
+# 5 s while frames come; every other AV1 session here is 4:4:4): a console clock changes the
+# screen meanwhile
+$env:WLOG_FILEAPPENDER_OUTPUT_FILE_NAME = "server-i420.wlog"
+$i420server = Start-Process -FilePath "$HostDir\freerdp-shadow-cli.exe" -PassThru -NoNewWindow `
+    -ArgumentList "/bind-address:127.0.0.1", "/port:4495", "/gfx-av1", "/gfx-av2:off"
+for ($i = 0; $i -lt 30 -and -not (Listening 4495) -and -not $i420server.HasExited; $i++) { Start-Sleep -Seconds 1 }
+Check "av1-i420: the server listens on 127.0.0.1:4495" (Listening 4495)
+$port = 4495
+$clock = Start-Process powershell -PassThru -ArgumentList "-NoProfile", "-Command", "while (`$true) { Get-Date -Format 'HH:mm:ss.fff'; Start-Sleep -Milliseconds 50 }"
+$s = Client @("/p:$pass", "/gfx:AV2:off,AV1:i420", "/size:1280x720") "av1-i420-session" 0 -Window
+Start-Sleep -Seconds 20
+Check "av1-i420: a session holds 20 s" (-not $s.HasExited)
+Check "av1-i420: the frames came in AV1" (GotAv1 "av1-i420-session") ((Codecs "av1-i420-session") -join ", ")
+Check "av1-i420: the server confirms 4:4:4 off (AV1_I444_DISABLED)" ([bool](Select-String -Path "$Out\av1-i420-session.wlog" `
+    -Pattern "RecvCapsConfirmPdu: version: RDPGFX_CAPVERSION_FRDP_1 .*AV1_I444_DISABLED" -Quiet -ErrorAction SilentlyContinue))
+Stop $s
+Stop $clock
+Stop $i420server
+$i420 = Select-String -Path "$Out\server-i420.wlog" -Pattern "AV1 [0-9]+x[0-9]+ I420: [0-9]+ frames in [^,]*" -ErrorAction SilentlyContinue |
+    Select-Object -Last 1
+Check "av1-i420: the server encodes AV1 4:2:0 (its log: AV1 WxH I420)" ([bool]$i420) "$(if ($i420) { $i420.Matches[0].Value } else { 'no I420 line' })"
+$port = 4489
+
 # ---- 2. the service
 $port = 4490
 $logs = "$Out\service"

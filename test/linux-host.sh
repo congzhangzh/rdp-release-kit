@@ -16,6 +16,8 @@
 #   journal (journalctl --user -u freerdp-shadow: WinPR's journald appender).
 # xorg: Xfce on Xvfb, the unit's arguments with /subsystem:x11: /subsystem picks
 #   X11 there, a login gets AV1 frames, another account is refused.
+# Both: an AV1 4:2:0 session (/gfx:AV1:i420), confirmed by the client's log and
+#   encoded as I420 by the server's own numbers (codec.av1 at DEBUG, WLOG_FILTER).
 #
 # The archives default to the newest in dist/. Logs and screenshots go to
 # dist/test/linux-host-<mode>/. PODMAN=<command> runs another podman (CI: a
