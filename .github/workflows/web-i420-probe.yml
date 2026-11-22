@@ -1,0 +1,60 @@
+name: web-i420-probe
+
+# Branch only, never for main: test/mac-host.sh (with test/web-av1-i420.mjs, backlog row C) on
+# macos-15 arm64 with the products of a finished kit run, so the test runs without a rebuild.
+on:
+  push:
+    branches: [web-av1-i420]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+env:
+  FROM_RUN: "44977112074"   # kit main 20bfc8c (Latest 20261122.1)
+
+jobs:
+  mac-host-test:
+    runs-on: macos-15
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - name: The runner's browsers and WebDriver
+        run: |
+          sw_vers; uname -m
+          echo "CHROMEWEBDRIVER=${CHROMEWEBDRIVER:-} GECKOWEBDRIVER=${GECKOWEBDRIVER:-}"
+          ls "${CHROMEWEBDRIVER:-/nonexistent}" "${GECKOWEBDRIVER:-/nonexistent}" 2>&1 || true
+          command -v safaridriver chromedriver geckodriver || true
+          ls -d /Applications/*.app | grep -iE 'chrome|firefox|safari' || true
+      - name: The products of kit run ${{ env.FROM_RUN }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          for a in wasm-build demo-media freerdp-host-macos-arm64 sdl3-freerdp-macos-arm64; do
+            d=dl/$a; case $a in wasm-build) d=dl/wasm ;; demo-media) d=dl/media ;; freerdp-host-*) d=dl/host ;; sdl3-*) d=dl/client ;; esac
+            gh run download "$FROM_RUN" -R "$GITHUB_REPOSITORY" -n "$a" -D "$d"
+          done
+      - name: ffmpeg
+        env:
+          HOMEBREW_NO_AUTO_UPDATE: 1
+          HOMEBREW_NO_INSTALL_CLEANUP: 1
+        run: command -v ffmpeg || brew install --quiet ffmpeg
+      - name: Unpack
+        run: |
+          cd dl/host && ditto -x -k freerdp-host-*.zip . && cd ../client && tar -xf sdl3-freerdp-*.tar.xz
+          cd .. && xattr -dr com.apple.quarantine . || true
+          ls -d host/*/ client/*/
+      - name: The macOS host, with the macOS client and the web client in three browsers
+        run: >
+          test/mac-host.sh "$(ls -d dl/host/freerdp-host-*-macos-arm64)"
+          "$(ls -d dl/client/sdl3-freerdp-*-macos-arm64)" out "$PWD/dl/wasm/web" "$PWD/dl/media"
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: web-i420-probe
+          path: out
+          retention-days: 7
