@@ -131,7 +131,7 @@ if [ -n "${HOST:-}" ]; then
         -DWITH_X11=ON -DWITH_WAYLAND=OFF -DWITH_XCURSOR=OFF -DWITH_XRANDR=OFF \
         -DWITH_PULSE=OFF -DWITH_ALSA=OFF -DWITH_OSS=OFF -DWITH_CUPS=OFF -DWITH_PCSC=OFF \
         -DWITH_KRB5=OFF -DWITH_FUSE=OFF -DWITH_FFMPEG=OFF -DWITH_SWSCALE=OFF -DWITH_SOXR=OFF \
-        -DWITH_OPENH264=OFF -DWITH_GFX_AV1=ON -DWITH_AOM=ON -DWITH_AOM_INTRABC_DV_FIX=ON -DWITH_DAV1D=ON -DWITH_OPUS=ON \
+        -DWITH_OPENH264=OFF -DWITH_GFX_AV1=ON -DWITH_AOM=ON -DWITH_AOM_INTRABC_DV_FIX=ON -DWITH_DAV1D=ON -DWITH_AV1_VAAPI=ON -DWITH_OPUS=ON \
         -DWITH_GFX_AV2=ON -DWITH_AVM=ON -DWITH_SIMD=ON \
         -DWITH_SYSTEMD=ON -DWITH_UNICODE_BUILTIN=ON -DWITH_INTERNAL_MD4=ON \
         -DWITH_INTERNAL_RC4=ON -DWITH_SSO_MIB=OFF -DCHANNEL_URBDRC=OFF \
@@ -142,6 +142,9 @@ if [ -n "${HOST:-}" ]; then
         grep -q "^${found}_FOUND:INTERNAL=1" "$WORK/build/$FREERDP/CMakeCache.txt" ||
             { echo "HOST=1: $found not found (log/freerdp.log)" >&2; exit 1; }
     done
+    # AV1 4:2:0 encoded on the GPU through VA-API (libva loaded at run time), libaom as the fallback
+    grep -q '^WITH_AV1_VAAPI:BOOL=ON' "$WORK/build/$FREERDP/CMakeCache.txt" ||
+        { echo "HOST=1: WITH_AV1_VAAPI is not on (log/freerdp.log)" >&2; exit 1; }
     grep -q -E '^PAM_LIBRARY:FILEPATH=/' "$WORK/build/$FREERDP/CMakeCache.txt" ||
         { echo "HOST=1: PAM not found (log/freerdp.log)" >&2; exit 1; }
     grep -q -E "^PNG_LIBRARY[A-Z_]*:FILEPATH=$DEPS/" "$WORK/build/$FREERDP/CMakeCache.txt" ||
