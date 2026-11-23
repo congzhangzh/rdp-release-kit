@@ -264,12 +264,15 @@ configure "$WORK/build/freerdp" env PKG_CONFIG_LIBDIR="$DEPS/lib/pkgconfig" \
     -DWITH_SERVER=OFF -DWITH_SAMPLE=OFF \
     -DWITH_PULSE=ON -DWITH_ALSA=OFF -DWITH_OSS=OFF -DWITH_CUPS=OFF -DWITH_PCSC=OFF \
     -DWITH_KRB5=OFF -DWITH_FUSE=ON -DWITH_FFMPEG=OFF -DWITH_SWSCALE=OFF \
-    -DWITH_OPENH264=OFF -DWITH_GFX_AV1=ON -DWITH_DAV1D=ON -DWITH_OPUS=ON \
+    -DWITH_OPENH264=OFF -DWITH_GFX_AV1=ON -DWITH_DAV1D=ON -DWITH_AV1_VAAPI=ON -DWITH_OPUS=ON \
     -DWITH_GFX_AV2=ON -DWITH_AVM=ON \
     -DWITH_SYSTEMD=OFF -DWITH_UNICODE_BUILTIN=ON -DWITH_INTERNAL_MD4=ON \
     -DWITH_INTERNAL_RC4=ON -DWITH_SSO_MIB=OFF -DCHANNEL_URBDRC=OFF \
     -DWITH_MANPAGES=OFF "${DEV[@]}" > "$WORK/log/freerdp.log" 2>&1
 grep -q -e "AV1 decoder: dav1d" -e "configuration kept" "$WORK/log/freerdp.log"
+# AV1 4:2:0 on the GPU through VA-API (libva loaded at run time: only its headers here, from
+# the image's libva-devel), dav1d as the fallback per stream
+grep -q -e "AV1 decoder: VA-API first" -e "configuration kept" "$WORK/log/freerdp.log"
 cmake --build "$WORK/build/freerdp" >> "$WORK/log/freerdp.log" 2>&1
 DESTDIR=$STAGE cmake --install "$WORK/build/freerdp" >> "$WORK/log/freerdp.log" 2>&1
 ccache_stats

@@ -11,6 +11,10 @@ from right now, and what our own changes to a source fix:
 Every change that alters what is built (a pin, a build option, a patch, a
 toolchain) gets an entry here in the same commit.
 
+## 2026-11-23
+
+- **FreeRDP 20261123.1: AV1 4:2:0 decoded on the GPU on Linux through VA-API, and `/codec-list` names VideoToolbox on a Mac** (shadow-comp-g4; road step 4, Boss Cong: "release all of them, I do test in the loop"): release-20261123.1 (9762a3ba4) is 20261122.4 plus `av1_vaapi.c` (`WITH_AV1_VAAPI`, now on in the Linux client; libva is loaded at run time, so the image needs only `libva-devel`'s headers and a machine without libva decodes with dav1d): profile 0 into NV12 on any render node with VAProfileAV1Profile0, copied back for the GDI surface; 4:4:4, 10 bit, film grain and any refusal or error fall back to dav1d for the stream; `/codec-first:hardware[:<ids>]` and `/codec-list` list the render nodes. **The hardware path is not yet proven on a real GPU**: the dav1d fallback is tested (no device, no libva, init, surface and mid-stream failures with a mock libva); the GPU proof comes with Boss Cong's Linux test (WSL2 first). The second commit makes `/codec-list` on macOS name VideoToolbox (it said "no hardware video decoder"; found by freerdp-sdl-comp-g2), first compiled here on the Mac jobs.
+
 ## 2026-11-22
 
 - **FreeRDP 20261122.4: the Windows shadow's default AV1 quality on the GPU** (shadow-comp-g4; Boss Cong: "raise to 90"): release-20261122.4 (a92a3cd88) is 20261122.2 plus the Media Foundation encoder's settings set before its media types. NVIDIA's AV1 MFT accepted them after but ignored them; set first, it keeps one key frame at the start (before: one every 30 frames, -2.35 dB at the same bit rate) and honours its quality mode, so the shadow's default CQ now runs on the GPU as well, with no default changed: quality = 100 - cq-level x 5 / 8, the default cq-level 16 is quality 90 (the log names it). On an RTX 5070 Laptop at 1080p the default gives 3423 kbit/s, Y 51.59 dB, 15.1 ms per frame; `/codec-first:software` (libaom) 3154 kbit/s, 54.55 dB, 26.8 ms. release-20261122.3 (quality 75) was picked and never pinned.

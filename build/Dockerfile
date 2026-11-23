@@ -23,7 +23,7 @@ RUN for try in 1 2 3; do \
             libxkbcommon-devel ibus-devel systemd-devel libusb1-devel vulkan-headers \
             mesa-libGLES-devel libstdc++-static \
             wayland-devel wayland-protocols-devel libdecor-devel \
-            mesa-libGL-devel mesa-libEGL-devel libdrm-devel mesa-libgbm-devel \
+            mesa-libGL-devel mesa-libEGL-devel libdrm-devel mesa-libgbm-devel libva-devel \
             pulseaudio-libs-devel alsa-lib-devel pipewire-devel dbus-devel \
         && break; \
         [ "$try" = 3 ] && exit 1; \
