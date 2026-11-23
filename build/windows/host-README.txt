@@ -30,7 +30,14 @@ OpenH264 needed. -gfx-avc444 leaves AVC444 out for now, because its picture turn
 with Media Foundation; the FreeRDP fixes for that are in, and AVC444 comes back once it
 is seen sharp. On Windows Server the encoder may need the feature "Media Foundation"
 (Install-WindowsFeature Server-Media-Foundation), though Server 2025 has it without.
-Graphics-card encoders are not tested yet.
+H.264 on the graphics card is not tested yet.
+
+AV1 4:2:0 is encoded on the graphics card when it has an AV1 encoder (Media
+Foundation's hardware encoder, e.g. NVIDIA's; tested on an NVIDIA laptop GPU), and
+with libaom (in software) otherwise; 4:4:4 is always libaom. /codec-first:software
+keeps it in software, /codec-first:hardware:<id> picks a card, and /codec-list
+shows the encoders this PC has (freerdp-shadow-cli.exe /codec-list). The log
+names the one in use: "AV1 encoder: Media Foundation ... (hardware ...)".
 
 It starts at once and with Windows, on port 3389. If Windows' own Remote
 Desktop is turned on, it holds 3389 already: add /port:<another>, e.g. 3388. --allow-sas lets the service send
