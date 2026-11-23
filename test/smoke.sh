@@ -27,6 +27,12 @@ INSIDE=$(mktemp)
 cat > "$INSIDE" << 'EOF'
 set -e
 if command -v apt-get > /dev/null; then
+    # Ubuntu from GitHub's own mirror (Azure): archive.ubuntu.com ran at ~180 KB/s and
+    # security.ubuntu.com at ~54 KB/s on 2026-11-23 and hung this test to its 15-minute limit; time out and retry, not hang
+    sed -i -e 's|http://archive.ubuntu.com/|http://azure.archive.ubuntu.com/|' \
+        -e 's|http://security.ubuntu.com/|http://azure.archive.ubuntu.com/|' \
+        /etc/apt/sources.list.d/ubuntu.sources /etc/apt/sources.list 2> /dev/null || true
+    printf 'Acquire::Retries "3";\nAcquire::http::Timeout "30";\n' > /etc/apt/apt.conf.d/80-ci
     apt-get update -qq && apt-get install -y -qq libpulse0 xz-utils > /dev/null
 elif command -v dnf > /dev/null; then
     dnf -y -q install pulseaudio-libs xz > /dev/null

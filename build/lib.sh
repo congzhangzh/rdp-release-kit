@@ -59,6 +59,21 @@ ccache_stats() {
         END { printf "%d hits, %d misses, %d not cacheable", hit, miss, unc }')"
 }
 
+# download <url> <file>: curl with retries, then the same path on a mirror where the
+# origin has one (download.savannah.gnu.org timed out on 2026-11-23 and failed a round);
+# whatever comes back is checked against sources.lock's SHA-256 or signature after
+download() {
+    local url=$1 file=$2 alt=
+    curl -fsSL --retry 5 --retry-all-errors --connect-timeout 30 -o "$file" "$url" && return 0
+    case $url in
+        https://download.savannah.gnu.org/releases/*)
+            alt=https://mirror.csclub.uwaterloo.ca/nongnu/${url#https://download.savannah.gnu.org/releases/} ;;
+    esac
+    [ -n "$alt" ] || return 1
+    echo "== $(basename "$url"): the origin failed, trying $alt" >&2
+    curl -fsSL --retry 5 --retry-all-errors --connect-timeout 30 -o "$file" "$alt"
+}
+
 # fetch <name>: the verified source archive in $SOURCES, path on stdout.
 # Every step is checked explicitly: fetch runs as "$(fetch) || return 1",
 # and bash ignores set -e inside a function called that way.
@@ -86,7 +101,7 @@ fetch() {
     else
         file=$SOURCES/$(basename "$url")
         if [ ! -f "$file" ]; then
-            curl -fsSL --retry 5 --retry-all-errors -o "$file.part" "$url" || return 1
+            download "$url" "$file.part" || return 1
             mv "$file.part" "$file" || return 1
         fi
         if ! echo "${SHA[$name]}  $file" | sha256sum -c --quiet - >&2; then
@@ -103,7 +118,7 @@ fetch() {
 # verify_signature <name> <file>: <file>.asc is a good signature by SIGNER
 verify_signature() {
     local name=$1 file=$2 home status
-    [ -f "$file.asc" ] || curl -fsSL --retry 5 --retry-all-errors -o "$file.asc" "${URL[$name]}.asc"
+    [ -f "$file.asc" ] || download "${URL[$name]}.asc" "$file.asc"
     home=$(mktemp -d)
     gpg --homedir "$home" --batch --quiet --import "$KIT"/keys/*.asc 2> /dev/null
     status=$(gpg --homedir "$home" --batch --status-fd 1 --verify "$file.asc" "$file" 2> /dev/null)
