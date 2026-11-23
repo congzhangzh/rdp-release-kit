@@ -2,12 +2,11 @@
 # Builds the SDL3 FreeRDP client for macOS, natively with Apple clang (no
 # container: macOS has none that can build for itself):
 #
-#   ./build-macos.sh [arm64|x86_64 ...]     default: both
+#   ./build-macos.sh [arm64]
 #
-# Writes dist/sdl3-freerdp-<version>-macos-<arch>.tar.xz. An Apple Silicon
-# Mac builds both: x86_64 with -arch x86_64, and its client is checked
-# through Rosetta 2 (softwareupdate --install-rosetta). An Intel Mac builds
-# x86_64 only. Needs Xcode or its command line tools, and from Homebrew:
+# Writes dist/sdl3-freerdp-<version>-macos-arm64.tar.xz, on an Apple Silicon
+# Mac. Intel Macs (x86_64) are no longer built since 2026-11-23 (kit
+# 20261122.6 has the last): sources.lock has no x86_64 Python any more. Needs Xcode or its command line tools, and from Homebrew:
 #
 #   brew install bash cmake ninja meson nasm pkgconf ccache
 #
@@ -75,11 +74,11 @@ else
     unset CCACHE_DIR
 fi
 
-# Apple Silicon builds both architectures, an Intel Mac x86_64 only
+# Apple Silicon only (Intel Macs no longer, since 2026-11-23)
 if [ "$(sysctl -in hw.optional.arm64)" = 1 ]; then
-    CAN=" arm64 x86_64 "
+    CAN=" arm64 "
 else
-    CAN=" x86_64 "
+    CAN=" "
 fi
 if [ $# = 0 ]; then
     # shellcheck disable=SC2086

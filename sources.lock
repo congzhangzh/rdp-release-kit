@@ -240,7 +240,6 @@ python_linux_aarch64  3.13.17+20261021 https://github.com/astral-sh/python-build
 python_windows_x86_64 3.13.17+20261021 https://github.com/astral-sh/python-build-standalone/releases/download/20261021/cpython-3.13.17+20261021-x86_64-pc-windows-msvc-install_only_stripped.tar.gz 56cde3b1a1dcc36576753cb408ee0c3568d211baafa0eee40423adc147c480f2
 python_windows_aarch64 3.13.17+20261021 https://github.com/astral-sh/python-build-standalone/releases/download/20261021/cpython-3.13.17+20261021-aarch64-pc-windows-msvc-install_only_stripped.tar.gz 9287d32654828930872c8225f53618dac9b06dd3af5d4c3e9ab1c576e0741c96
 python_macos_arm64    3.13.17+20261021 https://github.com/astral-sh/python-build-standalone/releases/download/20261021/cpython-3.13.17+20261021-aarch64-apple-darwin-install_only_stripped.tar.gz 8dc60610a82f1e73be7faf964383e02520f95f6e39592a5c37c3809f5a7b798e
-python_macos_x86_64   3.13.17+20261021 https://github.com/astral-sh/python-build-standalone/releases/download/20261021/cpython-3.13.17+20261021-x86_64-apple-darwin-install_only_stripped.tar.gz ce9c748c8f7525c0052247edb2435fdb1cac89c77e687e0e199eaf2b827668c2
 # The web page with its passkey vault, and SDL for the Emscripten build:
 # 3.4.18 plus one fix, on a fork branch named emscripten-timer-3.4: its
 # timers are safe to use from any thread (with threads, a timer removed from
