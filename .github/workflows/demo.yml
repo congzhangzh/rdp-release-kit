@@ -170,7 +170,7 @@ jobs:
           jq -n --arg kit "${{ inputs.kit_sha || github.sha }}" '{recorded: {kit: $kit},
             videos: [{title: "FreeRDP shadow server + Linux, two screens, AV1",
               src: "demo/shadow-multimon.mp4", poster: "demo/shadow-multimon.jpg",
-              caption: "The shadow shares one X screen as one desktop, and the client spreads it over its two screens. A server with two monitors shares only one (/monitors:N). The shadow doesn'"'"'t resize. Real multi-monitor and resizing: phase 2 (xrdp)."}]}' > "$d/demo.json"
+              caption: "The shadow shares one X screen as one desktop, and the client spreads it over its two screens. A server with two monitors shares only one (/monitors:N). The shadow doesn'"'"'t resize. Real multi-monitor and resizing: see the xrdp demo."}]}' > "$d/demo.json"
           test -s "$d/shadow-multimon.mp4" && test -s "$d/shadow-multimon.jpg"
       - uses: actions/upload-artifact@v7
         if: always()

@@ -37,7 +37,7 @@ ENGINE=${ENGINE:-$(command -v docker || command -v podman)}
 FFMPEG_DIR=${FFMPEG_DIR:-$HOME/.cache/rdp-release-kit/ci-ffmpeg}
 FONT=${FONT:-/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf}
 [ -f "$FONT" ] || { echo "no font for the titles: $FONT (FONT=<ttf>)" >&2; exit 1; }
-CAPTION="The shadow shares one X screen as one desktop, and the client spreads it over its two screens. A server with two monitors shares only one (/monitors:N). The shadow doesn't resize. Real multi-monitor and resizing: phase 2 (xrdp)."
+CAPTION="The shadow shares one X screen as one desktop, and the client spreads it over its two screens. A server with two monitors shares only one (/monitors:N). The shadow doesn't resize. Real multi-monitor and resizing: see the xrdp demo."
 
 rm -rf "$OUT"
 mkdir -p "$OUT/in" "$OUT/run"
@@ -183,7 +183,7 @@ if [ -s "$L/raw.mp4" ]; then
     # the titles: a lower third across both screens, where the recording has only the background
     printf 'rdp-release-kit %s  ·  FreeRDP %s  ·  AV1 4:2:0, the Linux shadow (X11) and client' "$KIT_NAME" "$FREERDP" > "$L/title-1.txt"
     printf '%s' "The shadow shares one X screen as one desktop, and the client spreads it over its two screens." > "$L/title-2.txt"
-    printf '%s' "A server with two monitors shares only one (/monitors:N). It doesn't resize: that is phase 2 (xrdp)." > "$L/title-3.txt"
+    printf '%s' "A server with two monitors shares only one (/monitors:N). It doesn't resize: resizing, see the xrdp demo." > "$L/title-3.txt"
     t="fontfile=$FONT:expansion=none"
     titles="drawbox=x=0:y=624:w=2560:h=96:color=black@0.62:t=fill"
     titles+=",drawtext=$t:textfile=$L/title-1.txt:fontsize=22:fontcolor=0xFFD166:x=40:y=634"

@@ -22,7 +22,15 @@ import { tmpdir } from "node:os";
 
 const [url, gateway, user, password, out, video] = process.argv.slice(2);
 const W = 960, H = 1080;   // each screen; the video is both, 1920 x 1080
-const LABEL = process.env.DEMO_LABEL || "xrdp preview + GNOME Wayland, All screens";
+const LABEL = process.env.DEMO_LABEL || "xrdp + GNOME Wayland, All screens";
+// the title line names releases, never a commit (the product owner's review): DEMO_KIT (e.g.
+// "rdp-release-kit 20261124.6") when the caller knows it, then the page's own FreeRDP release,
+// read from its MANIFEST at run time (relRelease below)
+const KIT = process.env.DEMO_KIT || "";
+// "FreeRDP release-20261123.11" from the page's MANIFEST ("  freerdp  20261123.11 <sha> …"), as its About reads it
+const RELEASE_JS = `fetch("MANIFEST").then(r => r.ok ? r.text() : "").then(t => {
+  const m = /^\\s+freerdp\\s+(\\S+)\\s/m.exec(t); return m ? "FreeRDP release-" + m[1] : ""; }).catch(() => "")`;
+const titleLine = async (dec) => [KIT, await ev(RELEASE_JS), dec].filter(Boolean).join(" · ");
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const marks = [];   // what happened when (epoch s, as the screencast's timestamps), for the log
 const mark = what => marks.push([Date.now() / 1000, what]);
@@ -91,6 +99,14 @@ const OVERLAY = labelled => `(() => {
       "border-radius:6px;background:rgba(47,111,222,.92);color:#fff;font:600 16px/1.3 system-ui,sans-serif";
     tag.textContent = ${JSON.stringify(LABEL)};
     document.body.append(tag);
+    // the title line, bottom left: the kit, then the page's decoder (from its log)
+    const line = document.createElement("div"); line.id = "demoKit";
+    line.style.cssText = "position:fixed;left:14px;top:52px;z-index:2147483646;pointer-events:none;max-width:44vw;" +
+      "padding:3px 9px;border-radius:5px;background:rgba(15,22,30,.78);color:#fff;font:500 14px/1.35 system-ui,sans-serif;" +
+      "white-space:nowrap;overflow:hidden;text-overflow:ellipsis";
+    line.textContent = ${JSON.stringify(KIT)}; line.style.display = ${JSON.stringify(KIT)} ? "" : "none";
+    document.body.append(line);
+    window.__demoKit = text => { line.textContent = text; line.style.display = text ? "" : "none"; return true; };
   }
   // a screencast gets a frame only when the window is composited again, so a window that
   // stops changing keeps whatever frame came last, often one from the middle of an animation:
@@ -189,7 +205,18 @@ await caption("Connect");
 await clickOn(main, "#go");
 let rx = 0;
 for (let i = 0; i < 80 && rx < 300000; i++) { await sleep(500); rx = await ev("window.freerdpNet?.rx ?? 0"); }
-await caption("GNOME on Wayland through the xrdp preview, on one screen");
+await caption("GNOME on Wayland through xrdp, on one screen");
+{ // the decoder, from the page's Info (open a moment; its log names none), into the title line
+  await ev("(b => (b && b.click(), true))(document.getElementById('tbInfo'))");
+  for (let i = 0; i < 20 && !(await ev("document.querySelectorAll('#infoTable tr').length > 3")); i++) await sleep(250);
+  await sleep(1500);
+  const d = await ev(`[...document.querySelectorAll("#infoTable tr")].map(tr => [...tr.cells].map(x => x.innerText.trim()))
+    .filter(c => /^AV[12] decoder/i.test(c[0] || "") && c[1] && !/^[–-]$/.test(c[1])).map(c => c[0] + ": " + c[1]).join(" · ")`);
+  await ev("(b => (b && b.click(), true))(document.getElementById('tbInfo'))");
+  const line = await titleLine(d);
+  await ev(`window.__demoKit && window.__demoKit(${JSON.stringify(line)})`);
+  console.log(`demo: title line: ${line}${d ? "" : " (no decoder row in Info)"}`);
+}
 await sleep(7000);
 for (let i = 0; i < 30; i++) {   // the offer to keep the password with a passkey: not now
   if (await ev("(b => !!b && b.offsetParent !== null)(document.getElementById('saveLater'))")) {

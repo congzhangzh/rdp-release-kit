@@ -50,10 +50,18 @@ const LABEL = process.env.DEMO_LABEL ||
   (WINDOWS ? "FreeRDP shadow server on Windows, AV1"
     : MAC ? "FreeRDP shadow server on macOS, AV1"
     : WINDOWS_RDP ? "Windows Server 2025's own Remote Desktop"
-    : XRDP_GNOME ? "xrdp preview + GNOME 51 Wayland, AV1"
-    : XRDP_KDE ? "xrdp preview + KDE Plasma 6 Wayland, AV1"
+    : XRDP_GNOME ? "xrdp + GNOME 51 Wayland, AV1"
+    : XRDP_KDE ? "xrdp + KDE Plasma 6 Wayland, AV1"
     : GNOME ? "gnome-remote-desktop + GNOME Wayland" : "xrdp + Xfce");
 const sleep = ms => new Promise(r => setTimeout(r, ms));
+// the title line names releases, never a commit (the product owner's review): DEMO_KIT (e.g.
+// "rdp-release-kit 20261124.6") when the caller knows it, then the page's own FreeRDP release,
+// read from its MANIFEST at run time (relRelease below)
+const KIT = process.env.DEMO_KIT || "";
+// "FreeRDP release-20261123.11" from the page's MANIFEST ("  freerdp  20261123.11 <sha> …"), as its About reads it
+const RELEASE_JS = `fetch("MANIFEST").then(r => r.ok ? r.text() : "").then(t => {
+  const m = /^\\s+freerdp\\s+(\\S+)\\s/m.exec(t); return m ? "FreeRDP release-" + m[1] : ""; }).catch(() => "")`;
+const titleLine = async (dec) => [KIT, await ev(RELEASE_JS), dec].filter(Boolean).join(" · ");
 // What the server says it encodes (DEMO_CODEC_CMD, from wasm-session.sh): the
 // last line of xrdp's AV1 encoder, e.g. "encoder for 1896x1056 (… 4:4:4,
 // cpu-used 10 …)", as a caption's tail; empty without one
@@ -139,6 +147,14 @@ const OVERLAY = `(() => {
     requestAnimationFrame(step);
   });
   window.__demoCaption = text => { cap.textContent = text; cap.style.opacity = text ? "1" : "0"; return true; };
+  // the title line, bottom left for the whole visit: the kit, then (once known) the page's decoder
+  const line = document.createElement("div"); line.id = "demoKit";
+  line.style.cssText = "position:fixed;left:14px;top:52px;z-index:2147483646;pointer-events:none;max-width:52vw;" +
+    "padding:3px 9px;border-radius:5px;background:rgba(15,22,30,.78);color:#fff;font:500 14px/1.35 system-ui,sans-serif;" +
+    "white-space:nowrap;overflow:hidden;text-overflow:ellipsis";
+  line.textContent = ${JSON.stringify(KIT)}; line.style.display = ${JSON.stringify(KIT)} ? "" : "none";
+  document.body.append(line);
+  window.__demoKit = text => { line.textContent = text; line.style.display = text ? "" : "none"; return true; };
   return true;
 })()`;
 // the recording's sound: a copy of everything the page plays (installed before the page's
@@ -298,6 +314,21 @@ for (let i = 0; i < 30; i++) {
   }
   await sleep(500);
 }
+// which decoder, and its numbers: the page's Info, open for a moment, then its "AV1 decoder" row
+// stays in the title line (the product owner's demo audit: say software or GPU, show the numbers)
+await ev("(b => (b && b.click(), true))(document.getElementById('tbInfo'))");
+await caption("Info: which decoder draws the picture, frames and bandwidth");
+for (let i = 0; i < 20 && !(await ev("document.querySelectorAll('#infoTable tr').length > 3")); i++) await sleep(250);
+await sleep(4500);
+// the decoder rows that name one (AV2's or AV1's; "–" is a codec the session doesn't use): none, no
+// decoder part, never a dash (the test round of 57b8995 showed "AV1 decoder: –" for an AV2 session)
+const decoderRow = await ev(`[...document.querySelectorAll("#infoTable tr")].map(tr => [...tr.cells].map(x => x.innerText.trim()))
+  .filter(c => /^AV[12] decoder/i.test(c[0] || "") && c[1] && !/^[–-]$/.test(c[1])).map(c => c[0] + ": " + c[1]).join(" · ")`);
+const line = await titleLine(decoderRow);
+await ev(`window.__demoKit(${JSON.stringify(line)})`);
+console.log(`demo: title line: ${line}${decoderRow ? "" : " (no decoder row in Info)"}`);
+await ev("(b => (b && b.click(), true))(document.getElementById('tbInfo'))");   // Info closed again
+await caption("");
 
 // 5. use it
 const canvas = await ev(`(() => { const r = document.getElementById('canvas').getBoundingClientRect(); return { x: r.left, y: r.top }; })()`);
