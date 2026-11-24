@@ -133,6 +133,45 @@ jobs:
           retention-days: 3
           if-no-files-found: ignore
 
+  # Demo 1.2 of the product plan: the FreeRDP shadow on Linux (X11), seen with /multimon on two
+  # screens (test/demo-shadow-multimon.sh), from this kit run's own host and client. Recorded
+  # only: its artifact is not demo-*, so the publish job below leaves it out; it joins the
+  # published demos with Boss Cong's go (the product owner's rule: none published without it)
+  shadow-multimon:
+    runs-on: ubuntu-24.04
+    continue-on-error: true
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.kit_sha || github.sha }}
+      - uses: actions/download-artifact@v8
+        if: inputs.kit_sha != ''
+        with:
+          name: sdl3-freerdp-ubuntu-24.04
+          path: dist/native
+      - uses: actions/download-artifact@v8
+        if: inputs.kit_sha != ''
+        with:
+          name: freerdp-host-linux-x86_64
+          path: dist/host
+      - name: Record
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # docker, the runner's own (the script takes it first)
+          host=$(find dist/host -name 'freerdp-host-*-linux-x86_64.tar.xz' 2> /dev/null | head -1)
+          client=$(find dist/native -name 'sdl3-freerdp-*-linux-x86_64.tar.xz' 2> /dev/null | head -1)
+          # without this run's files (a dispatch), the newest release's
+          test/demo-shadow-multimon.sh ${host:+"$PWD/$host"} ${client:+"$PWD/$client"}
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: record-shadow-multimon
+          path: dist/demo-shadow-multimon/
+          retention-days: 7
+          if-no-files-found: ignore
+
   publish:
     # not for a push to demo-ci (an experiment): github.event_name is the
     # kit's own event when the kit calls this workflow
