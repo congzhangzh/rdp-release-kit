@@ -758,11 +758,25 @@ Add-Type -Namespace Kit -Name Keys -MemberDefinition @'
 [DllImport("user32.dll")] public static extern void mouse_event(uint flags, int dx, int dy, uint data, System.UIntPtr extra);
 [DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern int GetWindowText(System.IntPtr h, System.Text.StringBuilder s, int n);
 public struct RECT { public int Left, Top, Right, Bottom; }
+[DllImport("user32.dll")] public static extern bool ShowWindow(System.IntPtr h, int cmd);
+[DllImport("user32.dll")] public static extern bool IsIconic(System.IntPtr h);
+[DllImport("user32.dll")] public static extern bool PostMessage(System.IntPtr h, uint msg, System.IntPtr w, System.IntPtr l);
 '@
 # the client's window to the front, for sure: Windows' foreground lock refused it once and the
 # keys went elsewhere (run 41208207833, second attempt: no key press in the server's log).
 # An Alt press, then this thread joined to the front window's input queue, up to five times.
 function Focus($hwnd) {
+    # minimized windows cannot take the front (the test minimizes them all before this step:
+    # in kit run 45340396136 x86_64 failed with the desktop, 'Program Manager', in front); and
+    # Windows' own "Microsoft account" prompt held the front on the ARM64 runner: close it
+    if ([Kit.Keys]::IsIconic($hwnd)) { [void][Kit.Keys]::ShowWindow($hwnd, 9); Start-Sleep -Milliseconds 500 }
+    $front = [Kit.Keys]::GetForegroundWindow(); $t = New-Object System.Text.StringBuilder 256
+    [void][Kit.Keys]::GetWindowText($front, $t, 256)
+    if ($t.ToString() -eq "Microsoft account") {
+        [void][Kit.Keys]::PostMessage($front, 0x0010, [IntPtr]::Zero, [IntPtr]::Zero)   # WM_CLOSE
+        "focus: closed Windows' 'Microsoft account' prompt" | Out-File -Append "$Out\notes.txt"
+        Start-Sleep -Milliseconds 800
+    }
     for ($i = 0; $i -lt 5; $i++) {
         [Kit.Keys]::keybd_event(0x12, 0, 0, [UIntPtr]::Zero); [Kit.Keys]::keybd_event(0x12, 0, 2, [UIntPtr]::Zero)
         $mine = [Kit.Keys]::GetCurrentThreadId()
