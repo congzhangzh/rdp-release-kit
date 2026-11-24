@@ -456,6 +456,13 @@ $owner = if ($cli) { $cli | Invoke-CimMethod -MethodName GetOwner } else { $null
 Check "service: the server runs on the console session ($console)" ($cli -and $cli.SessionId -eq $console) "session $($cli.SessionId)"
 Check "service: the server runs as SYSTEM" ($owner -and $owner.User -eq "SYSTEM") "$($owner.Domain)\$($owner.User)"
 function ServerLog { (Get-ChildItem "$logs\shadow-*.log" -ErrorAction SilentlyContinue | Get-Content) -join "`n" }
+# Until <seconds> { condition }: wait for the condition itself, not a fixed sleep (the ARM64
+# runner is slower: in kit run 45182560896 the server's line came after an 8 s sleep had ended)
+function Until([int]$seconds, [scriptblock]$cond) {
+    $end = (Get-Date).AddSeconds($seconds)
+    while ((Get-Date) -lt $end) { if (& $cond) { return $true }; Start-Sleep -Milliseconds 500 }
+    return [bool](& $cond)
+}
 Logins "windows-account"
 
 # this job's console desktop is what the server shares (and what the demo
@@ -685,7 +692,14 @@ if ($ClientZip -and $site) {
     # server, and their clients then left: none of their keys may still be held here
     # (FreeRDP#13958 lets go of a leaving client's keys; wininput.py release logs them)
     $held = [regex]::Match((Get-Content "$Out\tk-demo\run.log" -Raw -ErrorAction SilentlyContinue), "held: ([^\r\n]*)").Groups[1].Value
-    Check "keys: none still held after the web clients left (FreeRDP#13958)" ($held -eq "none") "held: $held"
+    if (-not $held) {
+        # no "held:" line: the freerdp-tk demo stopped before it let go of the keys, so nothing
+        # was measured (kit run 45196232844, ARM64: "the term 'ffmpeg' is not recognized"); that is
+        # the demo's failure, a record on ARM64 like the demo itself, not a held key
+        DemoCheck "keys: none still held after the web clients left (FreeRDP#13958)" $false "not measured: the freerdp-tk demo stopped before releasing the keys (tk-demo.log)"
+    } else {
+        Check "keys: none still held after the web clients left (FreeRDP#13958)" ($held -eq "none") "held: $held"
+    }
     SignOut
     (New-Object -ComObject Shell.Application).MinimizeAll()
 }
@@ -760,7 +774,7 @@ if ($session.MainWindowHandle -eq [IntPtr]::Zero) {
         [Kit.Keys]::keybd_event(0x2E, 0x53, 3, [UIntPtr]::Zero)
         [Kit.Keys]::keybd_event(0x12, 0x38, 2, [UIntPtr]::Zero)
         [Kit.Keys]::keybd_event(0x11, 0x1D, 2, [UIntPtr]::Zero)
-        Start-Sleep -Seconds 8
+        [void](Until 30 { (ServerLog) -match "asked freerdp-shadow-service for the secure attention sequence" })
     }
     TypeSas
     $tries = 1
@@ -769,6 +783,8 @@ if ($session.MainWindowHandle -eq [IntPtr]::Zero) {
         [void](Focus $session.MainWindowHandle); TypeSas; $tries = 2
     }
     "Ctrl+Alt+Del: $tries tries; the server's key events: $keysBefore before, $(KeyEvents) after" | Out-File -Append "$Out\notes.txt"
+    # the service and Winlogon answer after the server asked: wait for their lines too
+    [void](Until 30 { ((Get-Content "$logs\service.log" -Raw -ErrorAction SilentlyContinue) -match "secure attention sequence sent") -and ((ServerLog) -match "follows the input desktop from \w+ to Winlogon") })
     $svcLog = Get-Content "$logs\service.log" -Raw -ErrorAction SilentlyContinue
     # three steps, so a failure says where: the keys reached the server, the server asked the
     # service, the service sent it (SendSAS returns nothing: "sent" is as far as it can tell)
