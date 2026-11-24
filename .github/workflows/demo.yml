@@ -61,20 +61,12 @@ jobs:
       - name: Tools
         timeout-minutes: 15
         run: |
-          command -v ffmpeg > /dev/null ||
-            { echo "== apt-get update $(date -u +%T)"
-              sudo apt-get update
-              echo "== apt-get install ffmpeg $(date -u +%T)"
-              # the runner's Azure mirror can trickle (38 kB/s, round 42180721164): bytes
-              # keep arriving, so no network timeout fires. Three minutes, then Ubuntu's own
-              sudo timeout 180 apt-get install -y --no-install-recommends ffmpeg || {
-                echo "== Ubuntu's archive instead of Azure's $(date -u +%T)"
-                # a runner names it in /etc/apt/apt-mirrors.txt (mirror+file:), not in sources.list
-                sudo grep -rl 'azure\.archive\.ubuntu\.com' /etc/apt |
-                  sudo xargs -r sed -i 's/azure\.archive\.ubuntu\.com/archive.ubuntu.com/g'
-                sudo apt-get update
-                sudo apt-get install -y --no-install-recommends ffmpeg
-              }; }
+          # the recorder: a static FFmpeg from GitHub's servers, not apt (an AWS runner's mirror
+          # trickled past this step's limit three times, kit run 45308427234); a demo never
+          # runs without it: a failure here fails the job, by name
+          echo "== ffmpeg $(date -u +%T)"
+          build/ci-ffmpeg.sh "$HOME/.cache/ci-ffmpeg"
+          echo "$HOME/.cache/ci-ffmpeg/bin" >> "$GITHUB_PATH"
           echo "== podman wrapper $(date -u +%T)"
           printf '#!/bin/sh\nexec sudo podman "$@"\n' | sudo tee /usr/local/bin/podman-root > /dev/null
           sudo chmod 755 /usr/local/bin/podman-root

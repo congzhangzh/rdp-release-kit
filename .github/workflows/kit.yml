@@ -1010,7 +1010,7 @@ jobs:
                  caption: "FreeRDP Web in a browser on a GitHub macOS runner, through websockify, to the kit'"'"'s macOS host (FreeRDP-Shadow.app, ScreenCaptureKit) sharing that Mac'"'"'s screen: Firefox there with web video and WebGL; the picture in AV1. The browser runs headless, so the Mac'"'"'s screen shows only its own desktop. Big Buck Bunny © Blender Foundation, CC BY 3.0; WebGL Aquarium © Google, BSD."} as $m
                 | .mac = [$m] | .videos += [$m + {title: "FreeRDP shadow server + macOS, AV1"}]' dist/demo/demo.json > dist/demo/demo.json.new && mv dist/demo/demo.json.new dist/demo/demo.json
           elif [ -s dist/mac-host-test/mac-host.mov ]; then
-            command -v ffmpeg > /dev/null || { sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg > /dev/null; }
+            build/ci-ffmpeg.sh "$HOME/.cache/ci-ffmpeg" && PATH=$HOME/.cache/ci-ffmpeg/bin:$PATH
             ffmpeg -loglevel error -y -i dist/mac-host-test/mac-host.mov -c:v libx264 -pix_fmt yuv420p \
                 -movflags +faststart -an dist/demo/mac-host.mp4
             ffmpeg -loglevel error -y -ss 8 -i dist/demo/mac-host.mp4 -frames:v 1 dist/demo/mac-host.jpg
@@ -1040,6 +1040,8 @@ jobs:
           done
           (cd upload && sha256sum -- * > ../SHA256SUMS) && mv SHA256SUMS upload/
           ls upload
+          # the demos' recorder (a GPL FFmpeg) is a CI tool: never in what is released
+          build/check-no-ffmpeg.sh upload
 
       - name: Attest build provenance
         uses: actions/attest-build-provenance@v4

@@ -542,8 +542,31 @@ DemoCheck "demo: webdemo ready (the media page on 127.0.0.1:8000, Firefox)" ($si
 [Kit.Screen]::Close("System Properties") | Out-Null
 (New-Object -ComObject Shell.Application).MinimizeAll()
 if (-not (Get-Command ffmpeg -ErrorAction SilentlyContinue)) {
-    & choco install ffmpeg -y --no-progress 2>&1 | Out-File "$demo\choco.log"
+    # the recorder: a static FFmpeg 8.1 from GitHub's servers (BtbN/FFmpeg-Builds), checked against
+    # its release's checksums.sha256, as build/ci-ffmpeg.sh on Linux; choco had none for ARM64
+    # (kit run 45196232844: "the term 'ffmpeg' is not recognized"). A CI tool only (GPL):
+    # build/check-no-ffmpeg.sh keeps it out of every release asset
+    $ffArch = if ($arm64) { "winarm64" } else { "win64" }
+    $ffName = "ffmpeg-n8.1-latest-$ffArch-gpl-8.1.zip"
+    $ffBase = "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest"
+    $ffDir = "$env:RUNNER_TEMP\ci-ffmpeg"
+    try {
+        New-Item -ItemType Directory -Force $ffDir | Out-Null
+        Invoke-WebRequest "$ffBase/$ffName" -OutFile "$ffDir\$ffName" -MaximumRetryCount 5 -RetryIntervalSec 10
+        $sums = (Invoke-WebRequest "$ffBase/checksums.sha256" -MaximumRetryCount 5 -RetryIntervalSec 10).Content
+        $want = ([regex]::Match($sums, "(?m)^([0-9a-f]{64})  $([regex]::Escape($ffName))$")).Groups[1].Value
+        $got = (Get-FileHash "$ffDir\$ffName" -Algorithm SHA256).Hash.ToLower()
+        if (-not $want -or $want -ne $got) { throw "$ffName does not match the release's checksums.sha256" }
+        Expand-Archive "$ffDir\$ffName" $ffDir -Force
+        $ffBin = (Get-ChildItem $ffDir -Recurse -Filter ffmpeg.exe | Select-Object -First 1).DirectoryName
+        $env:PATH = "$ffBin;$env:PATH"
+        "ffmpeg: $(& ffmpeg -hide_banner -version | Select-Object -First 1)" | Tee-Object -FilePath "$demo\ffmpeg.log"
+    } catch {
+        "ffmpeg: none, the demos have no recorder: $($_.Exception.Message)" | Tee-Object -FilePath "$demo\ffmpeg.log"
+    }
 }
+# loud: a demo without its recorder is a failed demo, named, never a silent pass
+DemoCheck "demo: the recorder (ffmpeg) is there" ([bool](Get-Command ffmpeg -ErrorAction SilentlyContinue)) (Get-Content "$demo\ffmpeg.log" -Raw -ErrorAction SilentlyContinue)
 Memory "before the host demo"
 # StorSvc (the Storage Service) off for the demos: in the slow rounds it burned the CPU
 # (81 to 147 s), and the shadow server, dwm and the browser slowed with it (host demo
