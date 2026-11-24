@@ -31,5 +31,8 @@
   ],
   "mac-host": [
     "mac-host"
+  ],
+  "linux-shadow-two-screens": [
+    "shadow-multimon"
   ]
 }
