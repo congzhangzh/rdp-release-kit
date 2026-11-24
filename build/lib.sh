@@ -148,6 +148,14 @@ unpack() {
         git -C "$WORK/src/$name" apply -p1 "$p" >&2 || { echo "unpack: $p does not apply to $name" >&2; return 1; }
         echo "== $name: $(basename "$p")" >&2
     done
+    # FreeRDP's own revision is the release it is built as (its .source_version, read by its
+    # CMake): the client names it, the SDL overlay by that name alone (FreeRDP 644432f19), not
+    # by the development version a release is built from (3.33.2-dev0). Every platform, since
+    # every build unpacks here; a local override (above) keeps its own git revision
+    case $name in
+        freerdp | freerdp_host | freerdp_mac_host | freerdp_linux_host)
+            printf 'release-%s\n' "${VERSION[$name]}" > "$WORK/src/$name/.source_version" ;;
+    esac
     echo "$WORK/src/$name"
 }
 
