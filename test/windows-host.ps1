@@ -761,6 +761,7 @@ public struct RECT { public int Left, Top, Right, Bottom; }
 [DllImport("user32.dll")] public static extern bool ShowWindow(System.IntPtr h, int cmd);
 [DllImport("user32.dll")] public static extern bool IsIconic(System.IntPtr h);
 [DllImport("user32.dll")] public static extern bool PostMessage(System.IntPtr h, uint msg, System.IntPtr w, System.IntPtr l);
+[DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(System.IntPtr h, out uint pid);
 '@
 # the client's window to the front, for sure: Windows' foreground lock refused it once and the
 # keys went elsewhere (run 41208207833, second attempt: no key press in the server's log).
@@ -770,12 +771,21 @@ function Focus($hwnd) {
     # in kit run 45340396136 x86_64 failed with the desktop, 'Program Manager', in front); and
     # Windows' own "Microsoft account" prompt held the front on the ARM64 runner: close it
     if ([Kit.Keys]::IsIconic($hwnd)) { [void][Kit.Keys]::ShowWindow($hwnd, 9); Start-Sleep -Milliseconds 500 }
-    $front = [Kit.Keys]::GetForegroundWindow(); $t = New-Object System.Text.StringBuilder 256
-    [void][Kit.Keys]::GetWindowText($front, $t, 256)
-    if ($t.ToString() -eq "Microsoft account") {
-        [void][Kit.Keys]::PostMessage($front, 0x0010, [IntPtr]::Zero, [IntPtr]::Zero)   # WM_CLOSE
-        "focus: closed Windows' 'Microsoft account' prompt" | Out-File -Append "$Out\notes.txt"
-        Start-Sleep -Milliseconds 800
+    # Windows' shell pop-ups in front (the ARM64 runner: "Microsoft account" in kit run 45340396136,
+    # then "Search" in 45346945943): close the prompt, Escape the flyouts, up to four times
+    for ($k = 0; $k -lt 4; $k++) {
+        $front = [Kit.Keys]::GetForegroundWindow()
+        if ($front -eq $hwnd -or $front -eq [IntPtr]::Zero) { break }
+        $t = New-Object System.Text.StringBuilder 256; [void][Kit.Keys]::GetWindowText($front, $t, 256)
+        $fpid = [uint32]0; [void][Kit.Keys]::GetWindowThreadProcessId($front, [ref]$fpid)
+        $proc = (Get-Process -Id $fpid -ErrorAction SilentlyContinue).ProcessName
+        if ($t.ToString() -eq "Microsoft account") {
+            [void][Kit.Keys]::PostMessage($front, 0x0010, [IntPtr]::Zero, [IntPtr]::Zero)   # WM_CLOSE
+        } elseif ($proc -in @("SearchHost", "SearchApp", "StartMenuExperienceHost", "ShellExperienceHost", "explorer") -or $t.ToString() -in @("Search", "Start")) {
+            [Kit.Keys]::keybd_event(0x1B, 0x01, 0, [UIntPtr]::Zero); [Kit.Keys]::keybd_event(0x1B, 0x01, 2, [UIntPtr]::Zero)   # Escape
+        } else { break }
+        "focus: dismissed '$($t.ToString())' ($proc) in front" | Out-File -Append "$Out\notes.txt"
+        Start-Sleep -Milliseconds 700
     }
     for ($i = 0; $i -lt 5; $i++) {
         [Kit.Keys]::keybd_event(0x12, 0, 0, [UIntPtr]::Zero); [Kit.Keys]::keybd_event(0x12, 0, 2, [UIntPtr]::Zero)
@@ -804,8 +814,8 @@ function Focus($hwnd) {
 function FrontWindow {
     $h = [Kit.Keys]::GetForegroundWindow(); $t = New-Object System.Text.StringBuilder 256
     [void][Kit.Keys]::GetWindowText($h, $t, 256)
-    $id = 0; [void](Get-Process | Where-Object { $_.MainWindowHandle -eq $h } | Select-Object -First 1 | ForEach-Object { $id = $_.Id; $n = $_.ProcessName })
-    "'$($t.ToString())' ($n $id)"
+    $id = [uint32]0; [void][Kit.Keys]::GetWindowThreadProcessId($h, [ref]$id)
+    "'$($t.ToString())' ($((Get-Process -Id $id -ErrorAction SilentlyContinue).ProcessName) $id)"
 }
 # Delete presses the server took (its input log at DEBUG: Delete is an extended key, a key down
 # with flags=0x0100; Ctrl and Alt are 0x0000, but so are the key events the focus change sends,
