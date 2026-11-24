@@ -553,8 +553,11 @@ if (-not (Get-Command ffmpeg -ErrorAction SilentlyContinue)) {
     try {
         New-Item -ItemType Directory -Force $ffDir | Out-Null
         Invoke-WebRequest "$ffBase/$ffName" -OutFile "$ffDir\$ffName" -MaximumRetryCount 5 -RetryIntervalSec 10
-        $sums = (Invoke-WebRequest "$ffBase/checksums.sha256" -MaximumRetryCount 5 -RetryIntervalSec 10).Content
-        $want = ([regex]::Match($sums, "(?m)^([0-9a-f]{64})  $([regex]::Escape($ffName))$")).Groups[1].Value
+        # to a file, then read as text: .Content of an application/octet-stream reply is bytes,
+        # and a match on those found nothing (kit run 45319837589: "does not match")
+        Invoke-WebRequest "$ffBase/checksums.sha256" -OutFile "$ffDir\checksums.sha256" -MaximumRetryCount 5 -RetryIntervalSec 10
+        $sums = Get-Content "$ffDir\checksums.sha256" -Raw
+        $want = ([regex]::Match($sums, "(?m)^([0-9a-f]{64})\s+$([regex]::Escape($ffName))\s*$")).Groups[1].Value
         $got = (Get-FileHash "$ffDir\$ffName" -Algorithm SHA256).Hash.ToLower()
         if (-not $want -or $want -ne $got) { throw "$ffName does not match the release's checksums.sha256" }
         Expand-Archive "$ffDir\$ffName" $ffDir -Force
