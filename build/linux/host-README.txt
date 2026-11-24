@@ -78,6 +78,17 @@ Remove it with
   rm ~/.config/systemd/user/freerdp-shadow.service
   rm -r ~/.local/opt/freerdp-host
 
+The size of the picture
+-----------------------
+
+With X11 it shares the display as it is, at its own size: a client's window shows it,
+scaled if the window is smaller, and a client's /dynamic-resolution, /multimon layout and
+HiDPI scale factors change nothing (no Display Control; the client logs no "HiDPI:" line).
+With Mutter (GNOME) the server takes the client's window size through Display Control.
+For a session that follows the client's windows and monitors, HiDPI included, use a server
+that starts sessions of its own: xrdp, the session manager below (a headless GNOME per
+user), or Windows' own Remote Desktop.
+
 Connect
 -------
 

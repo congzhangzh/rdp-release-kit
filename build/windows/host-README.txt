@@ -53,6 +53,17 @@ Or, without a service, for the logged-on user's desktop only:
 
   .\freerdp-shadow-cli.exe /bind-address:127.0.0.1 /gfx-av1 /gfx-av2
 
+The size of the picture
+-----------------------
+
+It shares this PC's own screen as it is: the monitors, their resolution and their scale
+stay what Windows has set, and a client's window shows that screen, scaled if the window
+is smaller. The server cannot take another size (no Display Control), so a client's
+/dynamic-resolution, its /multimon layout and its HiDPI scale factors change nothing here,
+and the client logs no "HiDPI:" line.
+For a session that follows the client's windows and monitors, HiDPI included, use a server
+that starts sessions of its own: xrdp, or Windows' own Remote Desktop on a Pro edition.
+
 Connect
 -------
 

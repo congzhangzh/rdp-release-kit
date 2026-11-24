@@ -43,6 +43,17 @@ Remove it with
   rm ~/Library/LaunchAgents/org.freerdp.shadow.plist
   rm -R /Applications/FreeRDP-Shadow.app
 
+The size of the picture
+-----------------------
+
+It shares this Mac's own screen as it is: the displays, their resolution and their scale
+stay what macOS has set, and a client's window shows that screen, scaled if the window is
+smaller. The server cannot take another size (no Display Control), so a client's
+/dynamic-resolution, its /multimon layout and its HiDPI scale factors change nothing here,
+and the client logs no "HiDPI:" line.
+For a session that follows the client's windows and monitors, HiDPI included, use a server
+that starts sessions of its own: xrdp, or Windows' own Remote Desktop.
+
 Connect
 -------
 
