@@ -753,6 +753,11 @@ Add-Type -Namespace Kit -Name Keys -MemberDefinition @'
 [DllImport("user32.dll")] public static extern bool AttachThreadInput(uint a, uint b, bool attach);
 [DllImport("kernel32.dll")] public static extern uint GetCurrentThreadId();
 [DllImport("user32.dll")] public static extern void keybd_event(byte vk, byte scan, uint flags, System.UIntPtr extra);
+[DllImport("user32.dll")] public static extern bool GetWindowRect(System.IntPtr h, out RECT r);
+[DllImport("user32.dll")] public static extern bool SetCursorPos(int x, int y);
+[DllImport("user32.dll")] public static extern void mouse_event(uint flags, int dx, int dy, uint data, System.UIntPtr extra);
+[DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern int GetWindowText(System.IntPtr h, System.Text.StringBuilder s, int n);
+public struct RECT { public int Left, Top, Right, Bottom; }
 '@
 # the client's window to the front, for sure: Windows' foreground lock refused it once and the
 # keys went elsewhere (run 41208207833, second attempt: no key press in the server's log).
@@ -768,7 +773,25 @@ function Focus($hwnd) {
         Start-Sleep -Milliseconds 500
         if ([Kit.Keys]::GetForegroundWindow() -eq $hwnd) { return $true }
     }
+    # last, as a user would: a click on the window's title bar, which the foreground lock lets
+    # through (a click is real input) and which sends nothing to the session (the caption is
+    # the window's own, not the remote desktop). On the ARM64 runner the calls above never got
+    # the front (a SKIP in every round looked at, the product owner: "lost coverage, not a pass")
+    $r = New-Object Kit.Keys+RECT
+    if ([Kit.Keys]::GetWindowRect($hwnd, [ref]$r)) {
+        [void][Kit.Keys]::SetCursorPos([int](($r.Left + $r.Right) / 2), $r.Top + 12)
+        [Kit.Keys]::mouse_event(0x0002, 0, 0, 0, [UIntPtr]::Zero); [Kit.Keys]::mouse_event(0x0004, 0, 0, 0, [UIntPtr]::Zero)
+        Start-Sleep -Milliseconds 800
+        if ([Kit.Keys]::GetForegroundWindow() -eq $hwnd) { "focus: by a click on the title bar" | Out-File -Append "$Out\notes.txt"; return $true }
+    }
     return $false
+}
+# the window at the front and its process, for a focus that failed
+function FrontWindow {
+    $h = [Kit.Keys]::GetForegroundWindow(); $t = New-Object System.Text.StringBuilder 256
+    [void][Kit.Keys]::GetWindowText($h, $t, 256)
+    $id = 0; [void](Get-Process | Where-Object { $_.MainWindowHandle -eq $h } | Select-Object -First 1 | ForEach-Object { $id = $_.Id; $n = $_.ProcessName })
+    "'$($t.ToString())' ($n $id)"
 }
 # Delete presses the server took (its input log at DEBUG: Delete is an extended key, a key down
 # with flags=0x0100; Ctrl and Alt are 0x0000, but so are the key events the focus change sends,
@@ -778,8 +801,9 @@ $session.Refresh()
 if ($session.MainWindowHandle -eq [IntPtr]::Zero) {
     Check "Ctrl+Alt+Del: the client has a window to type into" $false
 } elseif (-not (Focus $session.MainWindowHandle)) {
-    # the harness, not the product: say so, as for the sound
-    "SKIP  Ctrl+Alt+Del: the test could not bring the client's window to the front" | Tee-Object -FilePath "$Out\checks.txt" -Append
+    # the harness, not the product, but a check that never runs is lost coverage: a FAIL that
+    # names it and the window that held the front (it was a SKIP, every ARM64 round)
+    Check "Ctrl+Alt+Del: the test brings the client's window to the front" $false "the front: $(FrontWindow)"
 } else {
     $deletes = DeleteDowns
     # all the server's key events, to see a loop: the server injects into this console, where
