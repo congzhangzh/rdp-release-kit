@@ -134,9 +134,9 @@ jobs:
           if-no-files-found: ignore
 
   # Demo 1.2 of the product plan: the FreeRDP shadow on Linux (X11), seen with /multimon on two
-  # screens (test/demo-shadow-multimon.sh), from this kit run's own host and client. Recorded
-  # only: its artifact is not demo-*, so the publish job below leaves it out; it joins the
-  # published demos with Boss Cong's go (the product owner's rule: none published without it)
+  # screens (test/demo-shadow-multimon.sh), from this kit run's own host and client. Published
+  # with the others since Boss Cong's go (2026-11-24); it joins demo.json at the end of the
+  # order, after the splash's own
   shadow-multimon:
     runs-on: ubuntu-24.04
     continue-on-error: true
@@ -164,10 +164,18 @@ jobs:
           client=$(find dist/native -name 'sdl3-freerdp-*-linux-x86_64.tar.xz' 2> /dev/null | head -1)
           # without this run's files (a dispatch), the newest release's
           test/demo-shadow-multimon.sh ${host:+"$PWD/$host"} ${client:+"$PWD/$client"}
+          # its entry for the publish job's demo.json, as record-demos.sh writes the others':
+          # the product owner's caption, word for word
+          d=dist/demo-shadow-multimon
+          jq -n --arg kit "${{ inputs.kit_sha || github.sha }}" '{recorded: {kit: $kit},
+            videos: [{title: "FreeRDP shadow server + Linux, two screens, AV1",
+              src: "demo/shadow-multimon.mp4", poster: "demo/shadow-multimon.jpg",
+              caption: "The shadow shares one X screen as one desktop, and the client spreads it over its two screens. A server with two monitors shares only one (/monitors:N). The shadow doesn'"'"'t resize. Real multi-monitor and resizing: phase 2 (xrdp)."}]}' > "$d/demo.json"
+          test -s "$d/shadow-multimon.mp4" && test -s "$d/shadow-multimon.jpg"
       - uses: actions/upload-artifact@v7
         if: always()
         with:
-          name: record-shadow-multimon
+          name: demo-shadow-multimon
           path: dist/demo-shadow-multimon/
           retention-days: 7
           if-no-files-found: ignore
@@ -176,7 +184,7 @@ jobs:
     # not for a push to demo-ci (an experiment): github.event_name is the
     # kit's own event when the kit calls this workflow
     if: inputs.kit_sha != '' || github.event_name == 'workflow_dispatch'
-    needs: [record]
+    needs: [record, shadow-multimon]
     runs-on: ubuntu-24.04
     concurrency: publish-demo-${{ inputs.kit_sha || github.sha }}
     permissions:
@@ -202,7 +210,7 @@ jobs:
           import glob, json, os, shutil, sys
           src, out = sys.argv[1], sys.argv[2]
           # by the videos' names (test/record-demos.sh)
-          order = ["xrdp-gnome", "xrdp-gnome-screens", "xrdp-kde", "xrdp-original-xfce", "grd-gnome"]
+          order = ["xrdp-gnome", "xrdp-gnome-screens", "xrdp-kde", "xrdp-original-xfce", "grd-gnome", "shadow-multimon"]
           # freerdp-tk's, for the page's Get a client (never the splash)
           client_order = ["freerdp-tk-release", "freerdp-tk-uvx"]
           recorded, videos, clients = {}, {}, {}
