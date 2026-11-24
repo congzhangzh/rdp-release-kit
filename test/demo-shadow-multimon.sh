@@ -1,0 +1,168 @@
+#!/bin/bash
+# Demo 1.2 of the product plan: the kit's FreeRDP shadow server on Linux (X11), seen by the
+# kit's Linux client with /multimon on two screens, in AV1 4:2:0. Both from a release, as
+# released (no stubs), each in a container of its own on a private network
+# (test/demo-shadow-multimon/): the server's X screen is 2560x720 with a ticking clock on each
+# half; the client's two screens are weston's two outputs of 1280x720, side by side. The video
+# is the client's display, ~30 s, with the client's overlay (decoder, frames, bandwidth):
+#
+#   test/demo-shadow-multimon.sh [host archive] [client archive]
+#
+# Without archives it takes freerdp-host-*-linux-x86_64.tar.xz and
+# sdl3-freerdp-*-linux-x86_64.tar.xz of the kit release KIT_TAG (default: the newest), each
+# checked against its SHA256SUMS. Out: dist/demo-shadow-multimon/ (OUT=<dir> for another):
+# shadow-multimon.mp4 (2560x720, H.264 CRF 28) and .jpg (a poster from 70 %), its caption and
+# numbers (shadow-multimon.txt), the logs, the overlay's numbers each second (stats.jsonl).
+# DEMO_SECONDS=<n> records another length. NAME=<prefix> names the containers and the network
+# (default kit-demo-shadow-mm). The recorder is build/ci-ffmpeg.sh's (FFMPEG_DIR=<dir> for
+# its folder). PODMAN or docker: ENGINE=<command>.
+#
+# What it shows, and what not (the plan's caption, word for word): the shadow shares one X
+# screen as one desktop, and the client spreads it over its two screens. A server with two
+# monitors shares only one (/monitors:N). The shadow doesn't resize (no Display Control).
+set -euo pipefail
+KIT=$(cd "$(dirname "$0")/.." && pwd)
+OUT=${OUT:-$KIT/dist/demo-shadow-multimon}
+REPO=congzhangzh/rdp-release-kit
+NAME=${NAME:-kit-demo-shadow-mm}
+SECONDS_REC=${DEMO_SECONDS:-30}
+ENGINE=${ENGINE:-$(command -v docker || command -v podman)}
+FFMPEG_DIR=${FFMPEG_DIR:-$HOME/.cache/rdp-release-kit/ci-ffmpeg}
+CAPTION="The shadow shares one X screen as one desktop, and the client spreads it over its two screens. A server with two monitors shares only one (/monitors:N). The shadow doesn't resize. Real multi-monitor and resizing: phase 2 (xrdp)."
+
+rm -rf "$OUT"
+mkdir -p "$OUT/in" "$OUT/run"
+HOST=${1:-} CLIENT=${2:-}
+if [ -z "$HOST" ] || [ -z "$CLIENT" ]; then
+    tag=${KIT_TAG:-$(gh release view -R "$REPO" --json tagName -q .tagName)}
+    echo "== the archives of kit release $tag"
+    gh release download "$tag" -R "$REPO" -D "$OUT/in" -p SHA256SUMS \
+        -p 'freerdp-host-*-linux-x86_64.tar.xz' -p 'sdl3-freerdp-*-linux-x86_64.tar.xz'
+    (cd "$OUT/in" && sha256sum -c --ignore-missing --quiet SHA256SUMS) ||
+        { echo "the archives don't match the release's SHA256SUMS" >&2; exit 1; }
+    HOST=$(ls "$OUT"/in/freerdp-host-*-linux-x86_64.tar.xz)
+    CLIENT=$(ls "$OUT"/in/sdl3-freerdp-*-linux-x86_64.tar.xz)
+else
+    cp "$HOST" "$CLIENT" "$OUT/in/"
+    HOST=$OUT/in/$(basename "$HOST") CLIENT=$OUT/in/$(basename "$CLIENT")
+fi
+echo "== server: $(basename "$HOST"); client: $(basename "$CLIENT")"
+
+"$KIT/build/ci-ffmpeg.sh" "$FFMPEG_DIR" > "$OUT/ffmpeg-version.txt"
+export PATH=$FFMPEG_DIR/bin:$PATH
+
+IMAGE=kit-demo-shadow-mm:debian-13
+"$ENGINE" build -q -t "$IMAGE" "$KIT/test/demo-shadow-multimon" > "$OUT/image-build.log" 2>&1 ||
+    { tail -20 "$OUT/image-build.log" >&2; echo "the demo image did not build" >&2; exit 1; }
+
+cleanup() {
+    "$ENGINE" rm -f "$NAME-server" "$NAME-client" > /dev/null 2>&1 || true
+    "$ENGINE" network rm "$NAME-net" > /dev/null 2>&1 || true
+}
+trap cleanup EXIT
+# mean brightness (Y, 16 = black) of one half of the recording, a frame from its middle
+half() {
+    local len
+    len=$(ffprobe -v error -show_entries format=duration -of csv=p=0 "$1")
+    ffmpeg -v error -ss "$(awk -v d="$len" 'BEGIN { printf "%.1f", d / 2 }')" -i "$1" -frames:v 1 \
+        -vf "crop=1280:720:$2:0,signalstats,metadata=print:key=lavfi.signalstats.YAVG:file=-" -f null - 2>&1 |
+        sed -n 's/.*YAVG=\([0-9.]*\).*/\1/p' | head -1
+}
+
+# record: the two containers, the client's display in $OUT/run
+record() {
+    cleanup
+    mkdir -p "$OUT/run"
+    "$ENGINE" network create "$NAME-net" > /dev/null
+    local mounts=(-v "$KIT/test/demo-shadow-multimon":/demo:ro -v "$OUT/in":/in:ro -v "$OUT/run":/out)
+    echo "== server: the shadow on a 2560x720 X screen"
+    "$ENGINE" run -d --name "$NAME-server" --network "$NAME-net" --network-alias shadow "${mounts[@]}" \
+        "$IMAGE" /demo/server.sh "/in/$(basename "$HOST")" > /dev/null
+    for _ in $(seq 60); do
+        "$ENGINE" exec "$NAME-server" sh -c 'grep -q ":0D3D .* 0A " /proc/net/tcp' 2> /dev/null && break
+        sleep 0.5
+    done
+    echo "== client: /multimon on weston's two outputs, recorded for $SECONDS_REC s"
+    "$ENGINE" run --name "$NAME-client" --network "$NAME-net" "${mounts[@]}" -v "$FFMPEG_DIR":/ffmpeg:ro \
+        "$IMAGE" /demo/client.sh "/in/$(basename "$CLIENT")" shadow "$SECONDS_REC" > "$OUT/run/client-run.log" 2>&1 ||
+        { tail -20 "$OUT/run/client-run.log" >&2; echo "the client run failed" >&2; return 1; }
+    "$ENGINE" stop -t 3 "$NAME-server" > /dev/null 2>&1 || true
+    # both screens drawn: now and then the client's second window stays black for a whole
+    # session (seen once in four runs, 2026-11-24; under investigation in the SDL client)
+    LEFT=$(half "$OUT/run/raw.mp4" 0) RIGHT=$(half "$OUT/run/raw.mp4" 1280)
+    awk -v l="${LEFT:-0}" -v r="${RIGHT:-0}" 'BEGIN { exit !(l > 20 && r > 20) }'
+}
+
+# a demo is a recording: one more try when a screen stayed black
+if ! record; then
+    echo "NOTE  a screen stayed black (left Y ${LEFT:-?}, right Y ${RIGHT:-?}): a second try"
+    mv "$OUT/run" "$OUT/run-try1"
+    record || true
+fi
+
+# the checks: what the demo claims must be in its logs
+status=0
+check() { if eval "$2"; then echo "PASS  $1"; else echo "FAIL  $1"; status=1; fi; }
+L=$OUT/run
+check "both screens are drawn (mean Y left $LEFT, right $RIGHT; black is 16)" \
+    'awk -v l="${LEFT:-0}" -v r="${RIGHT:-0}" "BEGIN { exit !(l > 20 && r > 20) }"'
+check "the client has two screens" '[ "$(grep -c "^ *[* ] \[" "$L/client-monitors.txt")" = 2 ]'
+check "the shadow shares one desktop of 2560x720" 'grep -qE "(activated|resize requested) \(2560x720" "$L/server.log"'
+check "AV1 4:2:0 was agreed (no AV2, no 4:4:4)" 'grep -q "AV1_I444_DISABLED" "$L/server.log"'
+check "the server encoded AV1 4:2:0" 'grep -q "I420: [0-9]* frames" "$L/server.log"'
+check "the client decoded AV1" 'grep -q "AV1 decoder: " "$L/client.log"'
+check "the overlay's numbers came" '[ -s "$L/stats.jsonl" ]'
+check "the video was recorded" '[ -s "$L/raw.mp4" ]'
+
+# the numbers, from the logs and the last reading of the overlay
+encoder=$(grep -o "AV1 encoder: .*" "$L/server.log" | head -1 || true)
+[ -n "$encoder" ] || encoder=$(grep -o "AV1 [0-9]*x[0-9]* I420: .*" "$L/server.log" | tail -1 || true)
+decoder=$(grep -o "AV1 decoder: .*" "$L/client.log" | head -1 || true)
+# the server's own encoder reading, every 5 s: the last one
+encoded=$(grep -o "AV1 [0-9]*x[0-9]* I420: .*" "$L/server.log" | tail -1 || true)
+numbers=$(python3 - "$L/stats.jsonl" << 'PY'
+import json, sys
+# the overlay's rows of the last reading: [label, value], a row without a label goes on the one before
+rows = {}
+for line in open(sys.argv[1], encoding="utf-8", errors="replace"):
+    try:
+        snap = json.loads(line)
+    except ValueError:
+        continue
+    rows = {}
+    for side in ("client", "server", "realtime"):
+        last = None
+        for label, value in (snap.get("rows") or {}).get(side) or []:
+            if label:
+                rows[label] = value
+                last = label
+            elif last:
+                rows[last] += "; " + value
+for label in ("Resolution", "Surface 1", "AV1 decoder", "Video codecs", "AV1 4:2:0 results", "Frames",
+              "Network in", "Network in (RDP)", "Session"):
+    if label in rows:
+        print(f"{label}: {rows[label]}")
+PY
+)
+{
+    echo "$CAPTION"
+    echo
+    echo "Server: $(basename "$HOST"), freerdp-shadow-cli /subsystem:x11 /gfx-av1 /gfx-av2:off -gfx-avc444, one X screen 2560x720."
+    echo "Client: $(basename "$CLIENT"), sdl-freerdp /multimon /gfx:AV2:off,AV1:i420 +sdl-info on two 1280x720 screens (weston)."
+    echo "Encoder: ${encoder:-not logged}"
+    echo "Encoded (server): ${encoded:-not logged}"
+    echo "Decoder: ${decoder:-not logged}"
+    echo "$numbers"
+} > "$OUT/shadow-multimon.txt"
+cat "$OUT/shadow-multimon.txt"
+
+if [ -s "$L/raw.mp4" ]; then
+    # the two screens side by side at their own size, 2560x720, so the overlay can be read
+    ffmpeg -v error -y -i "$L/raw.mp4" -vf "format=yuv420p" -c:v libx264 -crf 28 \
+        -preset slow -profile:v high -movflags +faststart "$OUT/shadow-multimon.mp4"
+    len=$(ffprobe -v error -show_entries format=duration -of csv=p=0 "$L/raw.mp4")
+    ffmpeg -v error -y -ss "$(awk -v d="$len" 'BEGIN { printf "%.1f", d * 0.7 }')" -i "$L/raw.mp4" -frames:v 1 \
+        -q:v 4 "$OUT/shadow-multimon.jpg"
+fi
+echo "demo: $OUT/shadow-multimon.mp4 ($([ $status = 0 ] && echo passed || echo FAILED))"
+exit $status
