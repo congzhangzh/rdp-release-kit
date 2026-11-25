@@ -119,18 +119,14 @@ echo "== $AGENT_PLIST"
 install -m 644 -o root -g wheel "$HERE/$AGENT.plist" "$AGENT_PLIST"
 plutil -lint "$DAEMON_PLIST" "$AGENT_PLIST" > /dev/null
 
-# 7. start the daemon; it listens once it is up
+# 7. start the daemon. It opens its port only once an agent has said hello (it has no screen of its
+# own), so it is not waited for here but after the agents start (kit round 45670622530: waiting
+# first, before any agent, timed out every time)
 echo "== starting $DAEMON (system)"
 # a label disabled before (launchctl disable, e.g. to stop an earlier install that looped)
 # stays disabled across bootout and reinstall, and launchd refuses to bootstrap it: enable it
 launchctl enable "system/$DAEMON"
 launchctl bootstrap system "$DAEMON_PLIST"
-up=0
-for _ in $(seq 1 20); do
-    if lsof -nP -iTCP:"$PORT" -sTCP:LISTEN > /dev/null 2>&1; then up=1; break; fi
-    sleep 1
-done
-[ $up = 1 ] || die "the daemon does not listen on port $PORT after 20 s: see $LOGS/daemon.log"
 
 # 8. the agent: in every GUI session now; launchd starts it by itself at the next login
 # window and in each new session (LimitLoadToSessionType LoginWindow, Aqua)
@@ -152,9 +148,22 @@ if [ "$console" = 0 ]; then
 fi
 echo "== the agent started in:${started:- no session yet}"
 
+# 9. the daemon listens once an agent has said hello: up to 60 s (its own wait for a hello); without
+# the grants below an agent may not get that far, so a daemon still waiting is not a failed install
+up=0
+for _ in $(seq 1 60); do
+    if lsof -nP -iTCP:"$PORT" -sTCP:LISTEN > /dev/null 2>&1; then up=1; break; fi
+    sleep 1
+done
+if [ $up = 1 ]; then
+    state="listens on 127.0.0.1:$PORT"
+else
+    state="waits for its agent: it listens on 127.0.0.1:$PORT once the agent in the console session says hello (allow it as below, then restart it; see $LOGS/daemon.log)"
+fi
+
 cat << EOF
 
-Installed: $DAEMON listens on 127.0.0.1:$PORT (/sec:tls: the Mac's own accounts), with the
+Installed: $DAEMON $state (/sec:tls: the Mac's own accounts), with the
 agent $AGENT at the login window and in each user's session.
 
 Now allow the agent, once, in a user's session (System Settings > Privacy & Security):
@@ -166,5 +175,5 @@ The grants hold at the login window too. The app is signed ad hoc: after each up
 asks again (remove the old entries, allow the new one).
 
 Logs: $LOGS/daemon.log and $LOGS/agent.log
-Remove: sudo ./uninstall-daemon.sh
+Remove: sudo bash $APP/Contents/Resources/uninstall-daemon.sh   (or ./uninstall-daemon.sh here)
 EOF
