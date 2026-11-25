@@ -7,11 +7,14 @@
 //
 // <browser> is safari or chrome. The server runs with /gfx-hevc:i420. The page asks for HEVC as a
 // user does, in Extra options: extra=/gfx-codec-order:HEVC,AVC420. That turns AV1, AV2 and H.264
-// 4:4:4 off, so the client offers HEVC_ENABLE with AVC_DISABLED (the shadow server uses HEVC only
-// without AVC444), and AVC420 stays as the fallback.
+// 4:4:4 off, so the client offers HEVC_ENABLE in the 11.x caps with AVC on: AVC420 stays as the
+// fallback (AVC_DISABLED would say the page decodes no AVC at all), and the server's codec order
+// puts HEVC first.
 // Checks, for this browser's session only (its own slice of the server's log):
-//  - the server confirms caps with RDPGFX_CAPS_FLAG_AVC_DISABLED and RDPGFX_CAPS_FLAG_HEVC_ENABLE
-//    ("selected GFX caps ...", shadow_client.c, INFO)
+//  - the server confirms caps 11.2 or later with HEVC_ENABLE ("selected GFX caps ...",
+//    shadow_client.c, INFO; the log names the flags without RDPGFX_CAPS_FLAG_)
+//  - the server's frames kept going: no 5 s period with frames held and none sent ("gfx 5.0 s:
+//    ... sent 0 ... held N", shadow_gfx_stats.c), which is the client acknowledging nothing
 //  - the server's HEVC encoder ran ("VideoToolbox HEVC encoder: WxH ...", h264_videotoolbox.m, DEBUG:
 //    the server must run with WLOG_LEVEL=DEBUG, as test/mac-host.sh starts it) and never failed
 //    ("freerdp_hevc_compress failed")
@@ -145,9 +148,18 @@ try {
 
   // the server's side, this session only
   const confirm = server.match(/selected GFX caps \S+ \[0x[0-9a-f]+\] flags=.*/g) || [];
-  check("the server confirms HEVC (RDPGFX_CAPS_FLAG_AVC_DISABLED + RDPGFX_CAPS_FLAG_HEVC_ENABLE)",
-    confirm.length > 0 && confirm.every((l) => /RDPGFX_CAPS_FLAG_AVC_DISABLED/.test(l) && /RDPGFX_CAPS_FLAG_HEVC_ENABLE/.test(l)),
-    confirm.at(-1)?.slice(0, 200) || "no caps confirm in its log");
+  // 11.2 (0x000b0200) or later, HEVC_ENABLE among the flags ({SCALEDMAP_DISABLE|HEVC_ENABLE})
+  const hevcConfirm = (l) => {
+    const v = /\[0x([0-9a-f]+)\]/.exec(l);
+    return v && parseInt(v[1], 16) >= 0x000b0200 && /[{|]HEVC_ENABLE[|}]/.test(l);
+  };
+  check("the server confirms HEVC (caps 11.2 or later with HEVC_ENABLE)",
+    confirm.length > 0 && confirm.every(hevcConfirm), confirm.at(-1)?.slice(0, 200) || "no caps confirm in its log");
+  // a stalled session: a whole period with frames held and none sent
+  const periods = server.match(/gfx \d+\.\d s: captured \d+[^\n]*/g) || [];
+  const stalled = periods.filter((l) => /, sent 0 /.test(l) && /, held [1-9]/.test(l));
+  check("the server's frames kept going (no period with frames held and none sent)", periods.length > 0 && stalled.length === 0,
+    `${stalled.length} of ${periods.length} periods stalled${stalled.length ? ": " + stalled[0].slice(0, 160) : ""}`);
   // a session for the screen's size: the 256x256 one is FreeRDP's probe whether an encoder exists
   // (freerdp_codec_supported, at every connection), not this session's encoder
   const enc = (server.match(/VideoToolbox HEVC encoder: \d+x\d+[^\n]*/g) || []).filter((l) => !/: 256x256 /.test(l));
