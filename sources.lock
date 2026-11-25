@@ -147,7 +147,7 @@ freerdp     20261125.3 git+https://github.com/congzhangzh/FreeRDP.git           
 # 20261031.8: the keys a client leaves held are let go when it leaves or sends a
 # Synchronize (#13958; before, a client dropped mid-shortcut left Win/Alt down)
 # 20261031.11: integration-all, the one FreeRDP the clients and the Mac host build too
-freerdp_host 20261125.3 git+https://github.com/congzhangzh/FreeRDP.git                                      7a0c4a9e5fea56e04154cd912f862b99264a88bf
+freerdp_host 20261123.11-allmon2 git+https://github.com/congzhangzh/FreeRDP.git                             a3ff7eb492920588dfa98ab6400fa07d3c5c18dd
 # FreeRDP for the macOS host (FreeRDP-Shadow.app, build-macos-client.sh HOST=1):
 # freerdp-d0's release-20261031.4, picked from the fork's integration-shadow-mac,
 # FreeRDP master dae0390a4 plus the AV2 extension (#13925), the shadow server's
