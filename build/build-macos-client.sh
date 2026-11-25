@@ -17,7 +17,9 @@
 # shadow work, as an app: FreeRDP-Shadow.app with a fixed bundle id, signed ad
 # hoc (so macOS grants Screen Recording and Accessibility to each build anew: an
 # ad hoc signature's identity is the build's hash), a LaunchAgent that starts it
-# in the user's session at login, and a README
+# in the user's session at login, the daemon mode (FreeRDP's freerdp-shadow-agent
+# in the same app, a root LaunchDaemon and a LaunchAgent for the login window and
+# each session, install-daemon.sh and uninstall-daemon.sh) and a README
 # (freerdp-host-<version>-macos-<arch>.zip).
 set -Eeuo pipefail
 
@@ -214,23 +216,33 @@ if [ -n "${HOST:-}" ]; then
     APP=$PKG/FreeRDP-Shadow.app
     rm -rf "$WORK/pkg"
     mkdir -p "$APP/Contents/MacOS" "$PKG/licenses"
-    for tool in freerdp-shadow-cli winpr-hash; do
+    # the agent (the daemon mode's capture and input in a session) beside the server in
+    # the app, so one bundle in /Applications holds both and its seal covers both
+    for tool in freerdp-shadow-cli freerdp-shadow-agent winpr-hash; do
         f=$(find "$STAGE/opt/freerdp/bin" -name "$tool" | head -1)
         [ -n "$f" ] || { echo "HOST=1: no $tool in the build" >&2; exit 1; }
         dest=$APP/Contents/MacOS
-        [ "$tool" = freerdp-shadow-cli ] || dest=$PKG
+        [ "$tool" != winpr-hash ] || dest=$PKG
         cp "$f" "$dest/"
         strip -S "$dest/$tool"
     done
     sed "s/@VERSION@/${VERSION[$FREERDP]}/; s/@MACOS_MIN@/$MACOS_MIN/" \
         "$KIT/build/macos/host-Info.plist" > "$APP/Contents/Info.plist"
-    cp "$KIT/build/macos/org.freerdp.shadow.plist" "$KIT/build/macos/host-README.txt" "$PKG/"
+    cp "$KIT/build/macos/org.freerdp.shadow.plist" "$KIT/build/macos/org.freerdp.shadow.daemon.plist" \
+        "$KIT/build/macos/org.freerdp.shadow.agent.plist" "$KIT/build/macos/install-daemon.sh" \
+        "$KIT/build/macos/uninstall-daemon.sh" "$KIT/build/macos/host-README.txt" "$PKG/"
+    chmod 755 "$PKG/install-daemon.sh" "$PKG/uninstall-daemon.sh"
     mv "$PKG/host-README.txt" "$PKG/README.txt"
+    for f in "$PKG"/*.plist; do plutil -lint "$f"; done
     # ad hoc: TCC knows this build by its hash, so an update asks again (a stable
-    # identity needs a signing certificate)
+    # identity needs a signing certificate). Inside out: the agent, a second program in
+    # Contents/MacOS, is signed first with its own identifier (the one Screen Recording
+    # and Accessibility list), then the app, whose seal then covers it
     codesign --force --sign - "$PKG/winpr-hash"
+    codesign --force --sign - --identifier org.freerdp.shadow.agent "$APP/Contents/MacOS/freerdp-shadow-agent"
     codesign --force --sign - --identifier org.freerdp.shadow "$APP"
-    codesign --verify --strict "$APP"
+    codesign --verify --strict --deep "$APP"
+    codesign --verify --strict "$APP/Contents/MacOS/freerdp-shadow-agent"
     licenses "$PKG/licenses" freerdp_mac_host openssl opus dav1d aom avm zlib jansson
     {
         echo "FreeRDP's shadow server for macOS ${VERSION[$FREERDP]}, $ARCH, built $(date -u +%F)"
@@ -246,6 +258,7 @@ if [ -n "${HOST:-}" ]; then
         done
     } > "$PKG/MANIFEST"
     "$KIT/build/check-macos.sh" "$APP/Contents/MacOS/freerdp-shadow-cli" "$MACOS_MIN"
+    "$KIT/build/check-macos.sh" "$APP/Contents/MacOS/freerdp-shadow-agent" "$MACOS_MIN"
     # ditto keeps the app's signature and attributes as macOS's own zips do
     (cd "$WORK/pkg" && ditto -c -k --keepParent "$NAME" "$OUT/$NAME.zip")
     (cd "$OUT" && sha256sum "$NAME.zip" > "$NAME.zip.sha256")

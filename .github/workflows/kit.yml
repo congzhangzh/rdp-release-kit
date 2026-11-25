@@ -297,6 +297,14 @@ jobs:
         run: >
           test/mac-host.sh "$(ls -d dl/host/freerdp-host-*-macos-arm64)"
           "$(ls -d dl/client/sdl3-freerdp-*-macos-arm64)" out "$PWD/dl/wasm/web" "$PWD/dl/media"
+      # the daemon mode as a user installs it (install-daemon.sh with sudo: the runner's is
+      # passwordless), AV1 through the daemon on 127.0.0.1:3388, then uninstall-daemon.sh and
+      # nothing of ours left (test/mac-daemon.sh); after the app's test, even when that failed
+      - name: The macOS host's daemon mode, with the macOS client
+        if: ${{ !cancelled() }}
+        run: >
+          test/mac-daemon.sh "$(ls -d dl/host/freerdp-host-*-macos-arm64)"
+          "$(ls -d dl/client/sdl3-freerdp-*-macos-arm64)" out/daemon
       - uses: actions/upload-artifact@v7
         if: always()
         with:

@@ -4,9 +4,17 @@ FreeRDP's shadow server for macOS
 Share this Mac's own screen with RDP clients: the kit's FreeRDP clients, FreeRDP Web,
 mstsc. What the user sees is what the client sees; the sound the Mac plays comes along.
 
-  FreeRDP-Shadow.app         the shadow server (FreeRDP's freerdp-shadow-cli, as an app)
-  org.freerdp.shadow.plist   a LaunchAgent: starts it at login, in your session
+  FreeRDP-Shadow.app         the shadow server (FreeRDP's freerdp-shadow-cli, as an app),
+                             with freerdp-shadow-agent for the daemon mode
+  org.freerdp.shadow.plist   a LaunchAgent: starts it at login, in your session (no root)
+  org.freerdp.shadow.daemon.plist, org.freerdp.shadow.agent.plist,
+  install-daemon.sh, uninstall-daemon.sh
+                             the daemon mode (root): from the login window on, see
+                             "The daemon mode" below
   winpr-hash                 a line of a SAM file (not needed for macOS accounts)
+
+Install one of the two, the LaunchAgent below or the daemon mode: both listen on
+127.0.0.1:3388.
 
 Install
 -------
@@ -70,4 +78,52 @@ What it cannot do
 -----------------
 
 It runs in your session, after you have logged in: it cannot show the login window,
-or this Mac before anyone logs in (a LaunchAgent has no screen until then).
+or this Mac before anyone logs in (a LaunchAgent has no screen until then). The daemon
+mode can.
+
+The daemon mode
+---------------
+
+The server runs as root, started by launchd at boot, and an agent captures the screen
+and posts the input in the session on the console: at the login window, and in each
+user's session once they log in. One connection lasts from the login window through the
+login to the desktop. The login is any local account but root at the login window, the
+user on the console after that (PAM, /sec:tls).
+
+  org.freerdp.shadow.daemon  /Library/LaunchDaemons/org.freerdp.shadow.daemon.plist
+                             the server, as root, on 127.0.0.1:3388; Mach service
+                             org.freerdp.shadow (FREERDP_SHADOW_MAC_AGENT_SERVICE)
+  org.freerdp.shadow.agent   /Library/LaunchAgents/org.freerdp.shadow.agent.plist
+                             freerdp-shadow-agent, at the login window (as root) and in
+                             each user's session (as that user)
+  the app                    /Applications/FreeRDP-Shadow.app (owned by root)
+
+First remove the LaunchAgent org.freerdp.shadow above if you installed it (both use
+3388; install-daemon.sh refuses while it runs on the same port). Then, in the unpacked
+folder:
+
+  sudo ./install-daemon.sh                  (--port <port> for another port)
+
+Then allow freerdp-shadow-agent, once, in your session (System Settings > Privacy &
+Security): Screen & System Audio Recording and Accessibility; with +, the program is
+/Applications/FreeRDP-Shadow.app/Contents/MacOS/freerdp-shadow-agent. Restart it:
+
+  launchctl kickstart -k gui/$(id -u)/org.freerdp.shadow.agent
+
+The grants hold at the login window too. As with the app, an update asks for both again
+(signed ad hoc). Run install-daemon.sh again to update or to change the port.
+
+Logs: one file per job, appended to by every start:
+
+  /var/log/freerdp-shadow/daemon.log
+  /var/log/freerdp-shadow/agent.log         (every session's agent)
+
+Clear one while it runs with  sudo sh -c ': > /var/log/freerdp-shadow/daemon.log'
+(the same for agent.log); uninstall-daemon.sh --logs removes the folder.
+
+Remove it with
+
+  sudo ./uninstall-daemon.sh                (--app: the app too; --logs: the logs too)
+
+It stops the agents and the daemon and removes both plists, so launchd starts neither
+again.
