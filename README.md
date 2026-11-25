@@ -1,5 +1,7 @@
 # rdp-release-kit
 
+**English** · [日本語](README.ja.md) · [Français](README.fr.md) · [中文](README.zh.md)
+
 Reproducible, portable builds of open-source RDP software, pinned to
 upstream release tags (the web client is a preview, built from upstream pull
 requests until they are released). This is an unofficial community build
@@ -18,6 +20,98 @@ directly: `bin/sdl-freerdp /v:server /u:user` (Windows: `sdl-freerdp.exe`).
 The release notes have a table per platform, the checksums and how to
 verify a file's origin.
 
+To share a computer's own screen (Windows, Linux or a Mac), take its
+`freerdp-host-*` archive: see [Shadow server](#shadow-server-share-this-computers-own-screen).
+
+## Shadow server: share this computer's own screen
+
+The kit's first product, and its most tested one. FreeRDP's shadow server shares the
+screen a computer already shows, the desktop of whoever is at it, with any RDP client:
+the kit's FreeRDP clients and freerdp-tk, FreeRDP Web in a browser, or Windows' own Remote
+Desktop Connection. It works like VNC or Remote Assistance, but over RDP, with the picture
+in AV1 4:2:0, encoded on the graphics card where it has an AV1 encoder. It doesn't start
+sessions of its own; for that, see [xrdp](#xrdp-packages).
+
+| | Windows (first) | Linux | macOS (Apple Silicon) |
+|---|---|---|---|
+| File | `freerdp-host-<version>-windows-x86_64.zip`, `-windows-aarch64.zip` | `freerdp-host-<version>-linux-x86_64.tar.xz`, `-linux-aarch64.tar.xz` | `freerdp-host-<version>-macos-arm64.zip` |
+| Runs as | a Windows service, `freerdp-shadow-service`, which runs the server as SYSTEM on the console session: the logon and lock screens, UAC prompts and Ctrl+Alt+Del too | a systemd user unit, `freerdp-shadow.service`, in your desktop session: GNOME through Mutter (Wayland or X11), or any other X11 desktop; optionally, a root [session manager](#the-session-manager-optional-runs-as-root) for every user's GNOME, headless ones included | a LaunchAgent in your login session (`FreeRDP-Shadow.app`) |
+| AV1 4:2:0 | on the graphics card through Media Foundation when it has an AV1 encoder (tested: an NVIDIA laptop GPU), else libaom | on the graphics card through VA-API (not yet proven on a real GPU), else libaom | libaom (no Apple chip encodes AV1) |
+| Also | AV2 (libavm), H.264 AVC420 from Media Foundation for clients without AV1, the PC's sound | AV2, the session's sound (PipeWire), keys through libei | AV2, H.264 from VideoToolbox, the Mac's sound |
+| Login | a Windows account (Network Level Authentication) | the desktop owner's account (PAM, over TLS) | your macOS account (PAM, over TLS) |
+| Tested in CI, every release | Windows Server 2025 (x86_64) and Windows 11 on ARM: AV1, Windows logins, Ctrl+Alt+Del, the lock screen, FreeRDP Web | GNOME headless and Xfce, on x86_64 and ARM64: AV1, AV2, keys, sound, another account refused, the session manager | a GitHub macOS runner: an AV1 and an AV2 session against the LaunchAgent (the runner's own login can't be tested) |
+
+### Install
+
+**Windows**, in an administrator's PowerShell, in the unzipped folder:
+
+```powershell
+.\freerdp-shadow-service.exe install --allow-sas -- /bind-address:127.0.0.1 /gfx-av1 /gfx-av2 -gfx-avc444
+```
+
+It starts at once and with Windows, on port 3389. If Windows' own Remote Desktop is on, it
+holds 3389 already: add `/port:3388`. AV1 only: `/gfx-av2:off` instead of `/gfx-av2`.
+`--allow-sas` lets the service send Ctrl+Alt+Del (the policy SoftwareSASGeneration); leave
+it out if you don't want that. Remove it with `.\freerdp-shadow-service.exe uninstall`,
+which also puts that policy back as install found it. Without a service, for the logged-on
+user's desktop only: `.\freerdp-shadow-cli.exe /bind-address:127.0.0.1 /gfx-av1 /gfx-av2`.
+
+**Linux**, as yourself, in the desktop session you want to share (details in
+[Installing the Linux host](#installing-the-linux-host)):
+
+```sh
+tar -xJf freerdp-host-*-linux-$(uname -m).tar.xz
+mkdir -p ~/.local/opt ~/.config/systemd/user
+mv freerdp-host-*-linux-$(uname -m) ~/.local/opt/freerdp-host
+cp ~/.local/opt/freerdp-host/freerdp-shadow.service ~/.config/systemd/user/
+systemctl --user daemon-reload && systemctl --user enable --now freerdp-shadow.service
+```
+
+**macOS**, after unzipping:
+
+```sh
+cp -R FreeRDP-Shadow.app /Applications/
+xattr -dr com.apple.quarantine /Applications/FreeRDP-Shadow.app
+cp org.freerdp.shadow.plist ~/Library/LaunchAgents/
+launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/org.freerdp.shadow.plist
+```
+
+Then allow FreeRDP Shadow in System Settings > Privacy & Security, under both Screen & System
+Audio Recording and Accessibility, and restart it:
+`launchctl kickstart -k gui/$(id -u)/org.freerdp.shadow`. The app is signed ad hoc, so macOS
+asks again after each update.
+
+Each archive's `README.txt` has the whole story for its platform: logs, options, removal.
+
+### Connect
+
+All three listen on 127.0.0.1 only. Keep it that way, and reach the server over SSH (see
+[Deploying a server](#deploying-a-server-keep-rdp-off-the-internet)):
+
+```sh
+ssh -N -L 13389:127.0.0.1:3389 user@host &
+sdl-freerdp /v:127.0.0.1:13389 /u:user
+```
+
+Or use freerdp-tk with 127.0.0.1:13389. For FreeRDP Web, start a WebSocket gateway on the
+host (`websockify 127.0.0.1:3390 127.0.0.1:3389`) and forward 3390 instead.
+`freerdp-shadow-cli /codec-list` shows the encoders the computer has, and
+`/codec-first:software` or `/codec-first:hardware:<id>` picks one. The log names the encoder
+in use, e.g. `AV1 encoder: Media Foundation 0 NVIDIA AV1 Encoder MFT (hardware, …), libaom as fallback`.
+
+### What it doesn't do
+
+- **It keeps the screen's own size.** The monitors, their resolution and their scale stay as
+  the computer has them, and the client's window shows that screen, scaled if it's smaller.
+  A client's `/dynamic-resolution`, `/multimon` layout and HiDPI scale change nothing here.
+- **It shares one monitor.** A computer with several monitors shares one of them
+  (`/monitors:<N>` picks it; the default is the first).
+- **The Mac can't show its login window.** The LaunchAgent starts once you've logged in.
+
+For a session that follows the client's windows and monitors, HiDPI included, use a server
+that starts sessions of its own: [xrdp](#xrdp-packages), or Windows' own Remote Desktop on
+a Pro edition.
+
 ## What it builds
 
 | Artifact | Channel | Runs on |
@@ -26,6 +120,7 @@ verify a file's origin.
 | `sdl-freerdp.exe`, the same client for Windows, with freerdp-tk and its Python | preview, the same | Windows 10 and 11, x86_64 and ARM64 |
 | `sdl-freerdp`, the same client for macOS, with freerdp-tk and its Python | preview, the same | macOS 12 and newer, Apple Silicon (arm64); Intel Macs no longer (the last: release 20261122.6) |
 | FreeRDP web client (WebAssembly) with the [freerdp-web](https://github.com/congzhangzh/freerdp-web) page | preview: FreeRDP master + open pull requests (see the pins below) | a current browser (tested: Chrome); served from GitHub Pages |
+| FreeRDP's shadow server (`freerdp-shadow-cli`), with `freerdp-shadow-service` on Windows, a systemd user unit on Linux, a LaunchAgent app on macOS: AV1 (GPU or libaom), AV2, H.264 on Windows and macOS, sound | preview, the same FreeRDP | Windows 10 and 11 x86_64 and ARM64; Linux x86_64 / aarch64 with glibc ≥ 2.34 (GNOME, or any X11 desktop); macOS on Apple Silicon |
 | xrdp + xorgxrdp native packages (.deb / .rpm) | stable | x86_64 and ARM64: Debian testing, 13, 12; Ubuntu 26.10, 26.04, 24.04; Fedora 45, 44, 43 |
 
 ### What does not run, and why
@@ -548,12 +643,16 @@ at runtime for the CPU they run on: FreeRDP's primitives (colour
 conversion, codecs) use SSE/AVX2 or NEON when present, and dav1d has
 hand-written assembly with runtime CPU detection. The kit builds for the
 architecture baseline, never `-march=native`, so the binary runs on any
-CPU of the architecture. Hardware video decoding (VA-API) would need FFmpeg
-and is not part of these builds.
+CPU of the architecture. AV1 on the graphics card needs no FFmpeg: the
+clients decode through D3D11VA (Windows), VA-API (Linux) and VideoToolbox
+(macOS, M3 and newer), the shadow servers encode through Media Foundation
+(Windows) and VA-API (Linux); dav1d and libaom take over where the card
+can't. `/codec-list` shows what a computer has.
 
-Not included yet: H.264 (OpenH264 is only usable through Cisco's binary,
+Not included yet: H.264 in the clients (OpenH264 is only usable through Cisco's binary,
 which FreeRDP (3.32.2 and the preview) does not find under its current name
-`libopenh264.so.8`), smart cards, Kerberos, USB redirection, FUSE file
+`libopenh264.so.8`; the Windows and macOS shadow servers encode H.264 with the
+system's own encoder), smart cards, Kerberos, USB redirection, FUSE file
 clipboard.
 
 ## Deploying a server: keep RDP off the internet
