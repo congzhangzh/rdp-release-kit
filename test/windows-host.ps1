@@ -532,7 +532,7 @@ if ($Media -and (Test-Path "$Media\bunny.webm") -and (Test-Path $firefox)) {
     # a profile per user (the freerdp-tk demo's user runs it too, in a session of its own)
     Set-Content -Encoding ascii -Path "$env:SystemRoot\webdemo.cmd" -Value @(
         "@if not exist `"%LOCALAPPDATA%\webdemo-firefox`" mkdir `"%LOCALAPPDATA%\webdemo-firefox`" && copy `"$wd\firefox\user.js`" `"%LOCALAPPDATA%\webdemo-firefox\`" > nul",
-        "@start `"`" `"$firefox`" -no-remote -profile `"%LOCALAPPDATA%\webdemo-firefox`" -width 1500 -height 820 http://127.0.0.1:8000/")
+        "@start `"`" `"$firefox`" -no-remote -profile `"%LOCALAPPDATA%\webdemo-firefox`" -width 1500 -height 820 http://127.0.0.1:8000/?video-only")
     $site = Start-Process -FilePath python -PassThru -NoNewWindow -RedirectStandardOutput "$demo\webdemo-http.log" `
         -RedirectStandardError "$demo\webdemo-http.err" -ArgumentList "-m", "http.server", "8000", "--bind", "127.0.0.1", "--directory", "$wd\site"
     for ($i = 0; $i -lt 10 -and -not (Listening 8000); $i++) { Start-Sleep -Seconds 1 }

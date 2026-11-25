@@ -9,17 +9,24 @@
          box-sizing:border-box; background:#15191e; color:#cfd6dd; font:15px/1.4 sans-serif; }
   figure { margin:0; display:flex; flex-direction:column; min-height:0; }
   video, iframe { flex:1; min-height:0; width:100%; border:0; background:#000; }
-  figcaption { padding:6px 2px 0; }
+  figcaption { padding:0 2px 6px; }
+  /* ?video-only: the video alone, the whole width (the Windows host's demo: no WebGL beside it on a
+     runner without a GPU, where the aquarium and the software encode shared the CPUs) */
+  body.video-only { grid-template-columns:1fr; }
+  body.video-only figure.webgl { display:none; }
 </style>
 </head>
 <body>
+<!-- the credits above, not below: the browser's status box ("Waiting for 127.0.0.1…") covers a
+     page's bottom left, and a licence credit must stay readable -->
 <figure>
-  <video src="bunny.webm" autoplay loop></video>
   <figcaption>Web video (VP9, Opus): Big Buck Bunny, © Blender Foundation, CC BY 3.0</figcaption>
+  <video src="bunny.webm" autoplay loop></video>
 </figure>
-<figure>
-  <iframe src="webgl/aquarium/aquarium.html?numFish=100"></iframe>
+<figure class="webgl">
   <figcaption>WebGL: the WebGL Aquarium, © Google, BSD license</figcaption>
+  <script>if (/[?&]video-only\b/.test(location.search)) document.body.classList.add("video-only");
+    else document.currentScript.insertAdjacentHTML("afterend", '<iframe src="webgl/aquarium/aquarium.html?numFish=100"></iframe>');</script>
 </figure>
 </body>
 </html>

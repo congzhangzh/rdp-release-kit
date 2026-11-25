@@ -251,7 +251,11 @@ await send("Emulation.setDeviceMetricsOverride", { width: W, height: H, deviceSc
 // Windows' own Remote Desktop takes TLS 1.2 from our client, not 1.3 (run 41176456545's
 // probe: 1.3 fails, "tlsv1 alert internal error"): until a client release fixes it, the
 // demo passes /tls:enforce:1.2 as a user would, in Extra options (the page's ?extra=)
-await send("Page.navigate", { url: WINDOWS_RDP ? url + (url.includes("?") ? "&" : "?") + "extra=" + encodeURIComponent("/tls:enforce:1.2") : url });
+// the extra options a user would type: Windows' own Remote Desktop needs TLS 1.2; our shadow servers
+// (Windows, Mac) get AV1 4:2:0, our road and what a GPU encodes (the product owner, 2026-11-25:
+// "ours is a 4:2:0 road everywhere"; FRDP_1 with AV1_I444_DISABLED, as the item C test asks)
+const EXTRA = WINDOWS_RDP ? "/tls:enforce:1.2" : (WINDOWS || MAC) ? "/gfx:AV2:off,AV1:i420" : "";
+await send("Page.navigate", { url: EXTRA ? url + (url.includes("?") ? "&" : "?") + "extra=" + encodeURIComponent(EXTRA) : url });
 if (!await load()) {
   // why: isolation, the page's status line, and its console (kit run 41188821119 said only this)
   console.log("the page did not get ready: isolated " + await ev("self.crossOriginIsolated") +
@@ -402,8 +406,10 @@ writeFileSync(join(out, "page.log"),
 if (WINDOWS_ANY) {
   // the shadow server sends what the PC plays: sound only where it has a playback device
   const pcSound = !!process.env.DEMO_SOUND;
-  await caption(WINDOWS_RDP ? "Web video with sound, and WebGL: Firefox in the Windows session"
-    : pcSound ? "Web video with sound, and WebGL: Firefox on the Windows PC" : "Web video and WebGL: Firefox on the Windows PC");
+  // the video alone on Windows (webdemo opens the media page with ?video-only, test/windows-host.ps1):
+  // the WebGL Aquarium and the shadow's software encode shared a runner without a GPU (kit run 45549545203)
+  await caption(WINDOWS_RDP ? "Web video with sound: Firefox in the Windows session"
+    : pcSound ? "Web video with sound: Firefox on the Windows PC" : "Web video: Firefox on the Windows PC");
   // Win+D first: the desktop, so Firefox opens in front of Notepad (run 41176456545: behind it)
   await chordRemote("d");
   await sleep(1200);
@@ -411,11 +417,13 @@ if (WINDOWS_ANY) {
   await sleep(1500);
   await typeRemote("webdemo\n");
   await sleep(14000);
-  await caption("Big Buck Bunny, © Blender Foundation, CC BY 3.0 · WebGL Aquarium, © Google, BSD");
+  await caption("Big Buck Bunny, © Blender Foundation, CC BY 3.0");
   await sleep(8000);
   await caption(WINDOWS_RDP ? "Drawn by Windows Server, streamed to this browser, sound included"
-    : `Drawn on the Windows PC, streamed to this browser in AV1${pcSound ? ", sound included" : ""}`);
+    : `Drawn on the Windows PC, streamed to this browser in AV1 4:2:0${pcSound ? ", sound included" : ""}`);
   await sleep(6000);
+  // honest about the machine (the product owner's words): no numbers that flatter or scare
+  if (WINDOWS) { await caption("Encoded in software (libaom) on a GitHub runner without a GPU."); await sleep(5000); }
 } else if (MAC) {
   const pcSound = !!process.env.DEMO_SOUND;
   await caption(pcSound ? "Web video with sound, and WebGL: Firefox on the Mac" : "Web video and WebGL: Firefox on the Mac");
@@ -423,7 +431,7 @@ if (WINDOWS_ANY) {
   await sleep(14000);
   await caption("Big Buck Bunny, © Blender Foundation, CC BY 3.0 · WebGL Aquarium, © Google, BSD");
   await sleep(8000);
-  await caption(`Drawn on the Mac, streamed to this browser in AV1${pcSound ? ", sound included" : ""}`);
+  await caption(`Drawn on the Mac, streamed to this browser in AV1 4:2:0${pcSound ? ", sound included" : ""}`);
   await sleep(6000);
 } else {
   await caption("Web video with sound, and WebGL: Firefox on the server");
