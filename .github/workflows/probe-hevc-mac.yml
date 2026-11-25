@@ -21,7 +21,7 @@ jobs:
     timeout-minutes: 30
     env:
       FREERDP_REPO: https://github.com/congzhangzh/FreeRDP.git
-      FREERDP_SHA: 95f702277c86622f445d79b232d1cf54333aee73
+      FREERDP_SHA: 392aec4c83e84ee944ee73f5061d1f3320ecbec5
       HOMEBREW_NO_AUTO_UPDATE: 1
       HOMEBREW_NO_INSTALL_CLEANUP: 1
       OUT: ${{ github.workspace }}/probe-out
