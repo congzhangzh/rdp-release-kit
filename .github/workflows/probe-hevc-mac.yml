@@ -56,8 +56,10 @@ jobs:
             -DWITH_PLATFORM_SERVER=OFF -DWITH_OPENH264=OFF -DWITH_GFX_AV1=OFF -DWITH_GFX_AV2=OFF \
             -DWITH_X11=OFF -DWITH_WAYLAND=OFF -DWITH_PCSC=OFF -DWITH_KRB5=OFF -DWITH_FUSE=OFF \
             -DWITH_CUPS=OFF -DWITH_UNICODE_BUILTIN=ON -DWITH_JSON_DISABLED=ON -DCHANNEL_URBDRC=OFF \
-            -DWITH_MANPAGES=OFF -DOPENSSL_ROOT_DIR="$(brew --prefix openssl@3)" 2>&1 | tee "$OUT/a-configure.log"
-          cmake --build build-a 2>&1 | tee "$OUT/a-build.log" | grep -E 'warning|error|FAILED' || true
+            -DWITH_OPUS=OFF -DWITH_MANPAGES=OFF -DOPENSSL_ROOT_DIR="$(brew --prefix openssl@3)" 2>&1 | tee "$OUT/a-configure.log"
+          # -k 0: every compile error, not just the first; a failed build fails the step
+          cmake --build build-a -- -k 0 > "$OUT/a-build.log" 2>&1 || { grep -E -A3 'error:|FAILED' "$OUT/a-build.log" | head -80; exit 1; }
+          grep -E 'warning:' "$OUT/a-build.log" | grep -E 'videotoolbox|hevc|shadow' || true
           cd build-a && WLOG_LEVEL=DEBUG \
             ctest -R 'TestFreeRDPCodec(HEVC|H264)' -V 2>&1 | tee "$OUT/a-ctest.log" | tail -40
 
@@ -70,9 +72,9 @@ jobs:
             -DWITH_CLIENT=OFF -DWITH_SERVER=OFF -DWITH_SAMPLE=OFF -DWITH_OPENH264=OFF \
             -DWITH_GFX_AV1=OFF -DWITH_GFX_AV2=OFF -DWITH_X11=OFF -DWITH_WAYLAND=OFF -DWITH_PCSC=OFF \
             -DWITH_KRB5=OFF -DWITH_FUSE=OFF -DWITH_CUPS=OFF -DWITH_UNICODE_BUILTIN=ON \
-            -DWITH_JSON_DISABLED=ON -DCHANNEL_URBDRC=OFF -DWITH_MANPAGES=OFF \
+            -DWITH_JSON_DISABLED=ON -DCHANNEL_URBDRC=OFF -DWITH_OPUS=OFF -DWITH_MANPAGES=OFF \
             -DOPENSSL_ROOT_DIR="$(brew --prefix openssl@3)" 2>&1 | tee "$OUT/b-configure.log"
-          cmake --build build-b --target TestFreeRDPCodec 2>&1 | tee "$OUT/b-build.log" | grep -E 'warning|error|FAILED' || true
+          cmake --build build-b --target TestFreeRDPCodec -- -k 0 > "$OUT/b-build.log" 2>&1 || { grep -E -A3 'error:|FAILED' "$OUT/b-build.log" | head -80; exit 1; }
           cd build-b && WLOG_LEVEL=DEBUG \
             ctest -R 'TestFreeRDPCodec(HEVC|H264)' -V 2>&1 | tee "$OUT/b-ctest.log" | tail -40
 
