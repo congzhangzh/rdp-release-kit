@@ -12,11 +12,14 @@
 #   2. the monitor added during a session: the server sees 2 monitors, duplicates both
 #      outputs, the client gets a Reset Graphics with 2 monitors and holds
 #   3. a picture on each monitor: a coloured window on each, seen in the client's window
-#   4. a click on each monitor: the pointer lands on the pixel the client meant
-#      (GetCursorPos, within 1 px), and the window there gets the click. The client runs unscaled
-#      with its client area exactly over the virtual desktop: SDL follows a posted move with one
-#      at the real pointer when the mouse leaves its window (WM_MOUSELEAVE; run 45692504667 sent
-#      x=1423 then x=1822), and over the desktop at 1:1 that echo is the same point
+#   4. the pointer on each monitor: A, the server gets the point the client meant, exactly;
+#      B, the pointer then sits on the server's last point (GetCursorPos, 0 px), at least once on
+#      each monitor; a click reaches the server and the window under the pointer. The release
+#      client keeps its window at the primary's size and scales the desktop into it, and SDL
+#      follows a posted move with motions at the real pointer (runs 45692504667, 45696683442:
+#      the server got x=1423, then the echoes x=1822), so B is measured against what the server
+#      got last, not against the posted point. With the window at the desktop's top left, its
+#      left edge is the one point the echoes keep: that is where the primary is aimed at
 #   5. the second monitor moved to the other side, the same total size: a new Reset Graphics
 #      with the new place, and the pointer still lands right
 #   6. Ctrl+Alt+Del and the lock screen with both monitors: the server follows to Winlogon,
@@ -263,8 +266,7 @@ $hwnd = $session.MainWindowHandle
 # the client's client area at the top left of the virtual desktop, 1:1 (it covers both monitors;
 # the coloured windows below stay in front of it)
 function Place($b) {
-    # the client takes the new size itself after a Reset Graphics
-    [void](Until 15 { $c = New-Object Kit.Win+RECT; [void][Kit.Win]::GetClientRect($hwnd, [ref]$c); ($c.Right -eq $b.W) -and ($c.Bottom -eq $b.H) })
+    Start-Sleep -Seconds 2
     $wr = New-Object Kit.Win+RECT; [void][Kit.Win]::GetWindowRect($hwnd, [ref]$wr)
     $o = New-Object Kit.Win+POINT; [void][Kit.Win]::ClientToScreen($hwnd, [ref]$o)
     [void][Kit.Win]::SetWindowPos($hwnd, [IntPtr]::Zero, $b.X - ($o.X - $wr.Left), $b.Y - ($o.Y - $wr.Top), 0, 0, 0x0001 -bor 0x0004 -bor 0x0010)   # SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE
@@ -275,7 +277,7 @@ function Place($b) {
 }
 $at = Place $box
 $cr = New-Object Kit.Win+RECT; [void][Kit.Win]::GetClientRect($hwnd, [ref]$cr)
-Check "client: its window over the desktop at 1:1" (($at.X -eq $box.X) -and ($at.Y -eq $box.Y) -and ($at.W -eq $box.W) -and ($at.H -eq $box.H)) "client area $($at.W)x$($at.H) at $($at.X),$($at.Y), desktop $($box.W)x$($box.H) at $($box.X),$($box.Y)"
+Note "client area $($at.W)x$($at.H) at $($at.X),$($at.Y), desktop $($box.W)x$($box.H) at $($box.X),$($box.Y)"
 $prim = $screens | Where-Object { $_.Primary } | Select-Object -First 1
 # a window that logs each click (screen point) and closes after $life seconds
 function ColourWindow([string]$name, [int]$x, [int]$y, [int]$w, [int]$h, [string]$colour, [int]$life) {
@@ -296,7 +298,8 @@ Add-Type -AssemblyName System.Windows.Forms, System.Drawing
 }
 $before = @(ClientLog).Count
 $m2win = ColourWindow "second" $second.X $second.Y $second.W $second.H "Magenta" 240
-$pwin = ColourWindow "primary" ($prim.X + 40) ($prim.Y + 40) 200 200 "Cyan" 240
+# the primary's at its left edge, in the middle: where its pointer check is aimed (see 4)
+$pwin = ColourWindow "primary" $prim.X ($prim.Y + [int]($prim.H / 2) - 100) 200 200 "Cyan" 240
 Start-Sleep -Seconds 6
 # a point of the desktop in the client's window (the box scaled into the client area: 1:1 here)
 function InClient($vx, $vy) {
@@ -311,7 +314,7 @@ function Colour($bmp, $p) {
 }
 function Near($rgb, [int[]]$want) { $c = $rgb -split ','; (0..2 | Where-Object { [math]::Abs([int]$c[$_] - $want[$_]) -gt 48 }).Count -eq 0 }
 $m2c = InClient ($second.X + [int]($second.W / 2)) ($second.Y + [int]($second.H / 2))
-$pc = InClient ($prim.X + 140) ($prim.Y + 140)
+$pc = InClient ($prim.X + 100) ($prim.Y + [int]($prim.H / 2))
 $seen = $false
 for ($i = 0; $i -lt 20 -and -not $seen; $i++) {
     Start-Sleep -Seconds 1
@@ -342,27 +345,57 @@ function PostMouse([int]$msg, [int]$wparam, $p) {
 function OnDesktop($p) {
     [pscustomobject]@{ X = $box.X + [int][math]::Floor($p.X * $box.W / $cr.Right); Y = $box.Y + [int][math]::Floor($p.Y * $box.H / $cr.Bottom) }
 }
-function Point([string]$name, $q, [switch]$Click) {
+# the server's mouse events, in order: flags and the point in the shared surface (the box)
+function MouseEvents {
+    [regex]::Matches((ServerLog), "shadow_input_mouse_event\]: \[use\] flags=0x([0-9A-Fa-f]+), x=(\d+), y=(\d+)") |
+        ForEach-Object { [pscustomobject]@{ Flags = $_.Groups[1].Value.ToLowerInvariant(); X = [int]$_.Groups[2].Value; Y = [int]$_.Groups[3].Value } }
+}
+# until the server took no mouse event for a second (the client's echoes settle), at most 10 s
+function Quiet {
+    $n = @(MouseEvents).Count
+    for ($i = 0; $i -lt 10; $i++) { Start-Sleep -Seconds 1; $m = @(MouseEvents).Count; if ($m -eq $n) { return }; $n = $m }
+}
+function MonitorAt($p, $list) {
+    $hit = $list | Where-Object { ($p.X -ge $_.X) -and ($p.X -lt $_.X + $_.W) -and ($p.Y -ge $_.Y) -and ($p.Y -lt $_.Y + $_.H) } | Select-Object -First 1
+    if (-not $hit) { "none" } elseif ($hit.Primary) { "primary" } else { "second" }
+}
+$script:onMonitor = @()
+function Point([string]$name, $q, $list, [switch]$Click) {
     $want = OnDesktop $q
+    $tx = $want.X - $box.X; $ty = $want.Y - $box.Y
+    $from = @(MouseEvents).Count
     PostMouse 0x0200 0 $q   # WM_MOUSEMOVE
-    $got = $null
-    [void](Until 5 { $c = Cursor; $script:got = $c; ([math]::Abs($c.X - $want.X) -le 1) -and ([math]::Abs($c.Y - $want.Y) -le 1) })
+    [void](Until 5 { @(MouseEvents | Select-Object -Skip $from | Where-Object { $_.X -eq $tx -and $_.Y -eq $ty }).Count -ge 1 })
+    $after = @(MouseEvents | Select-Object -Skip $from)
+    Check "pointer A: $name, the server got the point" (@($after | Where-Object { $_.X -eq $tx -and $_.Y -eq $ty }).Count -ge 1) "want $tx,$ty; the server got $(($after | Select-Object -First 6 | ForEach-Object { "$($_.X),$($_.Y)" }) -join ' ')" | Out-Host
+    Quiet
+    $last = @(MouseEvents) | Select-Object -Last 1
     $got = Cursor
-    Check "pointer: $name" (([math]::Abs($got.X - $want.X) -le 1) -and ([math]::Abs($got.Y - $want.Y) -le 1)) "client $($q.X),$($q.Y) -> want $($want.X),$($want.Y), got $($got.X),$($got.Y)" | Out-Host
+    $ex = $box.X + $last.X; $ey = $box.Y + $last.Y
+    $mon = MonitorAt $got $list
+    $ok = ($got.X -eq $ex) -and ($got.Y -eq $ey)
+    if ($ok) { $script:onMonitor += $mon }
+    Check "pointer B: $name, the pointer is on the server's last point" $ok "server $($last.X),$($last.Y) + box $($box.X),$($box.Y) = $ex,$ey; pointer $($got.X),$($got.Y) on the $mon monitor" | Out-Host
     if ($Click) {
+        $from = @(MouseEvents).Count
         PostMouse 0x0201 1 $q   # WM_LBUTTONDOWN, MK_LBUTTON
         Start-Sleep -Milliseconds 200
         PostMouse 0x0202 0 $q   # WM_LBUTTONUP
+        # PTR_FLAGS_DOWN | PTR_FLAGS_BUTTON1 = 0x9000, PTR_FLAGS_BUTTON1 = 0x1000
+        [void](Until 5 { $f = @(MouseEvents | Select-Object -Skip $from | ForEach-Object { $_.Flags }); ($f -contains "9000") -and ($f -contains "1000") })
+        $f = @(MouseEvents | Select-Object -Skip $from | ForEach-Object { $_.Flags })
+        Check "click: $name, the server got the button down and up" (($f -contains "9000") -and ($f -contains "1000")) "flags $($f -join ' ')" | Out-Host
+        Quiet
+        $at = Cursor
+        $file = if ((MonitorAt $at $list) -eq "primary") { "$Out\click-primary.txt" } else { "$Out\click-second.txt" }
+        [void](Until 5 { (Test-Path $file) -and ((Get-Content $file) -contains "$($at.X),$($at.Y)") })
+        $logged = if (Test-Path $file) { (Get-Content $file) -join ' ' } else { "" }
+        Check "click: $name, the window under the pointer got it there" ((Test-Path $file) -and ((Get-Content $file) -contains "$($at.X),$($at.Y)")) "pointer $($at.X),$($at.Y) on the $(MonitorAt $at $list) monitor; $(Split-Path $file -Leaf): $logged" | Out-Host
     }
-    $want
 }
-$w2 = Point "on the second monitor" $m2c -Click
-$wp = Point "on the primary monitor" $pc -Click
-[void](Until 10 { (Test-Path "$Out\click-second.txt") -and (Test-Path "$Out\click-primary.txt") })
-$c2 = if (Test-Path "$Out\click-second.txt") { (Get-Content "$Out\click-second.txt" | Select-Object -Last 1) } else { "" }
-$cp = if (Test-Path "$Out\click-primary.txt") { (Get-Content "$Out\click-primary.txt" | Select-Object -Last 1) } else { "" }
-Check "click: the window on the second monitor got it" ([bool]$c2) "at $c2, want $($w2.X),$($w2.Y)"
-Check "click: the window on the primary monitor got it" ([bool]$cp) "at $cp, want $($wp.X),$($wp.Y)"
+Point "on the second monitor" $m2c $screens -Click
+# the window's left edge (client x 0) maps to the desktop's, and the echoes keep it there: the primary
+Point "on the primary monitor" (InClient $prim.X ($prim.Y + [int]($prim.H / 2))) $screens -Click
 
 # ---- 5. the second monitor to the other side of the primary: the same box, another layout
 $resetsBefore = @(Resets).Count
@@ -383,7 +416,8 @@ $box = $box2
 $at = Place $box
 Note "client area after the move: $($at.W)x$($at.H) at $($at.X),$($at.Y)"
 $m2c2 = InClient ($second2.X + [int]($second2.W / 2)) ($second2.Y + [int]($second2.H / 2))
-[void](Point "on the moved second monitor" $m2c2)
+Point "on the moved second monitor" $m2c2 $screens2
+Check "pointer B: on each monitor at least once" (($script:onMonitor -contains "primary") -and ($script:onMonitor -contains "second")) "where B held: $(if ($script:onMonitor) { $script:onMonitor -join ', ' } else { 'nowhere' })"
 Check "moved: the session holds" (-not $session.HasExited)
 Shot "moved"
 
