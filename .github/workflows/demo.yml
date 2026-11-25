@@ -108,7 +108,7 @@ jobs:
       - name: Record
         env:
           GH_TOKEN: ${{ github.token }}
-          KIT_COMMIT: ${{ inputs.kit_sha || (github.event_name == 'push' && 'newest') || github.sha }}
+          KIT_COMMIT: ${{ inputs.kit_sha || ((github.event_name == 'push' || github.event_name == 'workflow_dispatch') && 'newest') || github.sha }}
           PODMAN: /usr/local/bin/podman-root
           # Ubuntu's AppArmor profile for rootful podman forbids the mounts
           # systemd makes for its own sandboxes ("Failed to remount root
@@ -183,7 +183,8 @@ jobs:
   publish:
     # not for a push to demo-ci (an experiment): github.event_name is the
     # kit's own event when the kit calls this workflow
-    if: inputs.kit_sha != '' || github.event_name == 'workflow_dispatch'
+    # TEST ONLY branch (never main): the recordings stay run artifacts, nothing is published
+    if: false
     needs: [record, shadow-multimon]
     runs-on: ubuntu-24.04
     concurrency: publish-demo-${{ inputs.kit_sha || github.sha }}
