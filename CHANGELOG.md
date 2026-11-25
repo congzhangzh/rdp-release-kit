@@ -13,6 +13,7 @@ toolchain) gets an entry here in the same commit.
 
 ## 2026-11-25
 
+- **Windows host test: x86_64's Ctrl+Alt+Del focus is a record for now** (release manager; the product owner's call): on windows-2025 the desktop ('Program Manager') kept the front in 3 of 4 attempts of kit run 45599655633 whatever the test tried, which blocked releases on a harness step, so on x86_64 a failed focus prints "INFO  x86_64 Ctrl+Alt+Del: not checked (focus; …)" instead of failing; ARM64 still gates (it passes 5/5). The real fix, a check that doesn't depend on the foreground window, is scheduled; then x86_64 gates again.
 - **The Windows host's demo: AV1 4:2:0, the video alone, an honest caption** (release manager; the product owner's review of the live 20261125.1 demos, item 1): its poster showed 0.0 pictures/s and a 3,139 ms round trip. Not a hang: the shadow encoded AV1 1600x900 4:4:4 in software (libaom; the runner has no GPU, and 4:4:4 never goes to Media Foundation) at 0.7-4 fps, encodes up to 1.85 s, beside Firefox's WebGL Aquarium on the same CPUs (kit run 45549545203). Now the shadow demos (Windows, Mac) ask for AV1 4:2:0 as a user would (the page's extra options `/gfx:AV2:off,AV1:i420`, as the item C test), the Windows webdemo opens the media page with `?video-only` (no Aquarium iframe at all), and a caption says "Encoded in software (libaom) on a GitHub runner without a GPU." The media page's credits move above the video and the scene: Firefox's "Waiting for 127.0.0.1…" box covered the start of the Big Buck Bunny credit.
 ## 2026-11-24
 

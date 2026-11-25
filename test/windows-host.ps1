@@ -827,7 +827,15 @@ if ($session.MainWindowHandle -eq [IntPtr]::Zero) {
 } elseif (-not (Focus $session.MainWindowHandle)) {
     # the harness, not the product, but a check that never runs is lost coverage: a FAIL that
     # names it and the window that held the front (it was a SKIP, every ARM64 round)
-    Check "Ctrl+Alt+Del: the test brings the client's window to the front" $false "the front: $(FrontWindow)"
+    if ($arm64) {
+        Check "Ctrl+Alt+Del: the test brings the client's window to the front" $false "the front: $(FrontWindow)"
+    } else {
+        # x86_64: record-only for now (the product owner, 2026-11-25): on windows-2025 the desktop
+        # keeps the front in most rounds (kit run 45599655633, 3 of 4 attempts), whatever the test
+        # tries; ARM64 still gates. The real fix, a check that doesn't depend on the foreground
+        # window, is scheduled; then this gates again
+        "INFO  x86_64 Ctrl+Alt+Del: not checked (focus; the front: $(FrontWindow))" | Tee-Object -FilePath "$Out\checks.txt" -Append
+    }
 } else {
     $deletes = DeleteDowns
     # all the server's key events, to see a loop: the server injects into this console, where
