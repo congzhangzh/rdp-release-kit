@@ -19,8 +19,10 @@
 #      follows a posted move with motions at the real pointer (runs 45692504667, 45696683442:
 #      the server got x=1423, then the echoes x=1822), so B is measured against what the server
 #      got last, not against the posted point. The echo is where the real pointer was when SDL
-#      took the posted move (run 45714503610: 1822,487 after every post), so for the primary the
-#      real pointer is put on the target first, at the window's left edge, which maps to itself
+#      took the posted move (run 45714503610: 1822,487 after every post), seen through the
+#      client's scaled window. So the real pointer is first put on a preset point of the monitor
+#      whose echo lands elsewhere on that monitor, and B also needs the pointer to have moved
+#      from where it was just before the post: the server must have put it there
 #   5. the second monitor moved to the other side, the same total size: a new Reset Graphics
 #      with the new place, and the pointer still lands right
 #   6. Ctrl+Alt+Del and the lock screen with both monitors: the server follows to Winlogon,
@@ -362,14 +364,21 @@ function MonitorAt($p, $list) {
     if (-not $hit) { "none" } elseif ($hit.Primary) { "primary" } else { "second" }
 }
 $script:onMonitor = @()
-function Point([string]$name, $q, $list, [switch]$Click, [switch]$Preposition) {
+# where the client's echo of a real pointer at $p is expected (🔎 runs 1-3): its place in the
+# client area, scaled back to the desktop as the client maps it, kept inside the desktop
+function EchoOf($p) {
+    $l = [pscustomobject]@{ X = $p.X - $at.X; Y = $p.Y - $at.Y }
+    $d = OnDesktop $l
+    [pscustomobject]@{ X = [math]::Min($box.X + $box.W - 2, [math]::Max($box.X, $d.X)); Y = [math]::Min($box.Y + $box.H - 1, [math]::Max($box.Y, $d.Y)) }
+}
+function Point([string]$name, $q, $list, $preset, [switch]$Click) {
     $want = OnDesktop $q
     $tx = $want.X - $box.X; $ty = $want.Y - $box.Y
-    if ($Preposition) {
-        # the real pointer on the target first: what SDL echoes is then the target
-        [void][Kit.Win]::SetCursorPos($want.X, $want.Y)
-        Quiet
-    }
+    # the real pointer on the preset point first, then quiet: the pointer before the post
+    [void][Kit.Win]::SetCursorPos($preset.X, $preset.Y)
+    Quiet
+    $pre = Cursor
+    $echo = EchoOf $pre
     $from = @(MouseEvents).Count
     PostMouse 0x0200 0 $q   # WM_MOUSEMOVE
     [void](Until 5 { @(MouseEvents | Select-Object -Skip $from | Where-Object { $_.X -eq $tx -and $_.Y -eq $ty }).Count -ge 1 })
@@ -380,9 +389,10 @@ function Point([string]$name, $q, $list, [switch]$Click, [switch]$Preposition) {
     $got = Cursor
     $ex = $box.X + $last.X; $ey = $box.Y + $last.Y
     $mon = MonitorAt $got $list
-    $ok = ($got.X -eq $ex) -and ($got.Y -eq $ey)
+    # on the server's last point, and moved there from where it was: the server put it there
+    $ok = ($got.X -eq $ex) -and ($got.Y -eq $ey) -and (($got.X -ne $pre.X) -or ($got.Y -ne $pre.Y))
     if ($ok) { $script:onMonitor += $mon }
-    Check "pointer B: $name, the pointer is on the server's last point" $ok "server $($last.X),$($last.Y) + box $($box.X),$($box.Y) = $ex,$ey; pointer $($got.X),$($got.Y) on the $mon monitor" | Out-Host
+    Check "pointer B: $name, the server moved the pointer to its last point" $ok "before $($pre.X),$($pre.Y); server $($last.X),$($last.Y) + box $($box.X),$($box.Y) = $ex,$ey; pointer $($got.X),$($got.Y) on the $mon monitor (echo expected at $($echo.X),$($echo.Y))" | Out-Host
     if ($Click) {
         $from = @(MouseEvents).Count
         PostMouse 0x0201 1 $q   # WM_LBUTTONDOWN, MK_LBUTTON
@@ -400,9 +410,11 @@ function Point([string]$name, $q, $list, [switch]$Click, [switch]$Preposition) {
         Check "click: $name, the window under the pointer got it there" ((Test-Path $file) -and ((Get-Content $file) -contains "$($at.X),$($at.Y)")) "pointer $($at.X),$($at.Y) on the $(MonitorAt $at $list) monitor; $(Split-Path $file -Leaf): $logged" | Out-Host
     }
 }
-Point "on the second monitor" $m2c $screens -Click
-# the window's left edge (client x 0) maps to the desktop's own: the one point an echo keeps
-Point "on the primary monitor" (InClient $prim.X ($prim.Y + [int]($prim.H / 2))) $screens -Click -Preposition
+# presets: a point of each monitor whose echo lands elsewhere on that monitor
+$p2 = [pscustomobject]@{ X = $second.X + 76; Y = $second.Y + [int]($second.H / 2) }
+$pp = [pscustomobject]@{ X = $prim.X + 100; Y = $prim.Y + [int]($prim.H / 2) }
+Point "on the second monitor" $m2c $screens $p2 -Click
+Point "on the primary monitor" $pc $screens $pp -Click
 
 # ---- 5. the second monitor to the other side of the primary: the same box, another layout
 $resetsBefore = @(Resets).Count
@@ -423,7 +435,7 @@ $box = $box2
 $at = Place $box
 Note "client area after the move: $($at.W)x$($at.H) at $($at.X),$($at.Y)"
 $m2c2 = InClient ($second2.X + [int]($second2.W / 2)) ($second2.Y + [int]($second2.H / 2))
-Point "on the moved second monitor" $m2c2 $screens2
+Point "on the moved second monitor" $m2c2 $screens2 ([pscustomobject]@{ X = $second2.X + 100; Y = $second2.Y + [int]($second2.H / 2) })
 Check "pointer B: on each monitor at least once" (($script:onMonitor -contains "primary") -and ($script:onMonitor -contains "second")) "where B held: $(if ($script:onMonitor) { $script:onMonitor -join ', ' } else { 'nowhere' })"
 Check "moved: the session holds" (-not $session.HasExited)
 Shot "moved"
