@@ -1,0 +1,68 @@
+# probe-iddcx: a record, not a kit test. Can a GitHub-hosted Windows runner get a second
+# monitor from an IddCx virtual display driver, and does DXGI desktop duplication see
+# real pictures on it? (the shadow server's "share all monitors" CI, freerdp-comp-shadow-g5,
+# 2026-11-25, on the RM's go). Publishes nothing; the artifacts carry the evidence.
+#
+# The driver is third-party code on the runner: VirtualDrivers/Virtual-Display-Driver
+# (MIT), release tag 25.7.23, its driver-only zips pinned by SHA256 (checked by the
+# script before anything is installed); the script prints the signer's thumbprint.
+name: probe-iddcx
+
+on:
+  push:
+    branches: [probe-iddcx]
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: windows-2025
+            arch: x64
+            zip: VirtualDisplayDriver-x86.Driver.Only.zip
+            sha256: e24210692b442b39af763536330ce78b423f19342b7a7792c26de3944e418b3a
+          - runner: windows-11-arm
+            arch: arm64
+            zip: VirtualDisplayDriver-ARM64.Driver.Only.zip
+            sha256: dcd487161469c726bab60f174a7e7f70ee02afd437cad0d5c0e6755953de5a25
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+    env:
+      OUT: ${{ github.workspace }}\probe-out
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Build the probe tools (MSVC of the image)
+        shell: pwsh
+        run: |
+          $bin = Join-Path $env:OUT 'bin'
+          New-Item -ItemType Directory -Force -Path $bin | Out-Null
+          $vs = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -property installationPath
+          $vcvars = Join-Path $vs 'VC\Auxiliary\Build\vcvarsall.bat'
+          $src = Join-Path $env:GITHUB_WORKSPACE 'test\probe-iddcx'
+          cmd /c "`"$vcvars`" ${{ matrix.arch }} >nul && cd /d `"$bin`" && cl /nologo /W3 /O2 `"$src\dxgi-probe.c`" d3d11.lib dxgi.lib dxguid.lib user32.lib gdi32.lib && cl /nologo /W3 /O2 `"$src\devnode.c`" setupapi.lib newdev.lib"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Get-ChildItem $bin -Filter *.exe
+
+      - name: Fetch the pinned driver
+        shell: pwsh
+        run: |
+          Invoke-WebRequest -Uri 'https://github.com/VirtualDrivers/Virtual-Display-Driver/releases/download/25.7.23/${{ matrix.zip }}' -OutFile (Join-Path $env:RUNNER_TEMP '${{ matrix.zip }}')
+
+      - name: Probe
+        shell: pwsh
+        run: |
+          & (Join-Path $env:GITHUB_WORKSPACE 'test\probe-iddcx\probe-iddcx.ps1') -Zip (Join-Path $env:RUNNER_TEMP '${{ matrix.zip }}') -Sha256 '${{ matrix.sha256 }}' -Arch '${{ matrix.arch }}' -Out $env:OUT
+          Get-Content (Join-Path $env:OUT 'verdict.txt')
+
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: probe-iddcx-${{ matrix.arch }}
+          path: probe-out
+          if-no-files-found: warn
+          retention-days: 14
