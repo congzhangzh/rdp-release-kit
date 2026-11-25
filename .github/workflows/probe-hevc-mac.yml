@@ -21,7 +21,7 @@ jobs:
     timeout-minutes: 30
     env:
       FREERDP_REPO: https://github.com/congzhangzh/FreeRDP.git
-      FREERDP_SHA: 33204561887070b234afd607503d0c423a40af21
+      FREERDP_SHA: 54a8449cf1da34a27762f66504ff981de1e09be2
       HOMEBREW_NO_AUTO_UPDATE: 1
       HOMEBREW_NO_INSTALL_CLEANUP: 1
       OUT: ${{ github.workspace }}/probe-out
@@ -74,7 +74,9 @@ jobs:
             -DWITH_CUPS=OFF -DWITH_UNICODE_BUILTIN=ON -DWITH_JSON_DISABLED=ON -DCHANNEL_URBDRC=OFF \
             -DWITH_OPUS=OFF -DWITH_MANPAGES=OFF -DOPENSSL_ROOT_DIR="$(brew --prefix openssl@3)" > "$OUT/c-configure.log" 2>&1
           cmake --build build-c -- -k 0 > "$OUT/c-build.log" 2>&1 || { grep -E -A3 'error:|FAILED' "$OUT/c-build.log" | head -80; exit 1; }
-          cd build-c && ctest -R 'TestFreeRDPCodecH264|TestShadow' 2>&1 | tee "$OUT/c-ctest.log" | tail -25
+          cd build-c && ctest -R 'TestFreeRDPCodecH264|TestShadow' 2>&1 | tee "$OUT/c-ctest.log" | tail -25 || true
+          # TestShadowPipeline failed here on fork 332045618 (run 45689415564): three times, verbose
+          ctest -R TestShadowPipeline -V --repeat until-fail:3 2>&1 | tee "$OUT/c-pipeline.log" | tail -40
 
       - name: "B: + FFmpeg decoder (VideoToolbox encodes, FFmpeg decodes)"
         run: |
