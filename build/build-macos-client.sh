@@ -239,6 +239,10 @@ if [ -n "${HOST:-}" ]; then
     # Contents/MacOS, is signed first with its own identifier (the one Screen Recording
     # and Accessibility list), then the app, whose seal then covers it
     codesign --force --sign - "$PKG/winpr-hash"
+    # the remover inside the app, so it is installed (and sealed) with it and outlives the
+    # unzipped download: sudo bash /Applications/FreeRDP-Shadow.app/Contents/Resources/uninstall-daemon.sh
+    mkdir -p "$APP/Contents/Resources"
+    install -m 755 "$KIT/build/macos/uninstall-daemon.sh" "$APP/Contents/Resources/uninstall-daemon.sh"
     codesign --force --sign - --identifier org.freerdp.shadow.agent "$APP/Contents/MacOS/freerdp-shadow-agent"
     codesign --force --sign - --identifier org.freerdp.shadow "$APP"
     codesign --verify --strict --deep "$APP"

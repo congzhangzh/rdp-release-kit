@@ -31,11 +31,11 @@ macOS：`freerdp-tk.command`，需先清除下载文件的隔离属性，见下�
 | | Windows（优先） | Linux | macOS（Apple Silicon） |
 |---|---|---|---|
 | 文件 | `freerdp-host-<version>-windows-x86_64.zip`、`-windows-aarch64.zip` | `freerdp-host-<version>-linux-x86_64.tar.xz`、`-linux-aarch64.tar.xz` | `freerdp-host-<version>-macos-arm64.zip` |
-| 运行方式 | Windows 服务 `freerdp-shadow-service`，以 SYSTEM 身份在控制台会话中运行服务器：登录界面和锁屏界面、UAC 提示以及 Ctrl+Alt+Del 也能共享 | [会话管理器](README.md#the-session-manager-runs-as-root) `freerdp-shadow-sesman`：以 root 身份运行的系统服务，把每个用户交给其自己 GNOME 会话（Mutter，Wayland 或 X11）里的 shadow server，并为没有 GNOME 会话的用户启动一个无显示器的 GNOME；不用 root 时，也可以用你所在桌面会话里的 systemd [用户单元](README.md#the-user-unit-your-own-desktop-no-root) `freerdp-shadow.service`：GNOME，或任何其他 X11 桌面 | 在你的登录会话中运行的 LaunchAgent（`FreeRDP-Shadow.app`） |
+| 运行方式 | Windows 服务 `freerdp-shadow-service`，以 SYSTEM 身份在控制台会话中运行服务器：登录界面和锁屏界面、UAC 提示以及 Ctrl+Alt+Del 也能共享 | [会话管理器](README.md#the-session-manager-runs-as-root) `freerdp-shadow-sesman`：以 root 身份运行的系统服务，把每个用户交给其自己 GNOME 会话（Mutter，Wayland 或 X11）里的 shadow server，并为没有 GNOME 会话的用户启动一个无显示器的 GNOME；不用 root 时，也可以用你所在桌面会话里的 systemd [用户单元](README.md#the-user-unit-your-own-desktop-no-root) `freerdp-shadow.service`：GNOME，或任何其他 X11 桌面 | 以 root 运行的 LaunchDaemon `org.freerdp.shadow.daemon`，加上在控制台会话里运行的代理（`freerdp-shadow-agent`）：先是登录窗口，然后是你的桌面，始终是同一个连接；不用 root 时，也可以用在你的登录会话中运行的 LaunchAgent（`FreeRDP-Shadow.app`） |
 | AV1 4:2:0 | 显卡带有 AV1 编码器时，通过 Media Foundation 在显卡上编码（已测试：NVIDIA 笔记本 GPU），否则使用 libaom | 通过 VA-API 在显卡上编码（尚未在真实 GPU 上验证），否则使用 libaom | libaom（没有 Apple 芯片能编码 AV1） |
 | 其他 | AV2（libavm）、Media Foundation 提供的 H.264 AVC420（供不支持 AV1 的客户端使用）、电脑的声音 | AV2、会话的声音（PipeWire）、通过 libei 输入按键 | AV2、VideoToolbox 提供的 H.264、Mac 的声音 |
-| 登录 | Windows 账户（网络级别身份验证） | 你自己的账户（PAM，通过 TLS）：会话管理器把你交给你自己的 GNOME；用户单元只接受桌面的所有者 | 你的 macOS 账户（PAM，通过 TLS） |
-| 每次发布都在 CI 中测试 | Windows Server 2025（x86_64）和 Windows 11 on ARM：AV1、Windows 登录、Ctrl+Alt+Del、锁屏界面、FreeRDP Web | x86_64 和 ARM64 上的 GNOME 无显示器会话和 Xfce：会话管理器（已登录的和无显示器的 GNOME）、用户单元、AV1、AV2、按键、声音、拒绝其他账户 | GitHub 的 macOS runner：针对 LaunchAgent 的一次 AV1 会话和一次 AV2 会话（无法测试 runner 自己的登录） |
+| 登录 | Windows 账户（网络级别身份验证） | 你自己的账户（PAM，通过 TLS）：会话管理器把你交给你自己的 GNOME；用户单元只接受桌面的所有者 | 本机的 macOS 账户（PAM，通过 TLS）：通过守护进程时，在登录窗口可以是除 root 以外的任何本机用户（之后像坐在 Mac 前一样在登录窗口登录），或者是控制台上的用户；LaunchAgent 只接受它自己的用户 |
+| 每次发布都在 CI 中测试 | Windows Server 2025（x86_64）和 Windows 11 on ARM：AV1、Windows 登录、Ctrl+Alt+Del、锁屏界面、FreeRDP Web | x86_64 和 ARM64 上的 GNOME 无显示器会话和 Xfce：会话管理器（已登录的和无显示器的 GNOME）、用户单元、AV1、AV2、按键、声音、拒绝其他账户 | GitHub 的 macOS runner：针对 LaunchAgent 的一次 AV1 会话和一次 AV2 会话，以及按下文安装的守护进程（runner 无法显示登录窗口） |
 
 ### 安装
 
@@ -76,7 +76,22 @@ systemctl --user daemon-reload && systemctl --user enable --now freerdp-shadow.s
 
 两者都监听 3388：二选一安装。
 
-**macOS**，解压之后：
+**macOS**，解压之后，以管理员身份：守护进程方式。整台 Mac 一个服务器，在任何人登录之前就已运行：
+它显示登录窗口，并在同一个连接里跟着你进入桌面：
+
+```sh
+sudo bash ./install-daemon.sh
+```
+
+它把应用装到 /Applications，把服务器作为 root 的 LaunchDaemon 运行在 127.0.0.1:3388，
+并把它的代理作为 LaunchAgent 运行在登录窗口和每个会话中。然后在“系统设置 > 隐私与安全性”中，同时在
+“屏幕与系统音频录制”和“辅助功能”下允许 `freerdp-shadow-agent`（在 /Applications/FreeRDP-Shadow.app/Contents/MacOS 中），
+然后以你自己的身份（不用 sudo）重启代理：`launchctl kickstart -k gui/$(id -u)/org.freerdp.shadow.agent`。这个授权在登录窗口也有效。日志：/var/log/freerdp-shadow/。用
+`sudo bash /Applications/FreeRDP-Shadow.app/Contents/Resources/uninstall-daemon.sh`
+卸载
+（`--app` 同时删除应用，`--logs` 删除日志）。
+
+不用 root、只共享你自己的会话：LaunchAgent 应用。
 
 ```sh
 cp -R FreeRDP-Shadow.app /Applications/
@@ -86,8 +101,11 @@ launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/org.freerdp.shadow.plist
 ```
 
 然后在“系统设置 > 隐私与安全性”中，同时在“屏幕与系统音频录制”和“辅助功能”下允许 FreeRDP Shadow，并重启它：
-`launchctl kickstart -k gui/$(id -u)/org.freerdp.shadow`。该应用使用临时（ad hoc）签名，
-所以每次更新后 macOS 都会再次询问。
+`launchctl kickstart -k gui/$(id -u)/org.freerdp.shadow`。
+
+两者都监听 3388：二选一安装（应用在监听时 `install-daemon.sh` 会拒绝；
+`launchctl bootout gui/$(id -u)/org.freerdp.shadow` 可以停掉它）。两者都使用临时（ad hoc）签名，
+所以每次更新后 macOS 都会再次询问这两项权限。
 
 每个压缩包里的 `README.txt` 都有该平台的完整说明：日志、选项、卸载。
 
@@ -114,7 +132,8 @@ sdl-freerdp /v:127.0.0.1:13388 /u:user
   客户端的 `/dynamic-resolution`、`/multimon` 布局和 HiDPI 缩放在这里都不起作用。
 - **只共享一个显示器。** 有多个显示器的电脑只共享其中一个
   （用 `/monitors:<N>` 选择；默认是第一个）。
-- **Mac 无法显示它的登录窗口。** LaunchAgent 要在你登录之后才会启动。
+- **开启了 FileVault 的 Mac 重启后**，会在 macOS 启动之前显示磁盘解锁界面：任何 RDP 服务器都无法显示它
+  （计划内的重启用 `sudo fdesetup authrestart`）。LaunchAgent 应用要在你登录之后才启动；守护进程会显示登录窗口。
 
 如果需要会话跟随客户端的窗口和显示器（包括 HiDPI），请使用能自己启动会话的服务器：
 [xrdp](README.md#xrdp-packages)，或 Pro 版 Windows 自带的远程桌面。
@@ -127,7 +146,7 @@ sdl-freerdp /v:127.0.0.1:13388 /u:user
 | `sdl-freerdp.exe`，Windows 版的同一个客户端，带 freerdp-tk 及其 Python | 预览版，同上 | Windows 10 和 11，x86_64 和 ARM64 |
 | `sdl-freerdp`，macOS 版的同一个客户端，带 freerdp-tk 及其 Python | 预览版，同上 | macOS 12 及更新版本，Apple Silicon（arm64）；不再支持 Intel Mac（最后一个版本：20261122.6） |
 | FreeRDP 网页客户端（WebAssembly），带 [freerdp-web](https://github.com/congzhangzh/freerdp-web) 页面 | 预览版：FreeRDP master + 尚未合并的 pull request（见下面的版本固定） | 较新的浏览器（已测试：Chrome）；由 GitHub Pages 提供 |
-| FreeRDP 的 shadow server（`freerdp-shadow-cli`），Windows 上带 `freerdp-shadow-service`，Linux 上是会话管理器或 systemd 用户单元，macOS 上是 LaunchAgent 应用：AV1（GPU 或 libaom）、AV2、Windows 和 macOS 上的 H.264、声音 | 预览版，同样的 FreeRDP | Windows 10 和 11 x86_64 和 ARM64；Linux x86_64 / aarch64，glibc ≥ 2.34（GNOME，或任何 X11 桌面）；Apple Silicon 上的 macOS |
+| FreeRDP 的 shadow server（`freerdp-shadow-cli`），Windows 上带 `freerdp-shadow-service`，Linux 上是会话管理器或 systemd 用户单元，macOS 上是 LaunchDaemon 及其代理，或 LaunchAgent 应用：AV1（GPU 或 libaom）、AV2、Windows 和 macOS 上的 H.264、声音 | 预览版，同样的 FreeRDP | Windows 10 和 11 x86_64 和 ARM64；Linux x86_64 / aarch64，glibc ≥ 2.34（GNOME，或任何 X11 桌面）；Apple Silicon 上的 macOS |
 | xrdp + xorgxrdp 原生软件包（.deb / .rpm） | 稳定版 | x86_64 和 ARM64：Debian testing、13、12；Ubuntu 26.10、26.04、24.04；Fedora 45、44、43 |
 
 ## 更多

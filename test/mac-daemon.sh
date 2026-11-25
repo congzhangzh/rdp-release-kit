@@ -132,8 +132,12 @@ save_logs
 cp "$OUT/var-log/daemon.log" "$OUT/daemon.log" 2> /dev/null || true
 
 # 5. uninstall: nothing of ours loaded, listening or running, also 15 s later (no loop); again
-sudo "$HOSTDIR/uninstall-daemon.sh" --app --logs > "$OUT/uninstall.log" 2>&1 && ok=1 || ok=0
-check "uninstall-daemon.sh --app --logs" "$ok" "$(tail -1 "$OUT/uninstall.log")"
+# the remover the app carries (the one the README names), not the archive's copy
+REMOVER=/Applications/FreeRDP-Shadow.app/Contents/Resources/uninstall-daemon.sh
+[ -x "$REMOVER" ] && ok=1 || ok=0
+check "the installed app carries uninstall-daemon.sh (Contents/Resources)" "$ok"
+sudo bash "$REMOVER" --app --logs > "$OUT/uninstall.log" 2>&1 && ok=1 || ok=0
+check "uninstall-daemon.sh --app --logs, from the installed app" "$ok" "$(tail -1 "$OUT/uninstall.log")"
 gone() {
     left=""
     loaded system/org.freerdp.shadow.daemon && left="$left daemon-loaded"

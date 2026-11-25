@@ -35,11 +35,11 @@ sessions of its own; for that, see [xrdp](#xrdp-packages).
 | | Windows (first) | Linux | macOS (Apple Silicon) |
 |---|---|---|---|
 | File | `freerdp-host-<version>-windows-x86_64.zip`, `-windows-aarch64.zip` | `freerdp-host-<version>-linux-x86_64.tar.xz`, `-linux-aarch64.tar.xz` | `freerdp-host-<version>-macos-arm64.zip` |
-| Runs as | a Windows service, `freerdp-shadow-service`, which runs the server as SYSTEM on the console session: the logon and lock screens, UAC prompts and Ctrl+Alt+Del too | the [session manager](#the-session-manager-runs-as-root), `freerdp-shadow-sesman`: a root system service that hands each user to a shadow server in their own GNOME session (Mutter, Wayland or X11), and starts a headless GNOME for a user who has none; or, without root, a systemd [user unit](#the-user-unit-your-own-desktop-no-root), `freerdp-shadow.service`, in the desktop session you're in: GNOME, or any other X11 desktop | a LaunchAgent in your login session (`FreeRDP-Shadow.app`) |
+| Runs as | a Windows service, `freerdp-shadow-service`, which runs the server as SYSTEM on the console session: the logon and lock screens, UAC prompts and Ctrl+Alt+Del too | the [session manager](#the-session-manager-runs-as-root), `freerdp-shadow-sesman`: a root system service that hands each user to a shadow server in their own GNOME session (Mutter, Wayland or X11), and starts a headless GNOME for a user who has none; or, without root, a systemd [user unit](#the-user-unit-your-own-desktop-no-root), `freerdp-shadow.service`, in the desktop session you're in: GNOME, or any other X11 desktop | a root LaunchDaemon, `org.freerdp.shadow.daemon`, with an agent (`freerdp-shadow-agent`) in the session on the console: the login window, then your desktop, on one connection; or, without root, a LaunchAgent in your login session (`FreeRDP-Shadow.app`) |
 | AV1 4:2:0 | on the graphics card through Media Foundation when it has an AV1 encoder (tested: an NVIDIA laptop GPU), else libaom | on the graphics card through VA-API (not yet proven on a real GPU), else libaom | libaom (no Apple chip encodes AV1) |
 | Also | AV2 (libavm), H.264 AVC420 from Media Foundation for clients without AV1, the PC's sound | AV2, the session's sound (PipeWire), keys through libei | AV2, H.264 from VideoToolbox, the Mac's sound |
-| Login | a Windows account (Network Level Authentication) | your own account (PAM, over TLS): the session manager hands you to your own GNOME; the user unit lets in the desktop's owner only | your macOS account (PAM, over TLS) |
-| Tested in CI, every release | Windows Server 2025 (x86_64) and Windows 11 on ARM: AV1, Windows logins, Ctrl+Alt+Del, the lock screen, FreeRDP Web | GNOME headless and Xfce, on x86_64 and ARM64: the session manager (a logged-in and a headless GNOME), the user unit, AV1, AV2, keys, sound, another account refused | a GitHub macOS runner: an AV1 and an AV2 session against the LaunchAgent (the runner's own login can't be tested) |
+| Login | a Windows account (Network Level Authentication) | your own account (PAM, over TLS): the session manager hands you to your own GNOME; the user unit lets in the desktop's owner only | a local macOS account (PAM, over TLS): through the daemon, any local user but root at the login window (then you log in on the login window, as at the Mac), or the user on the console; the LaunchAgent lets in its own user only |
+| Tested in CI, every release | Windows Server 2025 (x86_64) and Windows 11 on ARM: AV1, Windows logins, Ctrl+Alt+Del, the lock screen, FreeRDP Web | GNOME headless and Xfce, on x86_64 and ARM64: the session manager (a logged-in and a headless GNOME), the user unit, AV1, AV2, keys, sound, another account refused | a GitHub macOS runner: an AV1 and an AV2 session against the LaunchAgent, and the daemon mode installed as below (the runner can't show its login window) |
 
 ### Install
 
@@ -81,7 +81,24 @@ systemctl --user daemon-reload && systemctl --user enable --now freerdp-shadow.s
 
 Both listen on 3388: install one or the other.
 
-**macOS**, after unzipping:
+**macOS**, after unzipping, as an administrator: the daemon. One server for the Mac, there before
+anyone logs in: it shows the login window and follows you into your desktop on the same connection:
+
+```sh
+sudo bash ./install-daemon.sh
+```
+
+It installs the app in /Applications, the server as a root LaunchDaemon on 127.0.0.1:3388, and its
+agent as a LaunchAgent at the login window and in each session. Then allow `freerdp-shadow-agent`
+(in /Applications/FreeRDP-Shadow.app/Contents/MacOS) in System Settings > Privacy & Security, under
+both Screen & System Audio Recording and Accessibility, then restart the agent, as yourself (not sudo):
+`launchctl kickstart -k gui/$(id -u)/org.freerdp.shadow.agent`. The grant holds at the login window too.
+Logs: /var/log/freerdp-shadow/. Remove it with
+`sudo bash /Applications/FreeRDP-Shadow.app/Contents/Resources/uninstall-daemon.sh`
+(`--app` removes the
+app too, `--logs` its logs).
+
+Without root, for your own session only: the LaunchAgent app.
 
 ```sh
 cp -R FreeRDP-Shadow.app /Applications/
@@ -92,8 +109,11 @@ launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/org.freerdp.shadow.plist
 
 Then allow FreeRDP Shadow in System Settings > Privacy & Security, under both Screen & System
 Audio Recording and Accessibility, and restart it:
-`launchctl kickstart -k gui/$(id -u)/org.freerdp.shadow`. The app is signed ad hoc, so macOS
-asks again after each update.
+`launchctl kickstart -k gui/$(id -u)/org.freerdp.shadow`.
+
+Both listen on 3388: install one or the other (`install-daemon.sh` refuses while the app listens;
+`launchctl bootout gui/$(id -u)/org.freerdp.shadow` stops it). Both are signed ad hoc, so macOS
+asks for the two permissions again after each update.
 
 Each archive's `README.txt` has the whole story for its platform: logs, options, removal.
 
@@ -120,7 +140,9 @@ in use, e.g. `AV1 encoder: Media Foundation 0 NVIDIA AV1 Encoder MFT (hardware, 
   A client's `/dynamic-resolution`, `/multimon` layout and HiDPI scale change nothing here.
 - **It shares one monitor.** A computer with several monitors shares one of them
   (`/monitors:<N>` picks it; the default is the first).
-- **The Mac can't show its login window.** The LaunchAgent starts once you've logged in.
+- **A Mac restarted with FileVault on** shows the disk-unlock screen before macOS starts: no RDP
+  server can show it (`sudo fdesetup authrestart` for planned restarts). The LaunchAgent app starts
+  only once you've logged in; the daemon shows the login window.
 
 For a session that follows the client's windows and monitors, HiDPI included, use a server
 that starts sessions of its own: [xrdp](#xrdp-packages), or Windows' own Remote Desktop on
@@ -134,7 +156,7 @@ a Pro edition.
 | `sdl-freerdp.exe`, the same client for Windows, with freerdp-tk and its Python | preview, the same | Windows 10 and 11, x86_64 and ARM64 |
 | `sdl-freerdp`, the same client for macOS, with freerdp-tk and its Python | preview, the same | macOS 12 and newer, Apple Silicon (arm64); Intel Macs no longer (the last: release 20261122.6) |
 | FreeRDP web client (WebAssembly) with the [freerdp-web](https://github.com/congzhangzh/freerdp-web) page | preview: FreeRDP master + open pull requests (see the pins below) | a current browser (tested: Chrome); served from GitHub Pages |
-| FreeRDP's shadow server (`freerdp-shadow-cli`), with `freerdp-shadow-service` on Windows, the session manager or a systemd user unit on Linux, a LaunchAgent app on macOS: AV1 (GPU or libaom), AV2, H.264 on Windows and macOS, sound | preview, the same FreeRDP | Windows 10 and 11 x86_64 and ARM64; Linux x86_64 / aarch64 with glibc ≥ 2.34 (GNOME, or any X11 desktop); macOS on Apple Silicon |
+| FreeRDP's shadow server (`freerdp-shadow-cli`), with `freerdp-shadow-service` on Windows, the session manager or a systemd user unit on Linux, a LaunchDaemon with its agent, or a LaunchAgent app, on macOS: AV1 (GPU or libaom), AV2, H.264 on Windows and macOS, sound | preview, the same FreeRDP | Windows 10 and 11 x86_64 and ARM64; Linux x86_64 / aarch64 with glibc ≥ 2.34 (GNOME, or any X11 desktop); macOS on Apple Silicon |
 | xrdp + xorgxrdp native packages (.deb / .rpm) | stable | x86_64 and ARM64: Debian testing, 13, 12; Ubuntu 26.10, 26.04, 24.04; Fedora 45, 44, 43 |
 
 ### What does not run, and why

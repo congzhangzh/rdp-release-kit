@@ -35,11 +35,11 @@ pas de sessions propres ; pour cela, voir [xrdp](README.md#xrdp-packages).
 | | Windows (en premier) | Linux | macOS (Apple Silicon) |
 |---|---|---|---|
 | Fichier | `freerdp-host-<version>-windows-x86_64.zip`, `-windows-aarch64.zip` | `freerdp-host-<version>-linux-x86_64.tar.xz`, `-linux-aarch64.tar.xz` | `freerdp-host-<version>-macos-arm64.zip` |
-| S'exécute comme | un service Windows, `freerdp-shadow-service`, qui exécute le serveur en tant que SYSTEM sur la session console : écrans de connexion et de verrouillage, invites UAC et Ctrl+Alt+Suppr également | le [gestionnaire de sessions](README.md#the-session-manager-runs-as-root), `freerdp-shadow-sesman` : un service système root qui confie chaque utilisateur à un serveur shadow dans sa propre session GNOME (Mutter, Wayland ou X11), et démarre un GNOME sans écran pour qui n'en a pas ; ou, sans root, une [unité utilisateur](README.md#the-user-unit-your-own-desktop-no-root) systemd, `freerdp-shadow.service`, dans la session de bureau où vous êtes : GNOME, ou tout autre bureau X11 | un LaunchAgent dans votre session de connexion (`FreeRDP-Shadow.app`) |
+| S'exécute comme | un service Windows, `freerdp-shadow-service`, qui exécute le serveur en tant que SYSTEM sur la session console : écrans de connexion et de verrouillage, invites UAC et Ctrl+Alt+Suppr également | le [gestionnaire de sessions](README.md#the-session-manager-runs-as-root), `freerdp-shadow-sesman` : un service système root qui confie chaque utilisateur à un serveur shadow dans sa propre session GNOME (Mutter, Wayland ou X11), et démarre un GNOME sans écran pour qui n'en a pas ; ou, sans root, une [unité utilisateur](README.md#the-user-unit-your-own-desktop-no-root) systemd, `freerdp-shadow.service`, dans la session de bureau où vous êtes : GNOME, ou tout autre bureau X11 | un LaunchDaemon root, `org.freerdp.shadow.daemon`, avec un agent (`freerdp-shadow-agent`) dans la session de la console : la fenêtre de connexion, puis votre bureau, sur une seule connexion ; ou, sans root, un LaunchAgent dans votre session de connexion (`FreeRDP-Shadow.app`) |
 | AV1 4:2:0 | sur la carte graphique via Media Foundation lorsqu'elle dispose d'un encodeur AV1 (testé : un GPU d'ordinateur portable NVIDIA), sinon libaom | sur la carte graphique via VA-API (pas encore éprouvé sur un vrai GPU), sinon libaom | libaom (aucune puce Apple n'encode l'AV1) |
 | Aussi | AV2 (libavm), H.264 AVC420 de Media Foundation pour les clients sans AV1, le son du PC | AV2, le son de la session (PipeWire), les touches via libei | AV2, H.264 de VideoToolbox, le son du Mac |
-| Connexion | un compte Windows (Network Level Authentication) | votre propre compte (PAM, sur TLS) : le gestionnaire de sessions vous confie à votre propre GNOME ; l'unité utilisateur n'accepte que le propriétaire du bureau | votre compte macOS (PAM, sur TLS) |
-| Testé en CI, à chaque version | Windows Server 2025 (x86_64) et Windows 11 sur ARM : AV1, connexions Windows, Ctrl+Alt+Suppr, écran de verrouillage, FreeRDP Web | GNOME headless et Xfce, sur x86_64 et ARM64 : gestionnaire de sessions (un GNOME connecté et un GNOME sans écran), unité utilisateur, AV1, AV2, touches, son, autre compte refusé | un runner macOS de GitHub : une session AV1 et une session AV2 face au LaunchAgent (la connexion propre au runner ne peut pas être testée) |
+| Connexion | un compte Windows (Network Level Authentication) | votre propre compte (PAM, sur TLS) : le gestionnaire de sessions vous confie à votre propre GNOME ; l'unité utilisateur n'accepte que le propriétaire du bureau | un compte macOS local (PAM, sur TLS) : via le daemon, tout utilisateur local sauf root à la fenêtre de connexion (puis vous vous connectez sur la fenêtre de connexion, comme devant le Mac), ou l'utilisateur de la console ; le LaunchAgent n'accepte que son propre utilisateur |
+| Testé en CI, à chaque version | Windows Server 2025 (x86_64) et Windows 11 sur ARM : AV1, connexions Windows, Ctrl+Alt+Suppr, écran de verrouillage, FreeRDP Web | GNOME headless et Xfce, sur x86_64 et ARM64 : gestionnaire de sessions (un GNOME connecté et un GNOME sans écran), unité utilisateur, AV1, AV2, touches, son, autre compte refusé | un runner macOS de GitHub : une session AV1 et une session AV2 face au LaunchAgent, et le daemon installé comme ci-dessous (le runner ne peut pas afficher sa fenêtre de connexion) |
 
 ### Installation
 
@@ -81,7 +81,23 @@ systemctl --user daemon-reload && systemctl --user enable --now freerdp-shadow.s
 
 Les deux écoutent sur 3388 : installez l'un ou l'autre.
 
-**macOS**, après la décompression :
+**macOS**, après la décompression, en administrateur : le daemon. Un seul serveur pour le Mac, présent avant toute
+connexion : il affiche la fenêtre de connexion et vous suit jusqu'à votre bureau sur la même connexion :
+
+```sh
+sudo bash ./install-daemon.sh
+```
+
+Il installe l'app dans /Applications, le serveur comme LaunchDaemon root sur 127.0.0.1:3388, et son agent comme
+LaunchAgent à la fenêtre de connexion et dans chaque session. Autorisez ensuite `freerdp-shadow-agent`
+(dans /Applications/FreeRDP-Shadow.app/Contents/MacOS) dans Réglages Système > Confidentialité et sécurité, à la fois
+sous Enregistrement de l'écran et de l'audio système et sous Accessibilité, puis redémarrez l'agent, sous votre propre
+compte (sans sudo) : `launchctl kickstart -k gui/$(id -u)/org.freerdp.shadow.agent`. L'autorisation vaut aussi à la fenêtre de connexion. Journaux : /var/log/freerdp-shadow/. Désinstallez-le avec
+`sudo bash /Applications/FreeRDP-Shadow.app/Contents/Resources/uninstall-daemon.sh`
+(`--app` retire aussi
+l'app, `--logs` ses journaux).
+
+Sans root, pour votre propre session seulement : l'app LaunchAgent.
 
 ```sh
 cp -R FreeRDP-Shadow.app /Applications/
@@ -90,10 +106,13 @@ cp org.freerdp.shadow.plist ~/Library/LaunchAgents/
 launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/org.freerdp.shadow.plist
 ```
 
-Autorisez ensuite FreeRDP Shadow dans Réglages Système > Confidentialité et sécurité, à la fois sous Enregistrement de l'écran et de l'audio système
-et sous Accessibilité, puis redémarrez-le :
-`launchctl kickstart -k gui/$(id -u)/org.freerdp.shadow`. L'app est signée ad hoc, si bien que macOS
-redemande l'autorisation après chaque mise à jour.
+Autorisez ensuite FreeRDP Shadow dans Réglages Système > Confidentialité et sécurité, à la fois sous Enregistrement de
+l'écran et de l'audio système et sous Accessibilité, puis redémarrez-le :
+`launchctl kickstart -k gui/$(id -u)/org.freerdp.shadow`.
+
+Les deux écoutent sur 3388 : installez l'un ou l'autre (`install-daemon.sh` refuse tant que l'app écoute ;
+`launchctl bootout gui/$(id -u)/org.freerdp.shadow` l'arrête). Les deux sont signés ad hoc, si bien que macOS
+redemande les deux autorisations après chaque mise à jour.
 
 Le `README.txt` de chaque archive donne tous les détails pour sa plateforme : journaux, options, désinstallation.
 
@@ -120,7 +139,9 @@ utilisé, par exemple : `AV1 encoder: Media Foundation 0 NVIDIA AV1 Encoder MFT
   Les options `/dynamic-resolution`, la disposition `/multimon` et l'échelle HiDPI d'un client ne changent rien ici.
 - **Il partage un seul moniteur.** Un ordinateur à plusieurs moniteurs en partage un
   (`/monitors:<N>` le choisit ; par défaut, le premier).
-- **Le Mac ne peut pas afficher sa fenêtre de connexion.** Le LaunchAgent démarre une fois que vous êtes connecté.
+- **Un Mac redémarré avec FileVault activé** affiche l'écran de déverrouillage du disque avant le démarrage de macOS :
+  aucun serveur RDP ne peut l'afficher (`sudo fdesetup authrestart` pour les redémarrages prévus). L'app LaunchAgent
+  ne démarre qu'une fois que vous êtes connecté ; le daemon affiche la fenêtre de connexion.
 
 Pour une session qui suit les fenêtres et les moniteurs du client, HiDPI compris, utilisez un serveur
 qui démarre ses propres sessions : [xrdp](README.md#xrdp-packages), ou le Bureau à distance de Windows sur
@@ -134,7 +155,7 @@ une édition Pro.
 | `sdl-freerdp.exe`, le même client pour Windows, avec freerdp-tk et son Python | préversion, la même | Windows 10 et 11, x86_64 et ARM64 |
 | `sdl-freerdp`, le même client pour macOS, avec freerdp-tk et son Python | préversion, la même | macOS 12 et plus récent, Apple Silicon (arm64) ; plus les Mac Intel (la dernière : version 20261122.6) |
 | Client web FreeRDP (WebAssembly) avec la page [freerdp-web](https://github.com/congzhangzh/freerdp-web) | préversion : FreeRDP master + pull requests ouvertes (voir les versions épinglées plus bas) | un navigateur récent (testé : Chrome) ; servi depuis GitHub Pages |
-| Le serveur shadow de FreeRDP (`freerdp-shadow-cli`), avec `freerdp-shadow-service` sous Windows, le gestionnaire de sessions ou une unité utilisateur systemd sous Linux, une app LaunchAgent sous macOS : AV1 (GPU ou libaom), AV2, H.264 sous Windows et macOS, son | préversion, le même FreeRDP | Windows 10 et 11 x86_64 et ARM64 ; Linux x86_64 / aarch64 avec glibc ≥ 2.34 (GNOME, ou tout bureau X11) ; macOS sur Apple Silicon |
+| Le serveur shadow de FreeRDP (`freerdp-shadow-cli`), avec `freerdp-shadow-service` sous Windows, le gestionnaire de sessions ou une unité utilisateur systemd sous Linux, un LaunchDaemon et son agent, ou une app LaunchAgent, sous macOS : AV1 (GPU ou libaom), AV2, H.264 sous Windows et macOS, son | préversion, le même FreeRDP | Windows 10 et 11 x86_64 et ARM64 ; Linux x86_64 / aarch64 avec glibc ≥ 2.34 (GNOME, ou tout bureau X11) ; macOS sur Apple Silicon |
 | Paquets natifs xrdp + xorgxrdp (.deb / .rpm) | stable | x86_64 et ARM64 : Debian testing, 13, 12 ; Ubuntu 26.10, 26.04, 24.04 ; Fedora 45, 44, 43 |
 
 ## Plus

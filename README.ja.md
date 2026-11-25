@@ -35,11 +35,11 @@ Windows標準のリモートデスクトップ接続が使えます。VNCやリ�
 | | Windows(最初) | Linux | macOS(Apple Silicon) |
 |---|---|---|---|
 | ファイル | `freerdp-host-<version>-windows-x86_64.zip`、`-windows-aarch64.zip` | `freerdp-host-<version>-linux-x86_64.tar.xz`、`-linux-aarch64.tar.xz` | `freerdp-host-<version>-macos-arm64.zip` |
-| 実行形態 | Windowsサービス `freerdp-shadow-service`。コンソールセッション上でSYSTEMとしてサーバーを実行し、ログオン画面やロック画面、UACプロンプト、Ctrl+Alt+Delにも対応します | [セッションマネージャー](README.md#the-session-manager-runs-as-root) `freerdp-shadow-sesman`。rootのシステムサービスで、各ユーザーを本人のGNOMEセッション(Mutter、WaylandまたはX11)のシャドウサーバーに引き渡し、GNOMEセッションのないユーザーにはヘッドレスのGNOMEを起動します。rootなしの場合は、今いるデスクトップセッション内のsystemd[ユーザーユニット](README.md#the-user-unit-your-own-desktop-no-root) `freerdp-shadow.service`(GNOME、または任意のX11デスクトップ) | ログインセッション内のLaunchAgent(`FreeRDP-Shadow.app`) |
+| 実行形態 | Windowsサービス `freerdp-shadow-service`。コンソールセッション上でSYSTEMとしてサーバーを実行し、ログオン画面やロック画面、UACプロンプト、Ctrl+Alt+Delにも対応します | [セッションマネージャー](README.md#the-session-manager-runs-as-root) `freerdp-shadow-sesman`。rootのシステムサービスで、各ユーザーを本人のGNOMEセッション(Mutter、WaylandまたはX11)のシャドウサーバーに引き渡し、GNOMEセッションのないユーザーにはヘッドレスのGNOMEを起動します。rootなしの場合は、今いるデスクトップセッション内のsystemd[ユーザーユニット](README.md#the-user-unit-your-own-desktop-no-root) `freerdp-shadow.service`(GNOME、または任意のX11デスクトップ) | rootのLaunchDaemon `org.freerdp.shadow.daemon` と、コンソールのセッションで動くエージェント(`freerdp-shadow-agent`)。ログインウィンドウからデスクトップまで、1つの接続のまま使えます。rootなしの場合は、ログインセッション内のLaunchAgent(`FreeRDP-Shadow.app`) |
 | AV1 4:2:0 | AV1エンコーダーがあればMedia Foundation経由でグラフィックスカード上、なければlibaom(テスト済み: NVIDIAのノートPC用GPU) | VA-API経由でグラフィックスカード上(実際のGPUでは未検証)、なければlibaom | libaom(AV1をエンコードするAppleチップはありません) |
 | その他 | AV2(libavm)、AV1非対応クライアント向けにMedia FoundationのH.264 AVC420、PCの音声 | AV2、セッションの音声(PipeWire)、libei経由のキー入力 | AV2、VideoToolboxのH.264、Macの音声 |
-| ログイン | Windowsアカウント(ネットワークレベル認証) | 自分のアカウント(PAM、TLS経由)。セッションマネージャーは本人のGNOMEに引き渡し、ユーザーユニットはデスクトップの所有者だけを受け入れます | お使いのmacOSアカウント(PAM、TLS経由) |
-| リリースごとにCIでテスト | Windows Server 2025(x86_64)とWindows 11 on ARM: AV1、Windowsログイン、Ctrl+Alt+Del、ロック画面、FreeRDP Web | x86_64とARM64上のGNOMEヘッドレスとXfce: セッションマネージャー(ログイン済みとヘッドレスのGNOME)、ユーザーユニット、AV1、AV2、キー入力、音声、別アカウントの拒否 | GitHubのmacOSランナー: LaunchAgentに対するAV1とAV2のセッション(ランナー自身のログインはテストできません) |
+| ログイン | Windowsアカウント(ネットワークレベル認証) | 自分のアカウント(PAM、TLS経由)。セッションマネージャーは本人のGNOMEに引き渡し、ユーザーユニットはデスクトップの所有者だけを受け入れます | ローカルのmacOSアカウント(PAM、TLS経由)。デーモンでは、ログインウィンドウではroot以外の任意のローカルユーザー(その後、Macの前と同じようにログインウィンドウでログインします)、またはコンソールのユーザー。LaunchAgentは本人のユーザーだけを受け入れます |
+| リリースごとにCIでテスト | Windows Server 2025(x86_64)とWindows 11 on ARM: AV1、Windowsログイン、Ctrl+Alt+Del、ロック画面、FreeRDP Web | x86_64とARM64上のGNOMEヘッドレスとXfce: セッションマネージャー(ログイン済みとヘッドレスのGNOME)、ユーザーユニット、AV1、AV2、キー入力、音声、別アカウントの拒否 | GitHubのmacOSランナー: LaunchAgentに対するAV1とAV2のセッション、および下記の手順でインストールしたデーモン(ランナーはログインウィンドウを表示できません) |
 
 ### インストール
 
@@ -80,7 +80,23 @@ systemctl --user daemon-reload && systemctl --user enable --now freerdp-shadow.s
 
 どちらも3388で待ち受けるので、どちらか一方だけをインストールしてください。
 
-**macOS**: 展開後に実行します:
+**macOS**: 展開後、管理者として実行します。デーモン方式です。誰かがログインする前から動くMac全体で1つのサーバーで、
+ログインウィンドウを表示し、同じ接続のままデスクトップまで続きます:
+
+```sh
+sudo bash ./install-daemon.sh
+```
+
+アプリを /Applications に、サーバーをrootのLaunchDaemonとして127.0.0.1:3388に、そのエージェントを
+ログインウィンドウと各セッションのLaunchAgentとしてインストールします。次に、システム設定 > プライバシーとセキュリティで、
+「画面とシステムオーディオの録画」と「アクセシビリティ」の両方で `freerdp-shadow-agent`
+(/Applications/FreeRDP-Shadow.app/Contents/MacOS 内)を許可し、sudoなしの自分のユーザーでエージェントを再起動してください:
+`launchctl kickstart -k gui/$(id -u)/org.freerdp.shadow.agent`。この許可はログインウィンドウでも有効です。
+ログ: /var/log/freerdp-shadow/。削除は
+`sudo bash /Applications/FreeRDP-Shadow.app/Contents/Resources/uninstall-daemon.sh`
+で行います(`--app` でアプリも、`--logs` でログも削除)。
+
+rootなしで、自分のセッションだけを共有する場合: LaunchAgentアプリ。
 
 ```sh
 cp -R FreeRDP-Shadow.app /Applications/
@@ -90,9 +106,11 @@ launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/org.freerdp.shadow.plist
 ```
 
 次に、システム設定 > プライバシーとセキュリティで、「画面とシステムオーディオの録画」と「アクセシビリティ」の両方で
-FreeRDP Shadowを許可し、再起動してください:
-`launchctl kickstart -k gui/$(id -u)/org.freerdp.shadow`。アプリはアドホック署名のため、
-更新のたびにmacOSが再度許可を求めます。
+FreeRDP Shadowを許可し、再起動してください: `launchctl kickstart -k gui/$(id -u)/org.freerdp.shadow`。
+
+どちらも3388で待ち受けるので、どちらか一方だけをインストールしてください(アプリが待ち受けている間は `install-daemon.sh` が
+拒否します。`launchctl bootout gui/$(id -u)/org.freerdp.shadow` で止められます)。どちらもアドホック署名のため、
+更新のたびにmacOSが2つの許可を再度求めます。
 
 各アーカイブの `README.txt` に、そのプラットフォームについてのすべてが書かれています。ログ、オプション、削除方法などです。
 
@@ -119,7 +137,9 @@ freerdp-tkで127.0.0.1:13388を指定して接続することもできます。F
   クライアント側の `/dynamic-resolution`、`/multimon` のレイアウト、HiDPIスケールは、ここでは何も変えません。
 - **共有するのは1台のモニターです。** 複数のモニターがあるコンピューターでは、そのうちの1台を共有します
   (`/monitors:<N>` で選べます。既定は最初の1台です)。
-- **Macのログインウィンドウは表示できません。** LaunchAgentは、ログインした後に起動します。
+- **FileVaultを有効にしたMacを再起動すると**、macOSの起動前にディスクのロック解除画面が出ます。これはどのRDPサーバーでも
+  表示できません(計画的な再起動には `sudo fdesetup authrestart`)。LaunchAgentアプリはログイン後に起動し、
+  デーモンはログインウィンドウを表示します。
 
 クライアントのウィンドウやモニター(HiDPIを含む)に追従するセッションが必要な場合は、
 独自のセッションを開始するサーバーを使ってください:
@@ -133,7 +153,7 @@ freerdp-tkで127.0.0.1:13388を指定して接続することもできます。F
 | `sdl-freerdp.exe`。同じクライアントのWindows版で、freerdp-tkとそのPythonを含みます | プレビュー、同上 | Windows 10および11、x86_64とARM64 |
 | `sdl-freerdp`。同じクライアントのmacOS版で、freerdp-tkとそのPythonを含みます | プレビュー、同上 | macOS 12以降、Apple Silicon(arm64)。Intel Macはもう対象外です(最後のリリース: 20261122.6) |
 | FreeRDP Webクライアント(WebAssembly)と[freerdp-web](https://github.com/congzhangzh/freerdp-web)ページ | プレビュー: FreeRDPのmaster + オープン中のプルリクエスト(下記のピン留めを参照) | 最新のブラウザー(テスト済み: Chrome)。GitHub Pagesから配信されます |
-| FreeRDPのシャドウサーバー(`freerdp-shadow-cli`)。Windowsには `freerdp-shadow-service`、Linuxにはセッションマネージャーまたはsystemdユーザーユニット、macOSにはLaunchAgentアプリが付きます: AV1(GPUまたはlibaom)、AV2、WindowsとmacOSではH.264、音声 | プレビュー、同じFreeRDP | Windows 10および11のx86_64とARM64。glibc 2.34以上のLinux x86_64 / aarch64(GNOME、または任意のX11デスクトップ)。Apple SiliconのmacOS |
+| FreeRDPのシャドウサーバー(`freerdp-shadow-cli`)。Windowsには `freerdp-shadow-service`、Linuxにはセッションマネージャーまたはsystemdユーザーユニット、macOSにはLaunchDaemonとそのエージェント、またはLaunchAgentアプリが付きます: AV1(GPUまたはlibaom)、AV2、WindowsとmacOSではH.264、音声 | プレビュー、同じFreeRDP | Windows 10および11のx86_64とARM64。glibc 2.34以上のLinux x86_64 / aarch64(GNOME、または任意のX11デスクトップ)。Apple SiliconのmacOS |
 | xrdp + xorgxrdpのネイティブパッケージ(.deb / .rpm) | 安定版 | x86_64とARM64: Debian testing、13、12。Ubuntu 26.10、26.04、24.04。Fedora 45、44、43 |
 
 ## その他

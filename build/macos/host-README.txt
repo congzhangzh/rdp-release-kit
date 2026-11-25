@@ -121,9 +121,10 @@ Logs: one file per job, appended to by every start:
 Clear one while it runs with  sudo sh -c ': > /var/log/freerdp-shadow/daemon.log'
 (the same for agent.log); uninstall-daemon.sh --logs removes the folder.
 
-Remove it with
+Remove it with the copy the app carries (it outlives this folder), or this folder's:
 
-  sudo ./uninstall-daemon.sh                (--app: the app too; --logs: the logs too)
+  sudo bash /Applications/FreeRDP-Shadow.app/Contents/Resources/uninstall-daemon.sh
+  sudo bash ./uninstall-daemon.sh          (--app: the app too; --logs: the logs too)
 
 It stops the agents and the daemon and removes both plists, so launchd starts neither
 again.
