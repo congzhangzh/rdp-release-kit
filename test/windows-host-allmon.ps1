@@ -18,8 +18,9 @@
 #      client keeps its window at the primary's size and scales the desktop into it, and SDL
 #      follows a posted move with motions at the real pointer (runs 45692504667, 45696683442:
 #      the server got x=1423, then the echoes x=1822), so B is measured against what the server
-#      got last, not against the posted point. With the window at the desktop's top left, its
-#      left edge is the one point the echoes keep: that is where the primary is aimed at
+#      got last, not against the posted point. The echo is where the real pointer was when SDL
+#      took the posted move (run 45714503610: 1822,487 after every post), so for the primary the
+#      real pointer is put on the target first, at the window's left edge, which maps to itself
 #   5. the second monitor moved to the other side, the same total size: a new Reset Graphics
 #      with the new place, and the pointer still lands right
 #   6. Ctrl+Alt+Del and the lock screen with both monitors: the server follows to Winlogon,
@@ -84,6 +85,7 @@ public struct DEVMODE {
 [DllImport("user32.dll", CharSet = CharSet.Unicode, EntryPoint = "ChangeDisplaySettingsExW")] static extern int ChangeDisplaySettingsExApply(System.IntPtr dev, System.IntPtr dm, System.IntPtr hwnd, int flags, System.IntPtr param);
 [DllImport("user32.dll")] public static extern int GetSystemMetrics(int index);
 [DllImport("user32.dll")] public static extern bool GetCursorPos(out POINT p);
+[DllImport("user32.dll")] public static extern bool SetCursorPos(int x, int y);
 [DllImport("user32.dll")] public static extern bool PostMessage(System.IntPtr h, uint msg, System.IntPtr w, System.IntPtr l);
 [DllImport("user32.dll")] public static extern bool GetClientRect(System.IntPtr h, out RECT r);
 [DllImport("user32.dll")] public static extern bool GetWindowRect(System.IntPtr h, out RECT r);
@@ -360,9 +362,14 @@ function MonitorAt($p, $list) {
     if (-not $hit) { "none" } elseif ($hit.Primary) { "primary" } else { "second" }
 }
 $script:onMonitor = @()
-function Point([string]$name, $q, $list, [switch]$Click) {
+function Point([string]$name, $q, $list, [switch]$Click, [switch]$Preposition) {
     $want = OnDesktop $q
     $tx = $want.X - $box.X; $ty = $want.Y - $box.Y
+    if ($Preposition) {
+        # the real pointer on the target first: what SDL echoes is then the target
+        [void][Kit.Win]::SetCursorPos($want.X, $want.Y)
+        Quiet
+    }
     $from = @(MouseEvents).Count
     PostMouse 0x0200 0 $q   # WM_MOUSEMOVE
     [void](Until 5 { @(MouseEvents | Select-Object -Skip $from | Where-Object { $_.X -eq $tx -and $_.Y -eq $ty }).Count -ge 1 })
@@ -394,8 +401,8 @@ function Point([string]$name, $q, $list, [switch]$Click) {
     }
 }
 Point "on the second monitor" $m2c $screens -Click
-# the window's left edge (client x 0) maps to the desktop's, and the echoes keep it there: the primary
-Point "on the primary monitor" (InClient $prim.X ($prim.Y + [int]($prim.H / 2))) $screens -Click
+# the window's left edge (client x 0) maps to the desktop's own: the one point an echo keeps
+Point "on the primary monitor" (InClient $prim.X ($prim.Y + [int]($prim.H / 2))) $screens -Click -Preposition
 
 # ---- 5. the second monitor to the other side of the primary: the same box, another layout
 $resetsBefore = @(Resets).Count
