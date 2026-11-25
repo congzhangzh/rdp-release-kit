@@ -17,7 +17,7 @@
 # 2. freerdp-shadow-service: it runs the server as SYSTEM on the console
 #    session; Windows-account logins (Windows' own SSPI); the web client logs
 #    in through websockify and decodes AV1; the native client's frames are
-#    AV1; Ctrl+Alt+Del typed into the client reaches the service (SendSAS) and
+#    AV1; Ctrl+Alt+Del posted to the client's window reaches the service (SendSAS) and
 #    the server follows to the secure desktop; so it does when the screen is
 #    locked (last: this job's desktop stays locked).
 # Everything listens on 127.0.0.1 only. A local Windows user is made for the
@@ -743,74 +743,35 @@ Check "native: the frames came in AV1" (GotAv1 "session") ($codecs -join ", ")
 "native rdpsnd: " + ((Select-String -Path "$Out\session.wlog" -Pattern "rdpsnd" -ErrorAction SilentlyContinue |
     Select-Object -First 12 | ForEach-Object { $_.Line }) -join " | ") | Out-File -Append "$Out\notes.txt"
 
-# Ctrl+Alt+Del typed into the client's window: three ordinary keys there,
-# which the client sends to the server
+# Ctrl+Alt+Del typed into the client's window: three ordinary keys there, which the client
+# sends to the server. Posted to that window (PostMessage), not typed (keybd_event): a typed key
+# goes to the window in front, which the test cannot choose (on windows-2025 the desktop,
+# 'Program Manager', kept the front in most rounds whatever the test tried: kit run 45599655633,
+# 3 of 4 attempts). SDL3 takes a posted WM_KEYDOWN as it takes a typed one: the scan code from
+# lParam, Ctrl and Alt in its own modifier state, no check of the focus (SDL_windowsevents.c,
+# WM_KEYDOWN; SDL_keyboard.c); and the client sends the server every key event SDL gives it
+# (sdl_input.cpp, handleEvent). A posted key also never passes this console's input, so the
+# server's own injection of the keys comes back into the client only if the client is in front
+# (the echo loop of kit run 41549326887: 85,630 key events)
 Add-Type -Namespace Kit -Name Keys -MemberDefinition @'
-[DllImport("user32.dll")] public static extern bool SetForegroundWindow(System.IntPtr h);
-[DllImport("user32.dll")] public static extern bool BringWindowToTop(System.IntPtr h);
 [DllImport("user32.dll")] public static extern System.IntPtr GetForegroundWindow();
-[DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(System.IntPtr h, System.IntPtr pid);
-[DllImport("user32.dll")] public static extern bool AttachThreadInput(uint a, uint b, bool attach);
-[DllImport("kernel32.dll")] public static extern uint GetCurrentThreadId();
-[DllImport("user32.dll")] public static extern void keybd_event(byte vk, byte scan, uint flags, System.UIntPtr extra);
-[DllImport("user32.dll")] public static extern bool GetWindowRect(System.IntPtr h, out RECT r);
-[DllImport("user32.dll")] public static extern bool SetCursorPos(int x, int y);
-[DllImport("user32.dll")] public static extern void mouse_event(uint flags, int dx, int dy, uint data, System.UIntPtr extra);
 [DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern int GetWindowText(System.IntPtr h, System.Text.StringBuilder s, int n);
-public struct RECT { public int Left, Top, Right, Bottom; }
-[DllImport("user32.dll")] public static extern bool ShowWindow(System.IntPtr h, int cmd);
-[DllImport("user32.dll")] public static extern bool IsIconic(System.IntPtr h);
-[DllImport("user32.dll")] public static extern bool PostMessage(System.IntPtr h, uint msg, System.IntPtr w, System.IntPtr l);
 [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(System.IntPtr h, out uint pid);
+[DllImport("user32.dll")] public static extern bool PostMessage(System.IntPtr h, uint msg, System.IntPtr w, System.IntPtr l);
+[DllImport("user32.dll")] public static extern void keybd_event(byte vk, byte scan, uint flags, System.UIntPtr extra);
 '@
-# the client's window to the front, for sure: Windows' foreground lock refused it once and the
-# keys went elsewhere (run 41208207833, second attempt: no key press in the server's log).
-# An Alt press, then this thread joined to the front window's input queue, up to five times.
-function Focus($hwnd) {
-    # minimized windows cannot take the front (the test minimizes them all before this step:
-    # in kit run 45340396136 x86_64 failed with the desktop, 'Program Manager', in front); and
-    # Windows' own "Microsoft account" prompt held the front on the ARM64 runner: close it
-    if ([Kit.Keys]::IsIconic($hwnd)) { [void][Kit.Keys]::ShowWindow($hwnd, 9); Start-Sleep -Milliseconds 500 }
-    # Windows' shell pop-ups in front (the ARM64 runner: "Microsoft account" in kit run 45340396136,
-    # then "Search" in 45346945943): close the prompt, Escape the flyouts, up to four times
-    for ($k = 0; $k -lt 4; $k++) {
-        $front = [Kit.Keys]::GetForegroundWindow()
-        if ($front -eq $hwnd -or $front -eq [IntPtr]::Zero) { break }
-        $t = New-Object System.Text.StringBuilder 256; [void][Kit.Keys]::GetWindowText($front, $t, 256)
-        $fpid = [uint32]0; [void][Kit.Keys]::GetWindowThreadProcessId($front, [ref]$fpid)
-        $proc = (Get-Process -Id $fpid -ErrorAction SilentlyContinue).ProcessName
-        if ($t.ToString() -eq "Microsoft account") {
-            [void][Kit.Keys]::PostMessage($front, 0x0010, [IntPtr]::Zero, [IntPtr]::Zero)   # WM_CLOSE
-        } elseif ($proc -in @("SearchHost", "SearchApp", "StartMenuExperienceHost", "ShellExperienceHost", "explorer") -or $t.ToString() -in @("Search", "Start")) {
-            [Kit.Keys]::keybd_event(0x1B, 0x01, 0, [UIntPtr]::Zero); [Kit.Keys]::keybd_event(0x1B, 0x01, 2, [UIntPtr]::Zero)   # Escape
-        } else { break }
-        "focus: dismissed '$($t.ToString())' ($proc) in front" | Out-File -Append "$Out\notes.txt"
-        Start-Sleep -Milliseconds 700
-    }
-    for ($i = 0; $i -lt 5; $i++) {
-        [Kit.Keys]::keybd_event(0x12, 0, 0, [UIntPtr]::Zero); [Kit.Keys]::keybd_event(0x12, 0, 2, [UIntPtr]::Zero)
-        $mine = [Kit.Keys]::GetCurrentThreadId()
-        $theirs = [Kit.Keys]::GetWindowThreadProcessId([Kit.Keys]::GetForegroundWindow(), [IntPtr]::Zero)
-        $joined = $theirs -and $theirs -ne $mine -and [Kit.Keys]::AttachThreadInput($mine, $theirs, $true)
-        [void][Kit.Keys]::BringWindowToTop($hwnd); [void][Kit.Keys]::SetForegroundWindow($hwnd)
-        if ($joined) { [void][Kit.Keys]::AttachThreadInput($mine, $theirs, $false) }
-        Start-Sleep -Milliseconds 500
-        if ([Kit.Keys]::GetForegroundWindow() -eq $hwnd) { return $true }
-    }
-    # last, as a user would: a click on the window's title bar, which the foreground lock lets
-    # through (a click is real input) and which sends nothing to the session (the caption is
-    # the window's own, not the remote desktop). On the ARM64 runner the calls above never got
-    # the front (a SKIP in every round looked at, the product owner: "lost coverage, not a pass")
-    $r = New-Object Kit.Keys+RECT
-    if ([Kit.Keys]::GetWindowRect($hwnd, [ref]$r)) {
-        [void][Kit.Keys]::SetCursorPos([int](($r.Left + $r.Right) / 2), $r.Top + 12)
-        [Kit.Keys]::mouse_event(0x0002, 0, 0, 0, [UIntPtr]::Zero); [Kit.Keys]::mouse_event(0x0004, 0, 0, 0, [UIntPtr]::Zero)
-        Start-Sleep -Milliseconds 800
-        if ([Kit.Keys]::GetForegroundWindow() -eq $hwnd) { "focus: by a click on the title bar" | Out-File -Append "$Out\notes.txt"; return $true }
-    }
-    return $false
+# one key posted, as Windows posts a typed one: WM_KEYDOWN (0x0100) or WM_KEYUP (0x0101); lParam =
+# repeat count 1, the scan code in bits 16-23, bit 24 for an extended key (Delete), bits 30-31 on
+# a release. WM_KEYDOWN for Alt too, not WM_SYSKEYDOWN: SDL reads both alike, and a WM_SYSKEYUP of
+# Alt would open the window's menu
+function PostKey($hwnd, [int]$vk, [int]$scan, [bool]$extended, [bool]$up) {
+    [long]$l = 1 -bor ([long]$scan -shl 16)
+    if ($extended) { $l = $l -bor 0x01000000 }
+    if ($up) { $l = $l -bor 0xC0000000L }
+    $msg = if ($up) { 0x0101 } else { 0x0100 }
+    [Kit.Keys]::PostMessage($hwnd, $msg, [IntPtr]$vk, [IntPtr]$l)
 }
-# the window at the front and its process, for a focus that failed
+# the window at the front and its process, as a record
 function FrontWindow {
     $h = [Kit.Keys]::GetForegroundWindow(); $t = New-Object System.Text.StringBuilder 256
     [void][Kit.Keys]::GetWindowText($h, $t, 256)
@@ -818,51 +779,34 @@ function FrontWindow {
     "'$($t.ToString())' ($((Get-Process -Id $id -ErrorAction SilentlyContinue).ProcessName) $id)"
 }
 # Delete presses the server took (its input log at DEBUG: Delete is an extended key, a key down
-# with flags=0x0100; Ctrl and Alt are 0x0000, but so are the key events the focus change sends,
-# so only Delete tells that the typed keys arrived)
+# with flags=0x0100; Ctrl and Alt are 0x0000, but so are other key events, so only Delete tells
+# that the posted keys arrived)
 function DeleteDowns { ([regex]::Matches((ServerLog), "shadow_input_keyboard_event\]: \[use\] flags=0x0100")).Count }
 $session.Refresh()
-if ($session.MainWindowHandle -eq [IntPtr]::Zero) {
+$hwnd = $session.MainWindowHandle
+if ($hwnd -eq [IntPtr]::Zero) {
     Check "Ctrl+Alt+Del: the client has a window to type into" $false
-} elseif (-not (Focus $session.MainWindowHandle)) {
-    # the harness, not the product, but a check that never runs is lost coverage: a FAIL that
-    # names it and the window that held the front (it was a SKIP, every ARM64 round)
-    if ($arm64) {
-        Check "Ctrl+Alt+Del: the test brings the client's window to the front" $false "the front: $(FrontWindow)"
-    } else {
-        # x86_64: record-only for now (the product owner, 2026-11-25): on windows-2025 the desktop
-        # keeps the front in most rounds (kit run 45599655633, 3 of 4 attempts), whatever the test
-        # tries; ARM64 still gates. The real fix, a check that doesn't depend on the foreground
-        # window, is scheduled; then this gates again
-        "INFO  x86_64 Ctrl+Alt+Del: not checked (focus; the front: $(FrontWindow))" | Tee-Object -FilePath "$Out\checks.txt" -Append
-    }
 } else {
     $deletes = DeleteDowns
-    # all the server's key events, to see a loop: the server injects into this console, where
-    # the client has the focus, so a key typed there comes back (kit run 41549326887: 85,630)
+    # all the server's key events, to see a loop (a record)
     function KeyEvents { ([regex]::Matches((ServerLog), "shadow_input_keyboard_event\]: ")).Count }
     $keysBefore = KeyEvents
-    # Ctrl, Alt, then Delete, with time between them: the server takes the secure attention
-    # sequence only if Delete comes while Ctrl and Alt are down; in run 41549326887 Delete
-    # arrived first and was typed (freerdp-d2's reading of the server's log). Focus settled first
-    function TypeSas {
+    # Ctrl, Alt, then Delete: the server takes the secure attention sequence only if Delete comes
+    # while Ctrl and Alt are down (in run 41549326887 Delete came first and was typed). The six
+    # messages queue in order on the client's thread, so they reach the server in order
+    function PostSas {
         Start-Sleep -Seconds 1
-        if ([Kit.Keys]::GetForegroundWindow() -ne $session.MainWindowHandle) { [void](Focus $session.MainWindowHandle) }
-        # back to back: with 150 ms between them (kit run 41559774950) the echo of the injected
-        # keys through this console had time to flip Ctrl and Alt, and both tries failed
-        [Kit.Keys]::keybd_event(0x11, 0x1D, 0, [UIntPtr]::Zero)
-        [Kit.Keys]::keybd_event(0x12, 0x38, 0, [UIntPtr]::Zero)
-        [Kit.Keys]::keybd_event(0x2E, 0x53, 1, [UIntPtr]::Zero)
-        [Kit.Keys]::keybd_event(0x2E, 0x53, 3, [UIntPtr]::Zero)
-        [Kit.Keys]::keybd_event(0x12, 0x38, 2, [UIntPtr]::Zero)
-        [Kit.Keys]::keybd_event(0x11, 0x1D, 2, [UIntPtr]::Zero)
+        $posted = (PostKey $hwnd 0x11 0x1D $false $false) -and (PostKey $hwnd 0x12 0x38 $false $false) -and
+            (PostKey $hwnd 0x2E 0x53 $true $false) -and (PostKey $hwnd 0x2E 0x53 $true $true) -and
+            (PostKey $hwnd 0x12 0x38 $false $true) -and (PostKey $hwnd 0x11 0x1D $false $true)
+        "Ctrl+Alt+Del: posted to the client's window: $posted; the front: $(FrontWindow)" | Out-File -Append "$Out\notes.txt"
         [void](Until 30 { (ServerLog) -match "asked freerdp-shadow-service for the secure attention sequence" })
     }
-    TypeSas
+    PostSas
     $tries = 1
     if (-not ((ServerLog) -match "asked freerdp-shadow-service for the secure attention sequence")) {
-        # once more, focused again: a fault in the product fails twice, a race in the test doesn't
-        [void](Focus $session.MainWindowHandle); TypeSas; $tries = 2
+        # once more: a fault in the product fails twice, a race in the test doesn't
+        PostSas; $tries = 2
     }
     "Ctrl+Alt+Del: $tries tries; the server's key events: $keysBefore before, $(KeyEvents) after" | Out-File -Append "$Out\notes.txt"
     # the service and Winlogon answer after the server asked: wait for their lines too
