@@ -31,29 +31,40 @@ macOS：`freerdp-tk.command`，需先清除下载文件的隔离属性，见下�
 | | Windows（优先） | Linux | macOS（Apple Silicon） |
 |---|---|---|---|
 | 文件 | `freerdp-host-<version>-windows-x86_64.zip`、`-windows-aarch64.zip` | `freerdp-host-<version>-linux-x86_64.tar.xz`、`-linux-aarch64.tar.xz` | `freerdp-host-<version>-macos-arm64.zip` |
-| 运行方式 | Windows 服务 `freerdp-shadow-service`，以 SYSTEM 身份在控制台会话中运行服务器：登录界面和锁屏界面、UAC 提示以及 Ctrl+Alt+Del 也能共享 | 在你的桌面会话中运行的 systemd 用户单元 `freerdp-shadow.service`：通过 Mutter 支持 GNOME（Wayland 或 X11），或任何其他 X11 桌面；也可选用以 root 身份运行的[会话管理器](README.md#the-session-manager-optional-runs-as-root)，为每个用户的 GNOME 服务，包括无显示器的会话 | 在你的登录会话中运行的 LaunchAgent（`FreeRDP-Shadow.app`） |
+| 运行方式 | Windows 服务 `freerdp-shadow-service`，以 SYSTEM 身份在控制台会话中运行服务器：登录界面和锁屏界面、UAC 提示以及 Ctrl+Alt+Del 也能共享 | [会话管理器](README.md#the-session-manager-runs-as-root) `freerdp-shadow-sesman`：以 root 身份运行的系统服务，把每个用户交给其自己 GNOME 会话（Mutter，Wayland 或 X11）里的 shadow server，并为没有 GNOME 会话的用户启动一个无显示器的 GNOME；不用 root 时，也可以用你所在桌面会话里的 systemd [用户单元](README.md#the-user-unit-your-own-desktop-no-root) `freerdp-shadow.service`：GNOME，或任何其他 X11 桌面 | 在你的登录会话中运行的 LaunchAgent（`FreeRDP-Shadow.app`） |
 | AV1 4:2:0 | 显卡带有 AV1 编码器时，通过 Media Foundation 在显卡上编码（已测试：NVIDIA 笔记本 GPU），否则使用 libaom | 通过 VA-API 在显卡上编码（尚未在真实 GPU 上验证），否则使用 libaom | libaom（没有 Apple 芯片能编码 AV1） |
 | 其他 | AV2（libavm）、Media Foundation 提供的 H.264 AVC420（供不支持 AV1 的客户端使用）、电脑的声音 | AV2、会话的声音（PipeWire）、通过 libei 输入按键 | AV2、VideoToolbox 提供的 H.264、Mac 的声音 |
-| 登录 | Windows 账户（网络级别身份验证） | 桌面所有者的账户（PAM，通过 TLS） | 你的 macOS 账户（PAM，通过 TLS） |
-| 每次发布都在 CI 中测试 | Windows Server 2025（x86_64）和 Windows 11 on ARM：AV1、Windows 登录、Ctrl+Alt+Del、锁屏界面、FreeRDP Web | x86_64 和 ARM64 上的 GNOME 无显示器会话和 Xfce：AV1、AV2、按键、声音、拒绝其他账户、会话管理器 | GitHub 的 macOS runner：针对 LaunchAgent 的一次 AV1 会话和一次 AV2 会话（无法测试 runner 自己的登录） |
+| 登录 | Windows 账户（网络级别身份验证） | 你自己的账户（PAM，通过 TLS）：会话管理器把你交给你自己的 GNOME；用户单元只接受桌面的所有者 | 你的 macOS 账户（PAM，通过 TLS） |
+| 每次发布都在 CI 中测试 | Windows Server 2025（x86_64）和 Windows 11 on ARM：AV1、Windows 登录、Ctrl+Alt+Del、锁屏界面、FreeRDP Web | x86_64 和 ARM64 上的 GNOME 无显示器会话和 Xfce：会话管理器（已登录的和无显示器的 GNOME）、用户单元、AV1、AV2、按键、声音、拒绝其他账户 | GitHub 的 macOS runner：针对 LaunchAgent 的一次 AV1 会话和一次 AV2 会话（无法测试 runner 自己的登录） |
 
 ### 安装
 
 **Windows**，在管理员的 PowerShell 中，在解压后的文件夹里：
 
 ```powershell
-.\freerdp-shadow-service.exe install --allow-sas -- /bind-address:127.0.0.1 /gfx-av1 /gfx-av2 -gfx-avc444
+.\freerdp-shadow-service.exe install --allow-sas -- /bind-address:127.0.0.1 /port:3388 /gfx-av1 /gfx-av2 -gfx-avc444
 ```
 
-它会立即启动，并随 Windows 一起启动，端口为 3389。如果 Windows 自带的远程桌面已开启，
-它已经占用了 3389：请加上 `/port:3388`。只用 AV1：用 `/gfx-av2:off` 代替 `/gfx-av2`。
+它会立即启动，并随 Windows 一起启动，端口为 3388：shadow server 在所有系统上都监听 3388，
+因此 3389 留给 Windows 自带的远程桌面。只用 AV1：用 `/gfx-av2:off` 代替 `/gfx-av2`。
 `--allow-sas` 让服务可以发送 Ctrl+Alt+Del（即策略 SoftwareSASGeneration）；
 如果不想要这个功能，就不要加它。用 `.\freerdp-shadow-service.exe uninstall` 卸载，
 同时会把该策略恢复成安装时的状态。不使用服务、只共享已登录用户的桌面：
-`.\freerdp-shadow-cli.exe /bind-address:127.0.0.1 /gfx-av1 /gfx-av2`。
+`.\freerdp-shadow-cli.exe /bind-address:127.0.0.1 /port:3388 /gfx-av1 /gfx-av2`。
 
-**Linux**，以你自己的身份，在你想共享的桌面会话中（详情见
-[Installing the Linux host](README.md#installing-the-linux-host)）：
+**Linux**（GNOME），以 root 身份：会话管理器。一个服务为这台电脑的所有用户服务，在任何人登录之前就已运行；
+没有 GNOME 会话的用户可以得到一个无显示器的 GNOME（详情见 [The session manager](README.md#the-session-manager-runs-as-root)）：
+
+```sh
+sudo tar -xJf freerdp-host-*-linux-$(uname -m).tar.xz -C /opt
+sudo mv /opt/freerdp-host-*-linux-$(uname -m) /opt/freerdp-host
+sudo chown -R root:root /opt/freerdp-host
+sudo cp /opt/freerdp-host/freerdp-shadow-sesman.service /etc/systemd/system/
+sudo systemctl daemon-reload && sudo systemctl enable --now freerdp-shadow-sesman.service
+```
+
+不用 root，或在其他 X11 桌面上：用户单元，以你自己的身份，在你想共享的桌面会话中（详情见
+[The user unit](README.md#the-user-unit-your-own-desktop-no-root)）：
 
 ```sh
 tar -xJf freerdp-host-*-linux-$(uname -m).tar.xz
@@ -62,6 +73,8 @@ mv freerdp-host-*-linux-$(uname -m) ~/.local/opt/freerdp-host
 cp ~/.local/opt/freerdp-host/freerdp-shadow.service ~/.config/systemd/user/
 systemctl --user daemon-reload && systemctl --user enable --now freerdp-shadow.service
 ```
+
+两者都监听 3388：二选一安装。
 
 **macOS**，解压之后：
 
@@ -80,16 +93,16 @@ launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/org.freerdp.shadow.plist
 
 ### 连接
 
-三者都只监听 127.0.0.1。请保持这样，并通过 SSH 访问服务器（见
+三者都只监听 127.0.0.1:3388。请保持这样，并通过 SSH 访问服务器（见
 [部署服务器：不要让 RDP 暴露在互联网上](#部署服务器不要让-rdp-暴露在互联网上)）：
 
 ```sh
-ssh -N -L 13389:127.0.0.1:3389 user@host &
-sdl-freerdp /v:127.0.0.1:13389 /u:user
+ssh -N -L 13388:127.0.0.1:3388 user@host &
+sdl-freerdp /v:127.0.0.1:13388 /u:user
 ```
 
-或者在 freerdp-tk 中使用 127.0.0.1:13389。对于 FreeRDP Web，在主机上启动 WebSocket 网关
-（`websockify 127.0.0.1:3390 127.0.0.1:3389`），然后转发 3390。
+或者在 freerdp-tk 中使用 127.0.0.1:13388。对于 FreeRDP Web，在主机上启动 WebSocket 网关
+（`websockify 127.0.0.1:3390 127.0.0.1:3388`），然后转发 3390。
 `freerdp-shadow-cli /codec-list` 会列出这台电脑拥有的编码器，
 `/codec-first:software` 或 `/codec-first:hardware:<id>` 可以选定其中一个。日志会写出正在使用的编码器，
 例如 `AV1 encoder: Media Foundation 0 NVIDIA AV1 Encoder MFT (hardware, …), libaom as fallback`。
@@ -114,7 +127,7 @@ sdl-freerdp /v:127.0.0.1:13389 /u:user
 | `sdl-freerdp.exe`，Windows 版的同一个客户端，带 freerdp-tk 及其 Python | 预览版，同上 | Windows 10 和 11，x86_64 和 ARM64 |
 | `sdl-freerdp`，macOS 版的同一个客户端，带 freerdp-tk 及其 Python | 预览版，同上 | macOS 12 及更新版本，Apple Silicon（arm64）；不再支持 Intel Mac（最后一个版本：20261122.6） |
 | FreeRDP 网页客户端（WebAssembly），带 [freerdp-web](https://github.com/congzhangzh/freerdp-web) 页面 | 预览版：FreeRDP master + 尚未合并的 pull request（见下面的版本固定） | 较新的浏览器（已测试：Chrome）；由 GitHub Pages 提供 |
-| FreeRDP 的 shadow server（`freerdp-shadow-cli`），Windows 上带 `freerdp-shadow-service`，Linux 上是 systemd 用户单元，macOS 上是 LaunchAgent 应用：AV1（GPU 或 libaom）、AV2、Windows 和 macOS 上的 H.264、声音 | 预览版，同样的 FreeRDP | Windows 10 和 11 x86_64 和 ARM64；Linux x86_64 / aarch64，glibc ≥ 2.34（GNOME，或任何 X11 桌面）；Apple Silicon 上的 macOS |
+| FreeRDP 的 shadow server（`freerdp-shadow-cli`），Windows 上带 `freerdp-shadow-service`，Linux 上是会话管理器或 systemd 用户单元，macOS 上是 LaunchAgent 应用：AV1（GPU 或 libaom）、AV2、Windows 和 macOS 上的 H.264、声音 | 预览版，同样的 FreeRDP | Windows 10 和 11 x86_64 和 ARM64；Linux x86_64 / aarch64，glibc ≥ 2.34（GNOME，或任何 X11 桌面）；Apple Silicon 上的 macOS |
 | xrdp + xorgxrdp 原生软件包（.deb / .rpm） | 稳定版 | x86_64 和 ARM64：Debian testing、13、12；Ubuntu 26.10、26.04、24.04；Fedora 45、44、43 |
 
 ## 更多
@@ -122,13 +135,13 @@ sdl-freerdp /v:127.0.0.1:13389 /u:user
 本 README 的其余部分只有英文，因为它每次发布都会变化：
 构建与测试（[Build](README.md#build)）、版本固定（[The pins at a glance](README.md#the-pins-at-a-glance)）、
 [Windows 客户端](README.md#windows-client)、[网页客户端](README.md#web-client-preview)、
-[Linux 主机详解](README.md#linux-host)及其[会话管理器](README.md#the-session-manager-optional-runs-as-root)、
+[Linux 主机详解](README.md#linux-host)及其[会话管理器](README.md#the-session-manager-runs-as-root)、
 [xrdp 软件包](README.md#xrdp-packages)和[不同硬件上的性能](README.md#performance-on-different-hardware)。
 
 ## 部署服务器：不要让 RDP 暴露在互联网上
 
 RDP 服务器经常成为攻击目标，尤其是 xrdp 变化很快。
-不要把 3389 端口暴露到网络上。让服务器只监听环回接口，
+不要把 RDP 端口（3389，或 shadow server 的 3388）暴露到网络上。让服务器只监听环回接口，
 并通过 SSH 访问它，SSH 本身已经处理了身份验证、密钥和暴力破解防护：
 
 ```ini

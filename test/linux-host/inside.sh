@@ -55,9 +55,9 @@ install_host() {
     SERVER=$T_HOME/.local/opt/freerdp-host/bin/freerdp-shadow-cli
     cp "$T_HOME/.local/opt/freerdp-host/MANIFEST" "$OUT/MANIFEST"
 }
-# listening sockets on port 3389 (0D3D), or the hex port given, from /proc/net/tcp,
+# listening sockets on port 3388 (0D3C), the kit's shadow port, or the hex port given, from /proc/net/tcp,
 # whose addresses are hex: 0100007F is 127.0.0.1, 00000000 any address
-listeners() { awk -v port=":${1:-0D3D}\$" '$4 == "0A" && $2 ~ port { print $2 }' /proc/net/tcp /proc/net/tcp6; }
+listeners() { awk -v port=":${1:-0D3C}\$" '$4 == "0A" && $2 ~ port { print $2 }' /proc/net/tcp /proc/net/tcp6; }
 # connect <name> [client options...]: a client in the background, its log in
 # /out/<name>.wlog (DEBUG: it names the codec of each frame)
 connect() {
@@ -65,7 +65,7 @@ connect() {
     shift
     WLOG_LEVEL=DEBUG WLOG_APPENDER=FILE WLOG_FILEAPPENDER_OUTPUT_FILE_PATH="$OUT" \
         WLOG_FILEAPPENDER_OUTPUT_FILE_NAME="$name.wlog" DISPLAY=:99 \
-        "$CLIENT" /v:127.0.0.1:"${PORT_:-3389}" /u:"${USER_:-tester}" /p:"${PASS_:-$PW}" /cert:ignore /sec:tls \
+        "$CLIENT" /v:127.0.0.1:"${PORT_:-3388}" /u:"${USER_:-tester}" /p:"${PASS_:-$PW}" /cert:ignore /sec:tls \
         /size:1280x800 "$@" > "$OUT/$name.out" 2>&1 &
     CPID=$!
 }
@@ -170,7 +170,7 @@ if [ "$MODE" = gnome ]; then
     unit() { as "systemctl --user show freerdp-shadow.service -p $1 --value"; }
     SPID=$(unit MainPID)
     check "the unit runs the server" '[ "$(unit ActiveState)" = active ] && [ "${SPID:-0}" -gt 0 ]' "pid $SPID"
-    check "it listens on 127.0.0.1:3389 only" '[ "$(listeners)" = "0100007F:0D3D" ]' "$(listeners | tr '\n' ' ')"
+    check "it listens on 127.0.0.1:3388 only" '[ "$(listeners)" = "0100007F:0D3C" ]' "$(listeners | tr '\n' ' ')"
     check "default subsystem: Mutter" 'journal | grep -q "subsystem: Mutter"'
     as "WLOG_LEVEL=INFO $SERVER /subsystem" > "$OUT/subsystem-list.txt" 2>&1
     check "/subsystem lists Mutter first, picked" \
@@ -286,9 +286,11 @@ if [ "$MODE" = gnome ]; then
     check "journald appender: an INFO line at priority info, as freerdp-shadow-cli" 'jlevel info | grep -q "subsystem: Mutter"'
     check "journald appender: a WARN line at priority warning" 'jlevel warning | grep -q "stopped the sharing"'
 
-    # the session manager (optional: a root system unit on 127.0.0.1:3391), installed
+    # the session manager (a root system unit on 127.0.0.1:3388, the user unit's port too:
+    # the README says install one or the other, so the user unit goes first), installed
     # as the archive's README says: a connection that names tester goes to tester's
     # GNOME, through a shadow server it starts in tester's user manager
+    as "systemctl --user disable --now freerdp-shadow.service" >> "$OUT/install.log" 2>&1
     { rm -rf /opt/freerdp-host && tar -xJf /host.tar.xz -C /opt && mv /opt/freerdp-host-*-linux-* /opt/freerdp-host \
         && chown -R root:root /opt/freerdp-host \
         && cp /opt/freerdp-host/freerdp-shadow-sesman.service /etc/systemd/system/ \
@@ -296,12 +298,12 @@ if [ "$MODE" = gnome ]; then
     sesman() { journalctl -u freerdp-shadow-sesman -o cat --no-pager 2> /dev/null; }
     sesman_shadow() { as "journalctl --user -u freerdp-sesman-shadow -o cat --no-pager" 2> /dev/null; }
     for _ in $(seq 30); do sesman | grep -q "listening on" && break; sleep 1; done
-    check "sesman: the system unit runs, on 127.0.0.1:3391 only (0D3F)" \
-        '[ "$(systemctl show freerdp-shadow-sesman -p ActiveState --value)" = active ] && [ "$(listeners 0D3F)" = "0100007F:0D3F" ]' \
-        "$(listeners 0D3F | tr '\n' ' ')"
+    check "sesman: the system unit runs, on 127.0.0.1:3388 only (0D3C)" \
+        '[ "$(systemctl show freerdp-shadow-sesman -p ActiveState --value)" = active ] && [ "$(listeners)" = "0100007F:0D3C" ]' \
+        "$(listeners | tr '\n' ' ')"
     as "nohup foot sh -c '$CLOCK' > /tmp/foot-clock.log 2>&1 &"
     # the first connection waits for the shadow server to start
-    PORT_=3391 connect sesman /gfx:AV2:off
+    connect sesman /gfx:AV2:off
     sleep 25
     n=$(frames sesman AV1)
     check "sesman: tester is handed to the shadow server of tester's GNOME" \
@@ -313,7 +315,7 @@ if [ "$MODE" = gnome ]; then
     kill $CPID 2> /dev/null; sleep 2
     as "pkill -x foot"
     # a wrong password: the client is told why and ends, it does not reconnect with it
-    PASS_=wrong-pw PORT_=3391 connect sesman-badpw /gfx:AV2:off /auto-reconnect
+    PASS_=wrong-pw connect sesman-badpw /gfx:AV2:off /auto-reconnect
     for _ in $(seq 40); do kill -0 $CPID 2> /dev/null || break; sleep 1; done
     check "sesman: a wrong password ends the client within 40 s, no reconnecting" \
         '! kill -0 $CPID 2> /dev/null && sesman_shadow | grep -q "client authentication failure"' \
@@ -323,14 +325,14 @@ if [ "$MODE" = gnome ]; then
     # The next connection gets a new server, in the same GNOME
     shadow_pid() { as "systemctl --user show -p MainPID --value freerdp-sesman-shadow.service" 2> /dev/null; }
     shell_pid() { pgrep -u tester -o -x gnome-shell; }
-    PORT_=3391 connect sesman-before /gfx:AV2:off
+    connect sesman-before /gfx:AV2:off
     sleep 8
     kill $CPID 2> /dev/null; sleep 2
     OLD_SHADOW=$(shadow_pid)
     OLD_SHELL=$(shell_pid)
     cp -p /opt/freerdp-host/bin/freerdp-shadow-cli /opt/freerdp-host/bin/freerdp-shadow-cli.new
     mv -f /opt/freerdp-host/bin/freerdp-shadow-cli.new /opt/freerdp-host/bin/freerdp-shadow-cli
-    PORT_=3391 connect sesman-update /gfx:AV2:off
+    connect sesman-update /gfx:AV2:off
     sleep 12
     NEW_SHADOW=$(shadow_pid)
     check "sesman: after an update the next connection gets a new server, in the same GNOME" \
@@ -338,7 +340,7 @@ if [ "$MODE" = gnome ]; then
         "server $OLD_SHADOW -> $NEW_SHADOW, shell $OLD_SHELL -> $(shell_pid)"
     kill $CPID 2> /dev/null; sleep 2
     # other has an account but no GNOME session: refused before any login
-    USER_=other PASS_=other-pw PORT_=3391 connect sesman-other
+    USER_=other PASS_=other-pw connect sesman-other
     sleep 8
     kill $CPID 2> /dev/null; sleep 1
     check "sesman: a user with no GNOME session is refused, and sees nothing" \
@@ -360,7 +362,7 @@ if [ "$MODE" = gnome ]; then
     autostart other-system other-system-ran
     # GNOME's session target wants gnome-software.service: the same stand-in by that path
     printf '[Service]\nType=oneshot\nExecStart=/usr/bin/touch /tmp/software-unit-ran\n' > /usr/lib/systemd/user/gnome-software.service
-    USER_=other PASS_=other-pw PORT_=3391 connect sesman-headless /gfx:AV2:off /sound:sys:fake /dynamic-resolution
+    USER_=other PASS_=other-pw connect sesman-headless /gfx:AV2:off /sound:sys:fake /dynamic-resolution
     # a whole GNOME session takes longer to start than the shell alone
     for _ in $(seq 150); do other_shadow | grep -q "is activated" && break; sleep 1; done
     # the same clock window, in other's GNOME: it opens on the virtual monitor, the
@@ -432,7 +434,7 @@ else
         WLOG_FILEAPPENDER_OUTPUT_FILE_NAME=server.log WLOG_FILTER=com.freerdp.codec.av1:DEBUG nohup $ARGS /subsystem:x11 > $OUT/server.out 2>&1 &"
     for _ in $(seq 30); do grep -q "Listening on" "$OUT/server.log" 2> /dev/null && break; sleep 1; done
     SPID=$(pgrep -u tester -f "freerdp-shadow-cli /bind-address" | head -1)
-    check "it listens on 127.0.0.1:3389 only" '[ "$(listeners)" = "0100007F:0D3D" ]' "$(listeners | tr '\n' ' ')"
+    check "it listens on 127.0.0.1:3388 only" '[ "$(listeners)" = "0100007F:0D3C" ]' "$(listeners | tr '\n' ' ')"
     check "/subsystem:x11: subsystem X11" 'grep -q "subsystem: X11" "$OUT/server.log"'
     as "nohup xterm -geometry 60x20+100+100 -e sh -c '$CLOCK' > /tmp/xterm.log 2>&1 &"
     connect av1 /gfx:AV2:off

@@ -15,7 +15,7 @@ PartOf=graphical-session.target
 # session owner's own account, checked by the system's PAM; with NLA the
 # server would check a SAM file instead.
 # AV2 goes to the clients that offer it, AV1 to the others.
-ExecStart=%h/.local/opt/freerdp-host/bin/freerdp-shadow-cli /bind-address:127.0.0.1 /port:3389 /sec:tls /gfx-av1 /gfx-av2
+ExecStart=%h/.local/opt/freerdp-host/bin/freerdp-shadow-cli /bind-address:127.0.0.1 /port:3388 /sec:tls /gfx-av1 /gfx-av2
 # started again after a crash; the user stopping the sharing from GNOME's
 # screen-sharing indicator ends it with 0, so it stays stopped
 Restart=on-failure

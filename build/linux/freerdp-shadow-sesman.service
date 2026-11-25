@@ -1,6 +1,8 @@
-# FreeRDP's session manager, optional and off unless installed (README.txt, "The
-# session manager"): a SYSTEM unit that runs as root, on 127.0.0.1:3391, a port
-# of its own (the user unit freerdp-shadow.service keeps 3389). It reads the
+# FreeRDP's session manager, off unless installed (README.txt, "The session
+# manager"): a SYSTEM unit that runs as root, on 127.0.0.1:3388, the kit's shadow
+# port on every OS (3389 is the system's own RDP servers': GNOME Remote Desktop,
+# xrdp). The user unit freerdp-shadow.service takes 3388 too: install one or the
+# other, or give the second a /port of its own (never 3389). It reads the
 # first packet of each connection, the user it names (Cookie: mstshash=), and
 # hands the connection to the shadow server of that user's GNOME session,
 # which it starts in the user's own systemd manager
@@ -11,7 +13,7 @@
 # freerdp-headless <user>); without the group everyone else is refused. Needs
 # the server unpacked in /opt/freerdp-host, owned by root.
 [Unit]
-Description=FreeRDP session manager: RDP to the GNOME session of the user who connects, on 127.0.0.1:3391
+Description=FreeRDP session manager: RDP to the GNOME session of the user who connects, on 127.0.0.1:3388
 Documentation=https://github.com/congzhangzh/rdp-release-kit
 After=network.target systemd-logind.service
 
@@ -22,7 +24,7 @@ After=network.target systemd-logind.service
 # have none, started by the first connection that names them, before the
 # login (which the shadow server asks for once GNOME is up); --headless-size
 # its monitor (1920x1080)
-ExecStart=/opt/freerdp-host/bin/freerdp-shadow-sesman --bind 127.0.0.1 --port 3391 --headless-group freerdp-headless --shadow /opt/freerdp-host/bin/freerdp-shadow-cli -- /gfx-av1 /gfx-av2
+ExecStart=/opt/freerdp-host/bin/freerdp-shadow-sesman --bind 127.0.0.1 --port 3388 --headless-group freerdp-headless --shadow /opt/freerdp-host/bin/freerdp-shadow-cli -- /gfx-av1 /gfx-av2
 Restart=on-failure
 RestartSec=5
 

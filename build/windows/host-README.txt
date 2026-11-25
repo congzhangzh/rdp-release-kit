@@ -16,7 +16,7 @@ start sessions of its own. The picture is encoded in AV1.
 Install the service (in an administrator's PowerShell, in this folder)
 -----------------------------------------------------------------------
 
-  .\freerdp-shadow-service.exe install --allow-sas -- /bind-address:127.0.0.1 /gfx-av1 /gfx-av2 -gfx-avc444
+  .\freerdp-shadow-service.exe install --allow-sas -- /bind-address:127.0.0.1 /port:3388 /gfx-av1 /gfx-av2 -gfx-avc444
 
 AV2 goes to the clients that offer it (the kit's FreeRDP clients and FreeRDP
 Web), AV1 to the others. Smaller frames for the same picture, for more processor
@@ -39,8 +39,9 @@ keeps it in software, /codec-first:hardware:<id> picks a card, and /codec-list
 shows the encoders this PC has (freerdp-shadow-cli.exe /codec-list). The log
 names the one in use: "AV1 encoder: Media Foundation ... (hardware ...)".
 
-It starts at once and with Windows, on port 3389. If Windows' own Remote
-Desktop is turned on, it holds 3389 already: add /port:<another>, e.g. 3388. --allow-sas lets the service send
+It starts at once and with Windows, on port 3388, the kit's shadow port on
+every OS: 3389 stays free for Windows' own Remote Desktop. Without /port the
+server takes 3389. --allow-sas lets the service send
 Ctrl+Alt+Del (it sets the policy SoftwareSASGeneration = 1); leave it out
 if you do not want that. --log <folder> writes logs there. Remove it with
 
@@ -51,7 +52,7 @@ it only when services could not send Ctrl+Alt+Del before).
 
 Or, without a service, for the logged-on user's desktop only:
 
-  .\freerdp-shadow-cli.exe /bind-address:127.0.0.1 /gfx-av1 /gfx-av2
+  .\freerdp-shadow-cli.exe /bind-address:127.0.0.1 /port:3388 /gfx-av1 /gfx-av2
 
 The size of the picture
 -----------------------
@@ -71,10 +72,10 @@ Logins are Windows accounts (Network Level Authentication, through
 Windows' own security packages). Keep the server on 127.0.0.1 as above and
 reach it through SSH (Windows' optional feature "OpenSSH Server"):
 
-  ssh -L 13389:127.0.0.1:3389 <user>@<this PC>
+  ssh -L 13388:127.0.0.1:3388 <user>@<this PC>
 
-then connect to 127.0.0.1:13389. FreeRDP Web: start a WebSocket gateway on this PC
-(pip install websockify, then websockify 127.0.0.1:3390 127.0.0.1:3389) and
+then connect to 127.0.0.1:13388. FreeRDP Web: start a WebSocket gateway on this PC
+(pip install websockify, then websockify 127.0.0.1:3390 127.0.0.1:3388) and
 forward 3390 instead.
 
 A Unix socket instead of TCP: /ipc-socket:<path> (Windows 10 1803 or later;

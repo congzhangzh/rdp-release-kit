@@ -13,7 +13,7 @@ Optional, off unless you install it (see "The session manager" below; it runs as
 
   bin/freerdp-shadow-sesman      one port for every user of this computer: each
                                  connection goes to the GNOME session of the user it names
-  freerdp-shadow-sesman.service  its systemd system unit, on 127.0.0.1:3391
+  freerdp-shadow-sesman.service  its systemd system unit, on 127.0.0.1:3388
 
 One server for two kinds of desktop; it takes, at start, the first that finds a monitor:
 
@@ -69,8 +69,10 @@ systemctl --user daemon-reload && systemctl --user restart freerdp-shadow. There
 encoder in it: a client without AV1 or AV2 (Windows' own Remote Desktop client, most
 others) gets RemoteFX or the older bitmap codecs.
 
-Port 3389 may be taken already by GNOME's own Remote Desktop or Desktop Sharing
-(gnome-remote-desktop): turn that off, or give this one /port:<another>, e.g. 3388.
+It listens on 3388, the kit's shadow port on every OS: 3389 stays free for the system's own
+RDP servers (GNOME's Remote Desktop or Desktop Sharing, gnome-remote-desktop; xrdp). The
+session manager below takes 3388 too: install one or the other, or give the second a
+/port:<another> (never 3389).
 
 Remove it with
 
@@ -97,10 +99,10 @@ security (/sec:tls in the unit; keep it there). Another account is refused: it w
 your screen. GNOME (Mutter) asks PAM's service freerdp-shadow when /etc/pam.d/freerdp-shadow
 exists, else login. Keep the server on 127.0.0.1 as the unit has it, and reach it through SSH:
 
-  ssh -L 13389:127.0.0.1:3389 <user>@<this computer>
+  ssh -L 13388:127.0.0.1:3388 <user>@<this computer>
 
-then connect a client to 127.0.0.1:13389. FreeRDP Web: start a WebSocket gateway on this
-computer (websockify 127.0.0.1:3390 127.0.0.1:3389) and forward 3390 instead.
+then connect a client to 127.0.0.1:13388. FreeRDP Web: start a WebSocket gateway on this
+computer (websockify 127.0.0.1:3390 127.0.0.1:3388) and forward 3390 instead.
 
 The server makes its own TLS certificate on its first start, in ~/.config/freerdp/shadow/.
 
@@ -108,8 +110,9 @@ The session manager (optional, runs as root)
 --------------------------------------------
 
 freerdp-shadow-sesman lets every user of this computer reach their own GNOME session on one
-port, without installing the user unit above: it runs as root, as a system service, on a port
-of its own, 127.0.0.1:3391 (the user unit keeps 3389, so both can be installed). For each
+port, without installing the user unit above: it runs as root, as a system service, on
+127.0.0.1:3388, the same port as the user unit (install one or the other, or give the second
+a port of its own, never 3389). For each
 connection it reads the client's first packet and nothing else, takes the user it names
 (the client's user name, "Cookie: mstshash=<user>"), finds that user's GNOME Shell, starts
 the shadow server in the user's own systemd manager if it is not running yet (the unit
@@ -143,11 +146,11 @@ If an earlier version's install step added a polkit rule, remove it:
 
   sudo rm -f /etc/polkit-1/rules.d/49-freerdp-shadow-sesman.rules
 
-Connect as with the user unit, through SSH, to port 3391 this time:
+Connect as with the user unit, through SSH, to port 3388:
 
-  ssh -L 13391:127.0.0.1:3391 <user>@<this computer>
+  ssh -L 13388:127.0.0.1:3388 <user>@<this computer>
 
-then a client to 127.0.0.1:13391 with your own user name and password. Its log:
+then a client to 127.0.0.1:13388 with your own user name and password. Its log:
 sudo journalctl -u freerdp-shadow-sesman (who connects, to whose session); the shadow
 server's own lines are in your journal, journalctl --user -u freerdp-sesman-shadow.
 

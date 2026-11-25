@@ -10,7 +10,7 @@
     <array>
         <string>/Applications/FreeRDP-Shadow.app/Contents/MacOS/freerdp-shadow-cli</string>
         <string>/bind-address:127.0.0.1</string>
-        <string>/port:3389</string>
+        <string>/port:3388</string>
         <!-- TLS security: the login is the Mac's own (PAM); with NLA the server would
              check a SAM file instead (-sec-nla does not turn that off) -->
         <string>/sec:tls</string>

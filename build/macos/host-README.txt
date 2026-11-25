@@ -61,9 +61,10 @@ The login is the macOS account running it (your own), checked by macOS (PAM) ove
 security (/sec:tls in the plist; keep it there). Keep the server on 127.0.0.1 as
 above and reach it through SSH (System Settings > General > Sharing > Remote Login):
 
-  ssh -L 13389:127.0.0.1:3389 <user>@<this Mac>
+  ssh -L 13388:127.0.0.1:3388 <user>@<this Mac>
 
-then connect a client to 127.0.0.1:13389.
+then connect a client to 127.0.0.1:13388. It listens on 3388, the kit's shadow port on
+every OS (3389 is for the system's own RDP servers).
 
 What it cannot do
 -----------------

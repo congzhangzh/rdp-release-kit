@@ -35,29 +35,40 @@ Windows標準のリモートデスクトップ接続が使えます。VNCやリ�
 | | Windows(最初) | Linux | macOS(Apple Silicon) |
 |---|---|---|---|
 | ファイル | `freerdp-host-<version>-windows-x86_64.zip`、`-windows-aarch64.zip` | `freerdp-host-<version>-linux-x86_64.tar.xz`、`-linux-aarch64.tar.xz` | `freerdp-host-<version>-macos-arm64.zip` |
-| 実行形態 | Windowsサービス `freerdp-shadow-service`。コンソールセッション上でSYSTEMとしてサーバーを実行し、ログオン画面やロック画面、UACプロンプト、Ctrl+Alt+Delにも対応します | デスクトップセッション内のsystemdユーザーユニット `freerdp-shadow.service`。GNOMEはMutter経由(WaylandまたはX11)、それ以外はX11デスクトップに対応します。オプションとして、すべてのユーザーのGNOME(ヘッドレスを含む)向けにrootの[セッションマネージャー](README.md#the-session-manager-optional-runs-as-root)も使えます | ログインセッション内のLaunchAgent(`FreeRDP-Shadow.app`) |
+| 実行形態 | Windowsサービス `freerdp-shadow-service`。コンソールセッション上でSYSTEMとしてサーバーを実行し、ログオン画面やロック画面、UACプロンプト、Ctrl+Alt+Delにも対応します | [セッションマネージャー](README.md#the-session-manager-runs-as-root) `freerdp-shadow-sesman`。rootのシステムサービスで、各ユーザーを本人のGNOMEセッション(Mutter、WaylandまたはX11)のシャドウサーバーに引き渡し、GNOMEセッションのないユーザーにはヘッドレスのGNOMEを起動します。rootなしの場合は、今いるデスクトップセッション内のsystemd[ユーザーユニット](README.md#the-user-unit-your-own-desktop-no-root) `freerdp-shadow.service`(GNOME、または任意のX11デスクトップ) | ログインセッション内のLaunchAgent(`FreeRDP-Shadow.app`) |
 | AV1 4:2:0 | AV1エンコーダーがあればMedia Foundation経由でグラフィックスカード上、なければlibaom(テスト済み: NVIDIAのノートPC用GPU) | VA-API経由でグラフィックスカード上(実際のGPUでは未検証)、なければlibaom | libaom(AV1をエンコードするAppleチップはありません) |
 | その他 | AV2(libavm)、AV1非対応クライアント向けにMedia FoundationのH.264 AVC420、PCの音声 | AV2、セッションの音声(PipeWire)、libei経由のキー入力 | AV2、VideoToolboxのH.264、Macの音声 |
-| ログイン | Windowsアカウント(ネットワークレベル認証) | デスクトップの所有者のアカウント(PAM、TLS経由) | お使いのmacOSアカウント(PAM、TLS経由) |
-| リリースごとにCIでテスト | Windows Server 2025(x86_64)とWindows 11 on ARM: AV1、Windowsログイン、Ctrl+Alt+Del、ロック画面、FreeRDP Web | x86_64とARM64上のGNOMEヘッドレスとXfce: AV1、AV2、キー入力、音声、別アカウントの拒否、セッションマネージャー | GitHubのmacOSランナー: LaunchAgentに対するAV1とAV2のセッション(ランナー自身のログインはテストできません) |
+| ログイン | Windowsアカウント(ネットワークレベル認証) | 自分のアカウント(PAM、TLS経由)。セッションマネージャーは本人のGNOMEに引き渡し、ユーザーユニットはデスクトップの所有者だけを受け入れます | お使いのmacOSアカウント(PAM、TLS経由) |
+| リリースごとにCIでテスト | Windows Server 2025(x86_64)とWindows 11 on ARM: AV1、Windowsログイン、Ctrl+Alt+Del、ロック画面、FreeRDP Web | x86_64とARM64上のGNOMEヘッドレスとXfce: セッションマネージャー(ログイン済みとヘッドレスのGNOME)、ユーザーユニット、AV1、AV2、キー入力、音声、別アカウントの拒否 | GitHubのmacOSランナー: LaunchAgentに対するAV1とAV2のセッション(ランナー自身のログインはテストできません) |
 
 ### インストール
 
 **Windows**: 管理者のPowerShellで、展開したフォルダー内で実行します:
 
 ```powershell
-.\freerdp-shadow-service.exe install --allow-sas -- /bind-address:127.0.0.1 /gfx-av1 /gfx-av2 -gfx-avc444
+.\freerdp-shadow-service.exe install --allow-sas -- /bind-address:127.0.0.1 /port:3388 /gfx-av1 /gfx-av2 -gfx-avc444
 ```
 
-すぐに起動し、Windowsの起動時にも自動で起動します。ポートは3389です。Windows標準のリモートデスクトップが有効な場合は、
-すでに3389を使用しているため、`/port:3388` を追加してください。AV1のみにする場合は、`/gfx-av2` の代わりに `/gfx-av2:off` を指定します。
+すぐに起動し、Windowsの起動時にも自動で起動します。ポートは3388です。シャドウサーバーはどのOSでも3388で待ち受けるので、
+3389はWindows標準のリモートデスクトップのために空いたままです。AV1のみにする場合は、`/gfx-av2` の代わりに `/gfx-av2:off` を指定します。
 `--allow-sas` は、サービスがCtrl+Alt+Delを送信できるようにします(ポリシー SoftwareSASGeneration)。
 不要な場合は付けないでください。削除は `.\freerdp-shadow-service.exe uninstall` で行います。
 このときポリシーも、インストール時に見つけた状態に戻ります。サービスを使わず、ログオン中のユーザーのデスクトップだけを対象にする場合:
-`.\freerdp-shadow-cli.exe /bind-address:127.0.0.1 /gfx-av1 /gfx-av2`。
+`.\freerdp-shadow-cli.exe /bind-address:127.0.0.1 /port:3388 /gfx-av1 /gfx-av2`。
 
-**Linux**: 自分のユーザーで、共有したいデスクトップセッション内で実行します
-(詳細は[Linuxホストのインストール](README.md#installing-the-linux-host)):
+**Linux**(GNOME)、rootで: セッションマネージャー。コンピューターのすべてのユーザー向けの1つのサービスで、誰かがログインする前から動いています。
+GNOMEセッションのないユーザーにはヘッドレスのGNOMEを用意できます(詳細は[セッションマネージャー](README.md#the-session-manager-runs-as-root)):
+
+```sh
+sudo tar -xJf freerdp-host-*-linux-$(uname -m).tar.xz -C /opt
+sudo mv /opt/freerdp-host-*-linux-$(uname -m) /opt/freerdp-host
+sudo chown -R root:root /opt/freerdp-host
+sudo cp /opt/freerdp-host/freerdp-shadow-sesman.service /etc/systemd/system/
+sudo systemctl daemon-reload && sudo systemctl enable --now freerdp-shadow-sesman.service
+```
+
+rootなしの場合、または他のX11デスクトップの場合: ユーザーユニット。自分のユーザーで、共有したいデスクトップセッション内で実行します
+(詳細は[ユーザーユニット](README.md#the-user-unit-your-own-desktop-no-root)):
 
 ```sh
 tar -xJf freerdp-host-*-linux-$(uname -m).tar.xz
@@ -66,6 +77,8 @@ mv freerdp-host-*-linux-$(uname -m) ~/.local/opt/freerdp-host
 cp ~/.local/opt/freerdp-host/freerdp-shadow.service ~/.config/systemd/user/
 systemctl --user daemon-reload && systemctl --user enable --now freerdp-shadow.service
 ```
+
+どちらも3388で待ち受けるので、どちらか一方だけをインストールしてください。
 
 **macOS**: 展開後に実行します:
 
@@ -85,16 +98,16 @@ FreeRDP Shadowを許可し、再起動してください:
 
 ### 接続
 
-3つとも127.0.0.1でのみ待ち受けます。そのままにしておき、SSH経由でサーバーに接続してください
+3つとも127.0.0.1:3388でのみ待ち受けます。そのままにしておき、SSH経由でサーバーに接続してください
 ([サーバーの配備](#サーバーの配備-rdpをインターネットに公開しない)を参照):
 
 ```sh
-ssh -N -L 13389:127.0.0.1:3389 user@host &
-sdl-freerdp /v:127.0.0.1:13389 /u:user
+ssh -N -L 13388:127.0.0.1:3388 user@host &
+sdl-freerdp /v:127.0.0.1:13388 /u:user
 ```
 
-freerdp-tkで127.0.0.1:13389を指定して接続することもできます。FreeRDP Webの場合は、ホスト上でWebSocketゲートウェイ
-(`websockify 127.0.0.1:3390 127.0.0.1:3389`)を起動し、代わりに3390を転送してください。
+freerdp-tkで127.0.0.1:13388を指定して接続することもできます。FreeRDP Webの場合は、ホスト上でWebSocketゲートウェイ
+(`websockify 127.0.0.1:3390 127.0.0.1:3388`)を起動し、代わりに3390を転送してください。
 `freerdp-shadow-cli /codec-list` で、そのコンピューターにあるエンコーダーが表示され、
 `/codec-first:software` または `/codec-first:hardware:<id>` で1つを選べます。使用中のエンコーダーはログに記録されます。例:
 `AV1 encoder: Media Foundation 0 NVIDIA AV1 Encoder MFT (hardware, …), libaom as fallback`。
@@ -120,7 +133,7 @@ freerdp-tkで127.0.0.1:13389を指定して接続することもできます。F
 | `sdl-freerdp.exe`。同じクライアントのWindows版で、freerdp-tkとそのPythonを含みます | プレビュー、同上 | Windows 10および11、x86_64とARM64 |
 | `sdl-freerdp`。同じクライアントのmacOS版で、freerdp-tkとそのPythonを含みます | プレビュー、同上 | macOS 12以降、Apple Silicon(arm64)。Intel Macはもう対象外です(最後のリリース: 20261122.6) |
 | FreeRDP Webクライアント(WebAssembly)と[freerdp-web](https://github.com/congzhangzh/freerdp-web)ページ | プレビュー: FreeRDPのmaster + オープン中のプルリクエスト(下記のピン留めを参照) | 最新のブラウザー(テスト済み: Chrome)。GitHub Pagesから配信されます |
-| FreeRDPのシャドウサーバー(`freerdp-shadow-cli`)。Windowsには `freerdp-shadow-service`、Linuxにはsystemdユーザーユニット、macOSにはLaunchAgentアプリが付きます: AV1(GPUまたはlibaom)、AV2、WindowsとmacOSではH.264、音声 | プレビュー、同じFreeRDP | Windows 10および11のx86_64とARM64。glibc 2.34以上のLinux x86_64 / aarch64(GNOME、または任意のX11デスクトップ)。Apple SiliconのmacOS |
+| FreeRDPのシャドウサーバー(`freerdp-shadow-cli`)。Windowsには `freerdp-shadow-service`、Linuxにはセッションマネージャーまたはsystemdユーザーユニット、macOSにはLaunchAgentアプリが付きます: AV1(GPUまたはlibaom)、AV2、WindowsとmacOSではH.264、音声 | プレビュー、同じFreeRDP | Windows 10および11のx86_64とARM64。glibc 2.34以上のLinux x86_64 / aarch64(GNOME、または任意のX11デスクトップ)。Apple SiliconのmacOS |
 | xrdp + xorgxrdpのネイティブパッケージ(.deb / .rpm) | 安定版 | x86_64とARM64: Debian testing、13、12。Ubuntu 26.10、26.04、24.04。Fedora 45、44、43 |
 
 ## その他
@@ -128,13 +141,13 @@ freerdp-tkで127.0.0.1:13389を指定して接続することもできます。F
 このREADMEの残りの部分は、リリースのたびに変わるため、英語のみです:
 ビルドとテスト([Build](README.md#build))、ピン留め([The pins at a glance](README.md#the-pins-at-a-glance))、
 [Windowsクライアント](README.md#windows-client)、[Webクライアント](README.md#web-client-preview)、
-[Linuxホストの詳細](README.md#linux-host)とその[セッションマネージャー](README.md#the-session-manager-optional-runs-as-root)、
+[Linuxホストの詳細](README.md#linux-host)とその[セッションマネージャー](README.md#the-session-manager-runs-as-root)、
 [xrdpパッケージ](README.md#xrdp-packages)、[性能](README.md#performance-on-different-hardware)。
 
 ## サーバーの配備: RDPをインターネットに公開しない
 
 RDPサーバーは攻撃の標的になりやすく、特にxrdpは変更が速いです。
-ポート3389をネットワークに公開しないでください。サーバーはループバックインターフェースだけで待ち受けさせ、
+RDPのポート(3389、またはシャドウサーバーの3388)をネットワークに公開しないでください。サーバーはループバックインターフェースだけで待ち受けさせ、
 SSH経由で接続します。SSHは、認証、鍵、ブルートフォース対策をすでに備えています:
 
 ```ini

@@ -23,5 +23,5 @@ done
 sleep 1
 # its own session bus: nothing outside the container
 exec env WLOG_LEVEL=INFO WLOG_FILTER='com.freerdp.codec.av1:DEBUG' dbus-run-session -- \
-    /opt/host/bin/freerdp-shadow-cli /subsystem:x11 /bind-address:0.0.0.0 /port:3389 /sec:tls -auth \
+    /opt/host/bin/freerdp-shadow-cli /subsystem:x11 /bind-address:0.0.0.0 /port:3388 /sec:tls -auth \
     /gfx-av1 /gfx-av2:off -gfx-avc444 > /out/server.log 2>&1

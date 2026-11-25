@@ -35,29 +35,41 @@ sessions of its own; for that, see [xrdp](#xrdp-packages).
 | | Windows (first) | Linux | macOS (Apple Silicon) |
 |---|---|---|---|
 | File | `freerdp-host-<version>-windows-x86_64.zip`, `-windows-aarch64.zip` | `freerdp-host-<version>-linux-x86_64.tar.xz`, `-linux-aarch64.tar.xz` | `freerdp-host-<version>-macos-arm64.zip` |
-| Runs as | a Windows service, `freerdp-shadow-service`, which runs the server as SYSTEM on the console session: the logon and lock screens, UAC prompts and Ctrl+Alt+Del too | a systemd user unit, `freerdp-shadow.service`, in your desktop session: GNOME through Mutter (Wayland or X11), or any other X11 desktop; optionally, a root [session manager](#the-session-manager-optional-runs-as-root) for every user's GNOME, headless ones included | a LaunchAgent in your login session (`FreeRDP-Shadow.app`) |
+| Runs as | a Windows service, `freerdp-shadow-service`, which runs the server as SYSTEM on the console session: the logon and lock screens, UAC prompts and Ctrl+Alt+Del too | the [session manager](#the-session-manager-runs-as-root), `freerdp-shadow-sesman`: a root system service that hands each user to a shadow server in their own GNOME session (Mutter, Wayland or X11), and starts a headless GNOME for a user who has none; or, without root, a systemd [user unit](#the-user-unit-your-own-desktop-no-root), `freerdp-shadow.service`, in the desktop session you're in: GNOME, or any other X11 desktop | a LaunchAgent in your login session (`FreeRDP-Shadow.app`) |
 | AV1 4:2:0 | on the graphics card through Media Foundation when it has an AV1 encoder (tested: an NVIDIA laptop GPU), else libaom | on the graphics card through VA-API (not yet proven on a real GPU), else libaom | libaom (no Apple chip encodes AV1) |
 | Also | AV2 (libavm), H.264 AVC420 from Media Foundation for clients without AV1, the PC's sound | AV2, the session's sound (PipeWire), keys through libei | AV2, H.264 from VideoToolbox, the Mac's sound |
-| Login | a Windows account (Network Level Authentication) | the desktop owner's account (PAM, over TLS) | your macOS account (PAM, over TLS) |
-| Tested in CI, every release | Windows Server 2025 (x86_64) and Windows 11 on ARM: AV1, Windows logins, Ctrl+Alt+Del, the lock screen, FreeRDP Web | GNOME headless and Xfce, on x86_64 and ARM64: AV1, AV2, keys, sound, another account refused, the session manager | a GitHub macOS runner: an AV1 and an AV2 session against the LaunchAgent (the runner's own login can't be tested) |
+| Login | a Windows account (Network Level Authentication) | your own account (PAM, over TLS): the session manager hands you to your own GNOME; the user unit lets in the desktop's owner only | your macOS account (PAM, over TLS) |
+| Tested in CI, every release | Windows Server 2025 (x86_64) and Windows 11 on ARM: AV1, Windows logins, Ctrl+Alt+Del, the lock screen, FreeRDP Web | GNOME headless and Xfce, on x86_64 and ARM64: the session manager (a logged-in and a headless GNOME), the user unit, AV1, AV2, keys, sound, another account refused | a GitHub macOS runner: an AV1 and an AV2 session against the LaunchAgent (the runner's own login can't be tested) |
 
 ### Install
 
 **Windows**, in an administrator's PowerShell, in the unzipped folder:
 
 ```powershell
-.\freerdp-shadow-service.exe install --allow-sas -- /bind-address:127.0.0.1 /gfx-av1 /gfx-av2 -gfx-avc444
+.\freerdp-shadow-service.exe install --allow-sas -- /bind-address:127.0.0.1 /port:3388 /gfx-av1 /gfx-av2 -gfx-avc444
 ```
 
-It starts at once and with Windows, on port 3389. If Windows' own Remote Desktop is on, it
-holds 3389 already: add `/port:3388`. AV1 only: `/gfx-av2:off` instead of `/gfx-av2`.
+It starts at once and with Windows, on port 3388: the shadow server listens on 3388 on every
+OS, so 3389 stays free for Windows' own Remote Desktop. AV1 only: `/gfx-av2:off` instead of `/gfx-av2`.
 `--allow-sas` lets the service send Ctrl+Alt+Del (the policy SoftwareSASGeneration); leave
 it out if you don't want that. Remove it with `.\freerdp-shadow-service.exe uninstall`,
 which also puts that policy back as install found it. Without a service, for the logged-on
-user's desktop only: `.\freerdp-shadow-cli.exe /bind-address:127.0.0.1 /gfx-av1 /gfx-av2`.
+user's desktop only: `.\freerdp-shadow-cli.exe /bind-address:127.0.0.1 /port:3388 /gfx-av1 /gfx-av2`.
 
-**Linux**, as yourself, in the desktop session you want to share (details in
-[Installing the Linux host](#installing-the-linux-host)):
+**Linux** with GNOME, as root: the session manager. One service for every user of the
+computer, there before anyone logs in; a user with no GNOME session can get a headless one
+(details in [The session manager](#the-session-manager-runs-as-root)):
+
+```sh
+sudo tar -xJf freerdp-host-*-linux-$(uname -m).tar.xz -C /opt
+sudo mv /opt/freerdp-host-*-linux-$(uname -m) /opt/freerdp-host
+sudo chown -R root:root /opt/freerdp-host
+sudo cp /opt/freerdp-host/freerdp-shadow-sesman.service /etc/systemd/system/
+sudo systemctl daemon-reload && sudo systemctl enable --now freerdp-shadow-sesman.service
+```
+
+Without root, or on another X11 desktop: the user unit, as yourself, in the desktop session
+you want to share (details in [The user unit](#the-user-unit-your-own-desktop-no-root)):
 
 ```sh
 tar -xJf freerdp-host-*-linux-$(uname -m).tar.xz
@@ -66,6 +78,8 @@ mv freerdp-host-*-linux-$(uname -m) ~/.local/opt/freerdp-host
 cp ~/.local/opt/freerdp-host/freerdp-shadow.service ~/.config/systemd/user/
 systemctl --user daemon-reload && systemctl --user enable --now freerdp-shadow.service
 ```
+
+Both listen on 3388: install one or the other.
 
 **macOS**, after unzipping:
 
@@ -85,16 +99,16 @@ Each archive's `README.txt` has the whole story for its platform: logs, options,
 
 ### Connect
 
-All three listen on 127.0.0.1 only. Keep it that way, and reach the server over SSH (see
+All three listen on 127.0.0.1:3388 only. Keep it that way, and reach the server over SSH (see
 [Deploying a server](#deploying-a-server-keep-rdp-off-the-internet)):
 
 ```sh
-ssh -N -L 13389:127.0.0.1:3389 user@host &
-sdl-freerdp /v:127.0.0.1:13389 /u:user
+ssh -N -L 13388:127.0.0.1:3388 user@host &
+sdl-freerdp /v:127.0.0.1:13388 /u:user
 ```
 
-Or use freerdp-tk with 127.0.0.1:13389. For FreeRDP Web, start a WebSocket gateway on the
-host (`websockify 127.0.0.1:3390 127.0.0.1:3389`) and forward 3390 instead.
+Or use freerdp-tk with 127.0.0.1:13388. For FreeRDP Web, start a WebSocket gateway on the
+host (`websockify 127.0.0.1:3390 127.0.0.1:3388`) and forward 3390 instead.
 `freerdp-shadow-cli /codec-list` shows the encoders the computer has, and
 `/codec-first:software` or `/codec-first:hardware:<id>` picks one. The log names the encoder
 in use, e.g. `AV1 encoder: Media Foundation 0 NVIDIA AV1 Encoder MFT (hardware, …), libaom as fallback`.
@@ -120,7 +134,7 @@ a Pro edition.
 | `sdl-freerdp.exe`, the same client for Windows, with freerdp-tk and its Python | preview, the same | Windows 10 and 11, x86_64 and ARM64 |
 | `sdl-freerdp`, the same client for macOS, with freerdp-tk and its Python | preview, the same | macOS 12 and newer, Apple Silicon (arm64); Intel Macs no longer (the last: release 20261122.6) |
 | FreeRDP web client (WebAssembly) with the [freerdp-web](https://github.com/congzhangzh/freerdp-web) page | preview: FreeRDP master + open pull requests (see the pins below) | a current browser (tested: Chrome); served from GitHub Pages |
-| FreeRDP's shadow server (`freerdp-shadow-cli`), with `freerdp-shadow-service` on Windows, a systemd user unit on Linux, a LaunchAgent app on macOS: AV1 (GPU or libaom), AV2, H.264 on Windows and macOS, sound | preview, the same FreeRDP | Windows 10 and 11 x86_64 and ARM64; Linux x86_64 / aarch64 with glibc ≥ 2.34 (GNOME, or any X11 desktop); macOS on Apple Silicon |
+| FreeRDP's shadow server (`freerdp-shadow-cli`), with `freerdp-shadow-service` on Windows, the session manager or a systemd user unit on Linux, a LaunchAgent app on macOS: AV1 (GPU or libaom), AV2, H.264 on Windows and macOS, sound | preview, the same FreeRDP | Windows 10 and 11 x86_64 and ARM64; Linux x86_64 / aarch64 with glibc ≥ 2.34 (GNOME, or any X11 desktop); macOS on Apple Silicon |
 | xrdp + xorgxrdp native packages (.deb / .rpm) | stable | x86_64 and ARM64: Debian testing, 13, 12; Ubuntu 26.10, 26.04, 24.04; Fedora 45, 44, 43 |
 
 ### What does not run, and why
@@ -173,7 +187,7 @@ same tables are in the notes of every release.
 | Web client + freerdp-web page | freerdp 20261123.11, sdl3_wasm 3.4.18+timer, sdl3_ttf 3.2.2, freetype 2.15.0, libressl 4.4.0, opus 1.6.1, dav1d 1.5.4, avm 20261119.6, zlib 1.3.2, jansson 2.15.1, freerdp_web 20261117.2 | `test/wasm-session.sh`: a browser logs in to xrdp through SSH + websockify, the page served without COOP/COEP headers (as GitHub Pages) |
 | xrdp packages (.deb, .rpm) | xrdp 20261110.1, librfxcodec 0badc06, libpainter 379b8fb, xorgxrdp 20261018.1, x264 b35605a, opus 1.6.1, pipewire_xrdp 0.2, mutter 51.0-1.fc45 | `check-deps.sh`, then `test/xrdp-session.sh`: install in a fresh container of each release, log in over RDP: an Xorg session (xorgxrdp) with an xterm, then a Wayland one (sway, unless the release is marked no-sway) captured at the client's size; the login screen lists GNOME, and KDE unless no-kde; the default is GNOME on Fedora (Wayland first), Xorg elsewhere |
 | macOS host `FreeRDP-Shadow.app` | freerdp_mac_host 20261123.11, openssl 3.5.9, opus 1.6.1, dav1d 1.5.4, aom 3.15.2, avm 20261119.6, zlib 1.3.2, jansson 2.15.1 | `.github/workflows/kit.yml` builds and packages it on Apple Silicon (arm64; Intel no longer, since 2026-11-23); the capture is tested by hand on a Mac (CI cannot grant Screen Recording) |
-| Linux host `freerdp-shadow-cli` (GNOME and X11) | freerdp_linux_host 20261123.11, openssl 3.5.9, opus 1.6.1, dav1d 1.5.4, aom 3.15.2, avm 20261119.6, libei 1.6.0, libpng 1.6.59, zlib 1.3.2, jansson 2.15.1 | `build/check-portable.sh` (glibc ≥ 2.34, and from the host only PAM, libsystemd, PipeWire and the X11 libraries), then `test/linux-host.sh` on x86_64 and aarch64, each natively on its own runner (the release waits for it): GNOME Shell 50 headless with the server as the package's systemd user unit (Mutter by default, `/subsystem` lists it first, AV1 and AV2 frames, idle CPU with a client under 20 %, keys through libei, the session's sound in Opus, also when it plays before the first client, the clipboard channel open, the owner's login only, the sharing stopped in GNOME ends it with 0, its lines in the unit's journal through WinPR's journald appender; the optional session manager as a root system unit on 127.0.0.1:3391: the owner handed to their GNOME's shadow server, logged in, AV1 frames, the clipboard channel open, a wrong password ending the client, an update reaching the next connection, a user with no GNOME session refused, then given a headless GNOME once in the group freerdp-headless, with its sound, its settings daemons, GNOME Software out of its autostart and gnome-software.service masked, following the client's window size), and Xfce on Xvfb with `/subsystem:x11` (AV1 frames, the owner's login only) |
+| Linux host `freerdp-shadow-cli` (GNOME and X11) | freerdp_linux_host 20261123.11, openssl 3.5.9, opus 1.6.1, dav1d 1.5.4, aom 3.15.2, avm 20261119.6, libei 1.6.0, libpng 1.6.59, zlib 1.3.2, jansson 2.15.1 | `build/check-portable.sh` (glibc ≥ 2.34, and from the host only PAM, libsystemd, PipeWire and the X11 libraries), then `test/linux-host.sh` on x86_64 and aarch64, each natively on its own runner (the release waits for it): GNOME Shell 50 headless with the server as the package's systemd user unit (Mutter by default, `/subsystem` lists it first, AV1 and AV2 frames, idle CPU with a client under 20 %, keys through libei, the session's sound in Opus, also when it plays before the first client, the clipboard channel open, the owner's login only, the sharing stopped in GNOME ends it with 0, its lines in the unit's journal through WinPR's journald appender; the session manager as a root system unit on 127.0.0.1:3388: the owner handed to their GNOME's shadow server, logged in, AV1 frames, the clipboard channel open, a wrong password ending the client, an update reaching the next connection, a user with no GNOME session refused, then given a headless GNOME once in the group freerdp-headless, with its sound, its settings daemons, GNOME Software out of its autostart and gnome-software.service masked, following the client's window size), and Xfce on Xvfb with `/subsystem:x11` (AV1 frames, the owner's login only) |
 
 Pins that are not a plain upstream release:
 
@@ -304,7 +318,8 @@ the server (nothing to install on your computer but ssh):
 ssh -tt -L 127.0.0.1:3390:127.0.0.1:3390 user@server websockify 127.0.0.1:3390 127.0.0.1:3389
 ```
 
-then connect the page to `127.0.0.1:3390`. From the published page, Chrome
+then connect the page to `127.0.0.1:3390`. For the kit's shadow server, use 3388
+in place of 3389 (3389 is xrdp's and the system's own RDP server's). From the published page, Chrome
 asks whether the site may access other apps and services on this device:
 allow it, that is how the page reaches the gateway on 127.0.0.1 (Chrome's
 Local Network Access protection). freerdp-web's `rdp-gateway.sh` runs that
@@ -438,11 +453,11 @@ a failure but not after GNOME's Stop (the server then ends with 0), that logs
 to the unit's journal through WinPR's journald appender (`WITH_SYSTEMD=ON`,
 `WLOG_APPENDER=journald`, INFO), and a README (`build/linux/host-README.txt`):
 install, reach it over SSH. Logins are the session owner's own account (PAM,
-TLS security). Optional, off unless installed: the session manager
+TLS security). The main way to install it on GNOME is the session manager
 `freerdp-shadow-sesman` (FreeRDP's `WITH_SHADOW_SESMAN`) and its system unit
-`freerdp-shadow-sesman.service`, which runs as root on 127.0.0.1:3391, a port
-of its own, and hands each connection to the shadow server of the GNOME
-session of the user it names (see [The session manager](#the-session-manager-optional-runs-as-root)).
+`freerdp-shadow-sesman.service`, which runs as root on 127.0.0.1:3388 and
+hands each connection to the shadow server of the GNOME session of the user
+it names (see [The session manager](#the-session-manager-runs-as-root)).
 
 `test/linux-host.sh` runs it in a throwaway container with the kit's Linux
 client on an Xvfb of its own. `gnome`: GNOME Shell headless with systemd as
@@ -459,7 +474,7 @@ another account refused, the sharing stopped from GNOME
 with 0 and no restart, those lines coming from WinPR's journald appender
 (`_TRANSPORT=stdout`, identifier `freerdp-shadow-cli`, INFO at priority 6 and
 WARN at 4), and the session manager installed as root as the README says: its
-unit on 127.0.0.1:3391 only, tester handed to the shadow server of tester's
+unit on 127.0.0.1:3388 only, tester handed to the shadow server of tester's
 GNOME (logged in, AV1 frames), a user with no GNOME session refused, and,
 once that user is in `freerdp-headless`, a headless GNOME started for them
 (logged in, the shadow server's virtual monitor, frames with the screen
@@ -473,8 +488,60 @@ carries the archive.
 
 Each release has `freerdp-host-<version>-linux-x86_64.tar.xz` and
 `freerdp-host-<version>-linux-aarch64.tar.xz` for ARM64 (their checksums in the
-release's `SHA256SUMS`). Install it for your own account, in the
-desktop session you want to share (the archive's `README.txt` says the same):
+release's `SHA256SUMS`). There are two ways to install it. Both listen on
+127.0.0.1:3388, so install one or the other (or give the second a port of its
+own, never 3389, which belongs to the system's own RDP servers: GNOME Remote
+Desktop, xrdp):
+
+- **[The session manager](#the-session-manager-runs-as-root)**, the main way on
+  GNOME: one root service for every user of the computer, there before anyone
+  logs in, headless sessions included.
+- **[The user unit](#the-user-unit-your-own-desktop-no-root)**, without root, on
+  GNOME or any other X11 desktop: it shares the desktop session you're in, for
+  your own account only.
+
+### The session manager (runs as root)
+
+`freerdp-shadow-sesman` gives every user of the computer one port to their
+own GNOME session, without the user unit; it is the way to install the Linux
+host on GNOME. **It runs as root**, as a system service on 127.0.0.1:3388 (the
+user unit's port too: install one or the other). It reads the client's first packet only (the user it
+names, `Cookie: mstshash=<user>`), finds that user's GNOME Shell, starts the
+shadow server in the user's own systemd manager (`freerdp-sesman-shadow`, on a
+socket in `/run/user/<uid>`) unless it runs already, drops to the user and
+relays the connection. It never sees a password: TLS and the login stay in
+the shadow server (PAM, the session's owner only). A user with no GNOME
+session gets a headless GNOME Shell with a monitor of its own if they are in
+the group `freerdp-headless` (the unit's `--headless-group`; it does nothing
+until you make the group: `sudo groupadd -f freerdp-headless`,
+`sudo usermod -aG freerdp-headless <user>`), and is refused otherwise. The
+headless session keeps running after the client leaves, so the next
+connection finds the same desktop. As root and before any login, it reads
+nothing but that first packet; still, keep the port on 127.0.0.1 (over SSH) or
+private. Install it from the same archive,
+as root, in `/opt/freerdp-host` (a root service must not run files a user can
+change):
+
+```sh
+sudo rm -rf /opt/freerdp-host   # an earlier version, if any
+sudo tar -xJf freerdp-host-*-linux-$(uname -m).tar.xz -C /opt
+sudo mv /opt/freerdp-host-*-linux-$(uname -m) /opt/freerdp-host
+sudo chown -R root:root /opt/freerdp-host
+sudo cp /opt/freerdp-host/freerdp-shadow-sesman.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now freerdp-shadow-sesman.service
+```
+
+Reach it over SSH (`ssh -N -L 13388:127.0.0.1:3388 user@server`),
+log in with your own account. Its log: `sudo journalctl -u freerdp-shadow-sesman`;
+the shadow server's: `journalctl --user -u freerdp-sesman-shadow`. Remove it with
+`sudo systemctl disable --now freerdp-shadow-sesman.service`, then delete
+`/etc/systemd/system/freerdp-shadow-sesman.service` and `/opt/freerdp-host`.
+
+### The user unit: your own desktop, no root
+
+Install it for your own account, in the desktop session you want to share (the
+archive's `README.txt` says the same):
 
 ```sh
 tar -xJf freerdp-host-*-linux-$(uname -m).tar.xz
@@ -496,12 +563,12 @@ stopped; `systemctl --user restart freerdp-shadow` brings it back.
 
 **Keep it on 127.0.0.1 and reach it over SSH.** The unit binds the server to
 the loopback interface only (`/bind-address:127.0.0.1`); do not change that
-to open port 3389 to the network (see [Deploying a server](#deploying-a-server-keep-rdp-off-the-internet)).
+to open port 3388 to the network (see [Deploying a server](#deploying-a-server-keep-rdp-off-the-internet)).
 From the client:
 
 ```sh
-ssh -N -L 13389:127.0.0.1:3389 user@server &
-sdl-freerdp /v:127.0.0.1:13389 /u:user
+ssh -N -L 13388:127.0.0.1:3388 user@server &
+sdl-freerdp /v:127.0.0.1:13388 /u:user
 ```
 
 The login is the account whose desktop it is, checked by the system's PAM
@@ -513,43 +580,6 @@ Where the journal is kept in memory only (no `/var/log/journal`), journald
 keeps no file per user and `journalctl --user` may show nothing: read the
 server's lines as root (`sudo journalctl -t freerdp-shadow-cli`), or set
 `Storage=persistent` in `/etc/systemd/journald.conf`.
-
-### The session manager (optional, runs as root)
-
-`freerdp-shadow-sesman` gives every user of the computer one port to their
-own GNOME session, without the user unit. **It runs as root**, as a system
-service on a port of its own, 127.0.0.1:3391 (the user unit keeps 3389, so
-both can be installed). It reads the client's first packet only (the user it
-names, `Cookie: mstshash=<user>`), finds that user's GNOME Shell, starts the
-shadow server in the user's own systemd manager (`freerdp-sesman-shadow`, on a
-socket in `/run/user/<uid>`) unless it runs already, drops to the user and
-relays the connection. It never sees a password: TLS and the login stay in
-the shadow server (PAM, the session's owner only). A user with no GNOME
-session gets a headless GNOME Shell with a monitor of its own if they are in
-the group `freerdp-headless` (the unit's `--headless-group`; it does nothing
-until you make the group: `sudo groupadd -f freerdp-headless`,
-`sudo usermod -aG freerdp-headless <user>`), and is refused otherwise. The
-headless session keeps running after the client leaves, so the next
-connection finds the same desktop; it is started before the login, so keep
-the port on 127.0.0.1 (over SSH) or private. Install it from the same archive,
-as root, in `/opt/freerdp-host` (a root service must not run files a user can
-change):
-
-```sh
-sudo rm -rf /opt/freerdp-host   # an earlier version, if any
-sudo tar -xJf freerdp-host-*-linux-$(uname -m).tar.xz -C /opt
-sudo mv /opt/freerdp-host-*-linux-$(uname -m) /opt/freerdp-host
-sudo chown -R root:root /opt/freerdp-host
-sudo cp /opt/freerdp-host/freerdp-shadow-sesman.service /etc/systemd/system/
-sudo systemctl daemon-reload
-sudo systemctl enable --now freerdp-shadow-sesman.service
-```
-
-Reach it over SSH as the user unit (`ssh -N -L 13391:127.0.0.1:3391 user@server`),
-log in with your own account. Its log: `sudo journalctl -u freerdp-shadow-sesman`;
-the shadow server's: `journalctl --user -u freerdp-sesman-shadow`. Remove it with
-`sudo systemctl disable --now freerdp-shadow-sesman.service`, then delete
-`/etc/systemd/system/freerdp-shadow-sesman.service` and `/opt/freerdp-host`.
 
 ## xrdp packages
 
@@ -658,7 +688,8 @@ clipboard.
 ## Deploying a server: keep RDP off the internet
 
 RDP servers are a frequent attack target, and xrdp in particular changes
-quickly. Do not expose port 3389 to the network. Let the server listen on
+quickly. Do not expose an RDP port (3389, or the shadow server's 3388) to
+the network. Let the server listen on
 the loopback interface only, and reach it through SSH, which already
 handles authentication, keys and brute-force protection:
 

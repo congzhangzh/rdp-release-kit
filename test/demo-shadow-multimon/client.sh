@@ -28,7 +28,7 @@ xdotool windowmove "$w" 1280 0
 export WAYLAND_DISPLAY=wayland-demo SDL_VIDEO_DRIVER=wayland
 /opt/client/bin/sdl-freerdp /list:monitor > /out/client-monitors.txt 2>&1
 WLOG_LEVEL=INFO WLOG_FILTER='com.freerdp.codec.av1:DEBUG' /opt/client/bin/sdl-freerdp \
-    /v:"$server":3389 /sec:tls /cert:ignore /u:demo /p:demo /multimon /gfx:AV2:off,AV1:i420 \
+    /v:"$server":3388 /sec:tls /cert:ignore /u:demo /p:demo /multimon /gfx:AV2:off,AV1:i420 \
     +sdl-info /sdl-stats-ipc:/tmp/stats.sock > /out/client.log 2>&1 &
 client=$!
 # the overlay's numbers each second, as a line of JSON

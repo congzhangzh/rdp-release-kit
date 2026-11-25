@@ -35,29 +35,41 @@ pas de sessions propres ; pour cela, voir [xrdp](README.md#xrdp-packages).
 | | Windows (en premier) | Linux | macOS (Apple Silicon) |
 |---|---|---|---|
 | Fichier | `freerdp-host-<version>-windows-x86_64.zip`, `-windows-aarch64.zip` | `freerdp-host-<version>-linux-x86_64.tar.xz`, `-linux-aarch64.tar.xz` | `freerdp-host-<version>-macos-arm64.zip` |
-| S'exécute comme | un service Windows, `freerdp-shadow-service`, qui exécute le serveur en tant que SYSTEM sur la session console : écrans de connexion et de verrouillage, invites UAC et Ctrl+Alt+Suppr également | une unité utilisateur systemd, `freerdp-shadow.service`, dans votre session de bureau : GNOME via Mutter (Wayland ou X11), ou tout autre bureau X11 ; en option, un [gestionnaire de sessions](README.md#the-session-manager-optional-runs-as-root) root pour le GNOME de chaque utilisateur, y compris sans écran | un LaunchAgent dans votre session de connexion (`FreeRDP-Shadow.app`) |
+| S'exécute comme | un service Windows, `freerdp-shadow-service`, qui exécute le serveur en tant que SYSTEM sur la session console : écrans de connexion et de verrouillage, invites UAC et Ctrl+Alt+Suppr également | le [gestionnaire de sessions](README.md#the-session-manager-runs-as-root), `freerdp-shadow-sesman` : un service système root qui confie chaque utilisateur à un serveur shadow dans sa propre session GNOME (Mutter, Wayland ou X11), et démarre un GNOME sans écran pour qui n'en a pas ; ou, sans root, une [unité utilisateur](README.md#the-user-unit-your-own-desktop-no-root) systemd, `freerdp-shadow.service`, dans la session de bureau où vous êtes : GNOME, ou tout autre bureau X11 | un LaunchAgent dans votre session de connexion (`FreeRDP-Shadow.app`) |
 | AV1 4:2:0 | sur la carte graphique via Media Foundation lorsqu'elle dispose d'un encodeur AV1 (testé : un GPU d'ordinateur portable NVIDIA), sinon libaom | sur la carte graphique via VA-API (pas encore éprouvé sur un vrai GPU), sinon libaom | libaom (aucune puce Apple n'encode l'AV1) |
 | Aussi | AV2 (libavm), H.264 AVC420 de Media Foundation pour les clients sans AV1, le son du PC | AV2, le son de la session (PipeWire), les touches via libei | AV2, H.264 de VideoToolbox, le son du Mac |
-| Connexion | un compte Windows (Network Level Authentication) | le compte du propriétaire du bureau (PAM, sur TLS) | votre compte macOS (PAM, sur TLS) |
-| Testé en CI, à chaque version | Windows Server 2025 (x86_64) et Windows 11 sur ARM : AV1, connexions Windows, Ctrl+Alt+Suppr, écran de verrouillage, FreeRDP Web | GNOME headless et Xfce, sur x86_64 et ARM64 : AV1, AV2, touches, son, autre compte refusé, gestionnaire de sessions | un runner macOS de GitHub : une session AV1 et une session AV2 face au LaunchAgent (la connexion propre au runner ne peut pas être testée) |
+| Connexion | un compte Windows (Network Level Authentication) | votre propre compte (PAM, sur TLS) : le gestionnaire de sessions vous confie à votre propre GNOME ; l'unité utilisateur n'accepte que le propriétaire du bureau | votre compte macOS (PAM, sur TLS) |
+| Testé en CI, à chaque version | Windows Server 2025 (x86_64) et Windows 11 sur ARM : AV1, connexions Windows, Ctrl+Alt+Suppr, écran de verrouillage, FreeRDP Web | GNOME headless et Xfce, sur x86_64 et ARM64 : gestionnaire de sessions (un GNOME connecté et un GNOME sans écran), unité utilisateur, AV1, AV2, touches, son, autre compte refusé | un runner macOS de GitHub : une session AV1 et une session AV2 face au LaunchAgent (la connexion propre au runner ne peut pas être testée) |
 
 ### Installation
 
 **Windows**, dans un PowerShell administrateur, dans le dossier décompressé :
 
 ```powershell
-.\freerdp-shadow-service.exe install --allow-sas -- /bind-address:127.0.0.1 /gfx-av1 /gfx-av2 -gfx-avc444
+.\freerdp-shadow-service.exe install --allow-sas -- /bind-address:127.0.0.1 /port:3388 /gfx-av1 /gfx-av2 -gfx-avc444
 ```
 
-Il démarre aussitôt et avec Windows, sur le port 3389. Si le Bureau à distance de Windows est activé, il
-occupe déjà le port 3389 : ajoutez `/port:3388`. AV1 uniquement : `/gfx-av2:off` à la place de `/gfx-av2`.
+Il démarre aussitôt et avec Windows, sur le port 3388 : le serveur shadow écoute sur 3388 sous
+tous les systèmes, et 3389 reste libre pour le Bureau à distance de Windows. AV1 uniquement : `/gfx-av2:off` à la place de `/gfx-av2`.
 `--allow-sas` permet au service d'envoyer Ctrl+Alt+Suppr (la stratégie SoftwareSASGeneration) ; omettez-le
 si vous ne le souhaitez pas. Désinstallez-le avec `.\freerdp-shadow-service.exe uninstall`,
 qui remet aussi cette stratégie dans l'état où l'installation l'avait trouvée. Sans service, pour le bureau
-de l'utilisateur connecté uniquement : `.\freerdp-shadow-cli.exe /bind-address:127.0.0.1 /gfx-av1 /gfx-av2`.
+de l'utilisateur connecté uniquement : `.\freerdp-shadow-cli.exe /bind-address:127.0.0.1 /port:3388 /gfx-av1 /gfx-av2`.
 
-**Linux**, sous votre propre compte, dans la session de bureau que vous voulez partager (détails dans
-[Installing the Linux host](README.md#installing-the-linux-host)) :
+**Linux** avec GNOME, en root : le gestionnaire de sessions. Un seul service pour tous les
+utilisateurs de l'ordinateur, présent avant toute connexion ; un utilisateur sans session GNOME peut
+en obtenir une sans écran (détails dans [The session manager](README.md#the-session-manager-runs-as-root)) :
+
+```sh
+sudo tar -xJf freerdp-host-*-linux-$(uname -m).tar.xz -C /opt
+sudo mv /opt/freerdp-host-*-linux-$(uname -m) /opt/freerdp-host
+sudo chown -R root:root /opt/freerdp-host
+sudo cp /opt/freerdp-host/freerdp-shadow-sesman.service /etc/systemd/system/
+sudo systemctl daemon-reload && sudo systemctl enable --now freerdp-shadow-sesman.service
+```
+
+Sans root, ou sur un autre bureau X11 : l'unité utilisateur, sous votre propre compte, dans la
+session de bureau que vous voulez partager (détails dans [The user unit](README.md#the-user-unit-your-own-desktop-no-root)) :
 
 ```sh
 tar -xJf freerdp-host-*-linux-$(uname -m).tar.xz
@@ -66,6 +78,8 @@ mv freerdp-host-*-linux-$(uname -m) ~/.local/opt/freerdp-host
 cp ~/.local/opt/freerdp-host/freerdp-shadow.service ~/.config/systemd/user/
 systemctl --user daemon-reload && systemctl --user enable --now freerdp-shadow.service
 ```
+
+Les deux écoutent sur 3388 : installez l'un ou l'autre.
 
 **macOS**, après la décompression :
 
@@ -85,16 +99,16 @@ Le `README.txt` de chaque archive donne tous les détails pour sa plateforme : 
 
 ### Connexion
 
-Les trois n'écoutent que sur 127.0.0.1. Gardez-le ainsi, et accédez au serveur par SSH (voir
+Les trois n'écoutent que sur 127.0.0.1:3388. Gardez-le ainsi, et accédez au serveur par SSH (voir
 [Déploiement d'un serveur](#déploiement-dun-serveur--ne-pas-exposer-rdp-sur-internet)) :
 
 ```sh
-ssh -N -L 13389:127.0.0.1:3389 user@host &
-sdl-freerdp /v:127.0.0.1:13389 /u:user
+ssh -N -L 13388:127.0.0.1:3388 user@host &
+sdl-freerdp /v:127.0.0.1:13388 /u:user
 ```
 
-Ou utilisez freerdp-tk avec 127.0.0.1:13389. Pour FreeRDP Web, démarrez une passerelle WebSocket sur
-l'hôte (`websockify 127.0.0.1:3390 127.0.0.1:3389`) et redirigez plutôt le port 3390.
+Ou utilisez freerdp-tk avec 127.0.0.1:13388. Pour FreeRDP Web, démarrez une passerelle WebSocket sur
+l'hôte (`websockify 127.0.0.1:3390 127.0.0.1:3388`) et redirigez plutôt le port 3390.
 `freerdp-shadow-cli /codec-list` affiche les encodeurs dont dispose l'ordinateur, et
 `/codec-first:software` ou `/codec-first:hardware:<id>` en choisit un. Le journal indique l'encodeur
 utilisé, par exemple : `AV1 encoder: Media Foundation 0 NVIDIA AV1 Encoder MFT (hardware, …), libaom as fallback`.
@@ -120,7 +134,7 @@ une édition Pro.
 | `sdl-freerdp.exe`, le même client pour Windows, avec freerdp-tk et son Python | préversion, la même | Windows 10 et 11, x86_64 et ARM64 |
 | `sdl-freerdp`, le même client pour macOS, avec freerdp-tk et son Python | préversion, la même | macOS 12 et plus récent, Apple Silicon (arm64) ; plus les Mac Intel (la dernière : version 20261122.6) |
 | Client web FreeRDP (WebAssembly) avec la page [freerdp-web](https://github.com/congzhangzh/freerdp-web) | préversion : FreeRDP master + pull requests ouvertes (voir les versions épinglées plus bas) | un navigateur récent (testé : Chrome) ; servi depuis GitHub Pages |
-| Le serveur shadow de FreeRDP (`freerdp-shadow-cli`), avec `freerdp-shadow-service` sous Windows, une unité utilisateur systemd sous Linux, une app LaunchAgent sous macOS : AV1 (GPU ou libaom), AV2, H.264 sous Windows et macOS, son | préversion, le même FreeRDP | Windows 10 et 11 x86_64 et ARM64 ; Linux x86_64 / aarch64 avec glibc ≥ 2.34 (GNOME, ou tout bureau X11) ; macOS sur Apple Silicon |
+| Le serveur shadow de FreeRDP (`freerdp-shadow-cli`), avec `freerdp-shadow-service` sous Windows, le gestionnaire de sessions ou une unité utilisateur systemd sous Linux, une app LaunchAgent sous macOS : AV1 (GPU ou libaom), AV2, H.264 sous Windows et macOS, son | préversion, le même FreeRDP | Windows 10 et 11 x86_64 et ARM64 ; Linux x86_64 / aarch64 avec glibc ≥ 2.34 (GNOME, ou tout bureau X11) ; macOS sur Apple Silicon |
 | Paquets natifs xrdp + xorgxrdp (.deb / .rpm) | stable | x86_64 et ARM64 : Debian testing, 13, 12 ; Ubuntu 26.10, 26.04, 24.04 ; Fedora 45, 44, 43 |
 
 ## Plus
@@ -128,13 +142,13 @@ une édition Pro.
 Le reste de ce README n'existe qu'en anglais, car il change à chaque version : compilation
 et tests ([Build](README.md#build)), les versions épinglées ([The pins at a glance](README.md#the-pins-at-a-glance)),
 le [client Windows](README.md#windows-client), le [client web](README.md#web-client-preview),
-l'[hôte Linux en détail](README.md#linux-host) et son [gestionnaire de sessions](README.md#the-session-manager-optional-runs-as-root),
+l'[hôte Linux en détail](README.md#linux-host) et son [gestionnaire de sessions](README.md#the-session-manager-runs-as-root),
 les [paquets xrdp](README.md#xrdp-packages) et les [performances](README.md#performance-on-different-hardware).
 
 ## Déploiement d'un serveur : ne pas exposer RDP sur Internet
 
 Les serveurs RDP sont une cible d'attaque fréquente, et xrdp en particulier évolue
-rapidement. N'exposez pas le port 3389 au réseau. Faites écouter le serveur sur
+rapidement. N'exposez pas un port RDP (3389, ou le 3388 du serveur shadow) au réseau. Faites écouter le serveur sur
 l'interface de bouclage uniquement, et accédez-y par SSH, qui gère déjà
 l'authentification, les clés et la protection contre la force brute :
 
