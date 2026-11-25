@@ -13,7 +13,10 @@
 #      outputs, the client gets a Reset Graphics with 2 monitors and holds
 #   3. a picture on each monitor: a coloured window on each, seen in the client's window
 #   4. a click on each monitor: the pointer lands on the pixel the client meant
-#      (GetCursorPos), and the window there gets the click
+#      (GetCursorPos, within 1 px), and the window there gets the click. The client runs unscaled
+#      with its client area exactly over the virtual desktop: SDL follows a posted move with one
+#      at the real pointer when the mouse leaves its window (WM_MOUSELEAVE; run 45692504667 sent
+#      x=1423 then x=1822), and over the desktop at 1:1 that echo is the same point
 #   5. the second monitor moved to the other side, the same total size: a new Reset Graphics
 #      with the new place, and the pointer still lands right
 #   6. Ctrl+Alt+Del and the lock screen with both monitors: the server follows to Winlogon,
@@ -184,13 +187,12 @@ function DuplicatedSince($marker) {
 Check "one monitor at the start" ((MonitorCount) -eq 1) "SM_CMONITORS $(MonitorCount)"
 (New-Object -ComObject Shell.Application).MinimizeAll()
 
-# the client: smart-sizing into a fixed 1200 x 450 window (half of 2400 x 900, the size two
-# monitors of 1600 x 900 and 800 x 600 side by side make), so its points map back to the
-# desktop at a known scale; the surface commands and Reset Graphics monitors at TRACE
+# the client: unscaled (it takes the server's size on each Reset Graphics), later placed with its
+# client area over the virtual desktop; the surface commands and Reset Graphics monitors at TRACE
 $env:WLOG_FILEAPPENDER_OUTPUT_FILE_NAME = "session.wlog"
 $env:WLOG_FILTER = "com.freerdp.channels.rdpgfx.client:TRACE"
 $session = Start-Process -FilePath "$ClientDir\sdl-freerdp.exe" -PassThru -ArgumentList `
-    "/v:127.0.0.1:$port", "/u:$user", "/p:$pass", "/cert:ignore", "/gfx:AV1:on", "/smart-sizing:1200x450"
+    "/v:127.0.0.1:$port", "/u:$user", "/p:$pass", "/cert:ignore", "/gfx:AV1:on"
 Remove-Item Env:\WLOG_FILTER
 [void](Until 30 { @(Resets).Count -ge 1 })
 Start-Sleep -Seconds 5
@@ -258,11 +260,22 @@ Shot "two-monitors"
 # ---- 3. a picture on each monitor: a coloured window on each, as the client shows them
 $session.Refresh()
 $hwnd = $session.MainWindowHandle
+# the client's client area at the top left of the virtual desktop, 1:1 (it covers both monitors;
+# the coloured windows below stay in front of it)
+function Place($b) {
+    # the client takes the new size itself after a Reset Graphics
+    [void](Until 15 { $c = New-Object Kit.Win+RECT; [void][Kit.Win]::GetClientRect($hwnd, [ref]$c); ($c.Right -eq $b.W) -and ($c.Bottom -eq $b.H) })
+    $wr = New-Object Kit.Win+RECT; [void][Kit.Win]::GetWindowRect($hwnd, [ref]$wr)
+    $o = New-Object Kit.Win+POINT; [void][Kit.Win]::ClientToScreen($hwnd, [ref]$o)
+    [void][Kit.Win]::SetWindowPos($hwnd, [IntPtr]::Zero, $b.X - ($o.X - $wr.Left), $b.Y - ($o.Y - $wr.Top), 0, 0, 0x0001 -bor 0x0004 -bor 0x0010)   # SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE
+    Start-Sleep -Milliseconds 500
+    $o = New-Object Kit.Win+POINT; [void][Kit.Win]::ClientToScreen($hwnd, [ref]$o)
+    $c = New-Object Kit.Win+RECT; [void][Kit.Win]::GetClientRect($hwnd, [ref]$c)
+    [pscustomobject]@{ X = $o.X; Y = $o.Y; W = $c.Right; H = $c.Bottom }
+}
+$at = Place $box
 $cr = New-Object Kit.Win+RECT; [void][Kit.Win]::GetClientRect($hwnd, [ref]$cr)
-Note "client window $hwnd, client area $($cr.Right)x$($cr.Bottom)"
-# the client's window away from the windows below (they must not be under it: what it shows
-# of the desktop would then be itself); its client area keeps its size
-[void][Kit.Win]::SetWindowPos($hwnd, [IntPtr]::Zero, 340, 380, 0, 0, 0x0001 -bor 0x0004)   # SWP_NOSIZE | SWP_NOZORDER
+Check "client: its window over the desktop at 1:1" (($at.X -eq $box.X) -and ($at.Y -eq $box.Y) -and ($at.W -eq $box.W) -and ($at.H -eq $box.H)) "client area $($at.W)x$($at.H) at $($at.X),$($at.Y), desktop $($box.W)x$($box.H) at $($box.X),$($box.Y)"
 $prim = $screens | Where-Object { $_.Primary } | Select-Object -First 1
 # a window that logs each click (screen point) and closes after $life seconds
 function ColourWindow([string]$name, [int]$x, [int]$y, [int]$w, [int]$h, [string]$colour, [int]$life) {
@@ -276,13 +289,16 @@ Add-Type -AssemblyName System.Windows.Forms, System.Drawing
 `$t = New-Object System.Windows.Forms.Timer; `$t.Interval = $($life * 1000); `$t.Add_Tick({ `$f.Close() }); `$t.Start()
 [System.Windows.Forms.Application]::Run(`$f)
 "@
-    Start-Process pwsh -PassThru -WindowStyle Hidden -ArgumentList "-NoProfile", "-Command", $script
+    # -EncodedCommand: Start-Process joins its arguments without quoting them (run 45692504667's
+    # "{0},{1}" arrived as two script blocks)
+    $encoded = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($script))
+    Start-Process pwsh -PassThru -WindowStyle Hidden -ArgumentList "-NoProfile", "-EncodedCommand", $encoded
 }
+$before = @(ClientLog).Count
 $m2win = ColourWindow "second" $second.X $second.Y $second.W $second.H "Magenta" 240
 $pwin = ColourWindow "primary" ($prim.X + 40) ($prim.Y + 40) 200 200 "Cyan" 240
 Start-Sleep -Seconds 6
-$before = @(ClientLog).Count
-# a point of the desktop in the client's window: smart-sizing scales the box into the client area
+# a point of the desktop in the client's window (the box scaled into the client area: 1:1 here)
 function InClient($vx, $vy) {
     [pscustomobject]@{ X = [int][math]::Floor(($vx - $box.X) * $cr.Right / $box.W); Y = [int][math]::Floor(($vy - $box.Y) * $cr.Bottom / $box.H) }
 }
@@ -311,7 +327,8 @@ Check "picture: the second monitor's window in the client" (Near $m2rgb @(255, 0
 Check "picture: the primary's window in the client" (Near $prgb @(0, 255, 255)) "rgb $prgb at client $($pc.X),$($pc.Y), want cyan"
 $cmds = @(SurfaceCommands $before)
 Check "picture: frames on both monitors' surfaces" ($cmds.Count -ge 2) "$(($cmds | ForEach-Object { "surface $($_.Surface) x$($_.Count)" }) -join ', ')"
-$bad = @(ClientLog | Where-Object { $_ -match "\[ERROR\].*(rdpgfx|gdi|codec|av1)" })
+# (the client's "AV1 encoder requires libaom" at start is about an encoder it never uses)
+$bad = @(ClientLog | Where-Object { ($_ -match "\[ERROR\]\[com\.freerdp\.(channels\.rdpgfx|gdi|codec)") -and ($_ -notmatch "encoder requires") })
 Check "picture: no decoder error in the client" ($bad.Count -eq 0) "$($bad.Count) lines$(if ($bad) { ': ' + $bad[0] })"
 Shot "pictures"
 
@@ -331,7 +348,7 @@ function Point([string]$name, $q, [switch]$Click) {
     $got = $null
     [void](Until 5 { $c = Cursor; $script:got = $c; ([math]::Abs($c.X - $want.X) -le 1) -and ([math]::Abs($c.Y - $want.Y) -le 1) })
     $got = Cursor
-    Check "pointer: $name" (([math]::Abs($got.X - $want.X) -le 1) -and ([math]::Abs($got.Y - $want.Y) -le 1)) "client $($q.X),$($q.Y) -> want $($want.X),$($want.Y), got $($got.X),$($got.Y)"
+    Check "pointer: $name" (([math]::Abs($got.X - $want.X) -le 1) -and ([math]::Abs($got.Y - $want.Y) -le 1)) "client $($q.X),$($q.Y) -> want $($want.X),$($want.Y), got $($got.X),$($got.Y)" | Out-Host
     if ($Click) {
         PostMouse 0x0201 1 $q   # WM_LBUTTONDOWN, MK_LBUTTON
         Start-Sleep -Milliseconds 200
@@ -363,6 +380,8 @@ $last = @(Resets) | Select-Object -Last 1
 $wantLeft = $second2.X - $prim.X
 Check "moved: a new Reset Graphics with the new place" ((@(Resets).Count -gt $resetsBefore) -and $last.Count -eq 2 -and (($last.Monitors -join ' ') -match "(^| )$wantLeft,")) "$(if ($last) { "$($last.W)x$($last.H): $($last.Monitors -join ' | ')" }), want a monitor at left $wantLeft"
 $box = $box2
+$at = Place $box
+Note "client area after the move: $($at.W)x$($at.H) at $($at.X),$($at.Y)"
 $m2c2 = InClient ($second2.X + [int]($second2.W / 2)) ($second2.Y + [int]($second2.H / 2))
 [void](Point "on the moved second monitor" $m2c2)
 Check "moved: the session holds" (-not $session.HasExited)
