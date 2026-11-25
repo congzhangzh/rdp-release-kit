@@ -184,6 +184,33 @@ else
         check "web AV1 4:2:0 in $b: $(grep -m1 '^RESULT ' "$OUT/web-i420-$b.log" | cut -d: -f2- | sed 's/^ //')" $ok \
             "$(grep -c '^PASS ' "$OUT/web-i420-$b.log") of $(grep -cE '^(PASS|FAIL) ' "$OUT/web-i420-$b.log") checks"
     done
+    # HEVC 4:2:0 in FreeRDP Web: the host encodes it with VideoToolbox (WITH_GFX_AZURE), the page
+    # decodes it through WebCodecs. A server of its own with /gfx-hevc:i420 (HEVC is opt-in), on the
+    # same port behind the same websockify; the page asks as a user does, in Extra options
+    # (/gfx-codec-order:HEVC,AVC420, test/web-hevc.mjs). Safari is the check (WebCodecs HEVC through
+    # VideoToolbox); Chrome is only recorded, whether this runner's Chrome decodes HEVC or not.
+    kill $SRV 2> /dev/null; sleep 2
+    "$SERVER" /buildconfig 2> /dev/null | tr " " "\n" | grep -qx "WITH_GFX_AZURE=ON" && ok=1 || ok=0
+    check "web HEVC: the host is built with WITH_GFX_AZURE" $ok
+    WLOG_FILEAPPENDER_OUTPUT_FILE_NAME=server-web-hevc.wlog "$SERVER" /bind-address:127.0.0.1 /port:4490 \
+        /sec:tls /gfx-av1 /gfx-av2:off -gfx-avc444 /gfx-hevc:i420 -auth > "$OUT/server-web-hevc.out" 2>&1 &
+    SRV=$!
+    for i in $(seq 1 30); do listening 4490 && break; sleep 1; done
+    listening 4490 && ok=1 || ok=0
+    check "web HEVC: the server with /gfx-hevc:i420 listens" $ok
+    for b in safari chrome; do
+        SERVER_LOG="$OUT/server-web-hevc.wlog" OUT="$OUT/web-hevc" CHROME="$CHROME_BIN" \
+            node "$KIT_TEST/web-hevc.mjs" http://127.0.0.1:8082/index.html 127.0.0.1:3390 $b \
+            > "$OUT/web-hevc-$b.log" 2>&1 && ok=1 || ok=0
+        grep -E '^(PASS|FAIL|INFO|RESULT) ' "$OUT/web-hevc-$b.log"
+        result=$(grep -m1 '^RESULT ' "$OUT/web-hevc-$b.log" | cut -d: -f2- | sed 's/^ //')
+        if [ $b = safari ]; then
+            check "web HEVC 4:2:0 in safari: ${result:-no result}" $ok \
+                "$(grep -c '^PASS ' "$OUT/web-hevc-$b.log") of $(grep -cE '^(PASS|FAIL) ' "$OUT/web-hevc-$b.log") checks"
+        else
+            echo "INFO  web HEVC 4:2:0 in $b (a record, not a check): $([ $ok = 1 ] && echo passed || echo failed): ${result:-no result}"
+        fi
+    done
     pkill -x firefox 2> /dev/null; kill $COI $GW 2> /dev/null
     if [ -s "$OUT/web/raw.mp4" ]; then
         # as the site's other videos (test/record-demos.sh): 720p, H.264 CRF 28, AAC 96 kbit/s,
