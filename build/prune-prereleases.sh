@@ -1,6 +1,6 @@
 #!/bin/bash
 # Removes old pre-releases from the release page, so it shows the kit's releases and the
-# few pre-releases still in use (聪哥, 2026-11-02: the per-round xrdp-/web-/demo- pre-releases
+# few pre-releases still in use (the owner, 2026-11-02: the per-round xrdp-/web-/demo- pre-releases
 # cluttered it):
 #
 #   prune-prereleases.sh [--dry-run] [keep]       keep: the newest per kind, default 3
@@ -13,7 +13,7 @@
 #   that never made a release stays, since its files are nowhere else.
 # - Only the release goes; its tag stays, so publish-prerelease.sh's rule holds (a name is
 #   never used for a second build).
-# - Nothing is lost (聪哥's rule: results are kept): before any deletion, each release's notes
+# - Nothing is lost (the owner's rule: results are kept): before any deletion, each release's notes
 #   and every file whose content (SHA-256) no kit release holds (demo.json, KIT_COMMIT,
 #   checksum lists…) go into pruned-<UTC stamp>.tar.gz on the pre-release "prerelease-archive"
 #   (made once, never pruned); the deletions start only once that upload checks out.

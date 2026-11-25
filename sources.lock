@@ -31,7 +31,7 @@
 # 20261031.9: and the SDL3 dialog and clipboard queues no longer read a freed
 # item (#13961: garbled connection messages), and a wave that does not decode is
 # dropped while sound plays on (#13957)
-# 20261031.11: one FreeRDP for everything (聪哥: "integration all"): integration-all =
+# 20261031.11: one FreeRDP for everything (the owner: "integration all"): integration-all =
 # integration-latest (.9) + integration-shadow-win (host .8) + integration-shadow-mac
 # (Mac host .10), the same commit for the clients and both hosts
 # 20261031.12: and the Windows host's H.264 (AVC420) from Media Foundation (#13970)

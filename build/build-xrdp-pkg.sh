@@ -214,7 +214,7 @@ if [ -z "$NO_AV1" ]; then
         "$STAGE/xrdp/etc/xrdp/gfx.toml"
     grep -q '^order = \[ "AV1", "H\.264", "RFX" \]$' "$STAGE/xrdp/etc/xrdp/gfx.toml"
 fi
-# With AV2 too, AV2 goes first (聪哥, 2026-10-31: AV2 on by default): the clients that offer
+# With AV2 too, AV2 goes first (the owner, 2026-10-31: AV2 on by default): the clients that offer
 # it (the kit's FreeRDP clients, FreeRDP Web) get AV2, the others AV1, then H.264, RFX
 if [ -z "$NO_AV1" ] && [ -n "$AV2" ]; then
     sed -i 's/^order = \[ "AV1", "H\.264", "RFX" \]$/order = [ "AV2", "AV1", "H.264", "RFX" ]/' \

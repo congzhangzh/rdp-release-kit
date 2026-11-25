@@ -1,5 +1,5 @@
 #!/bin/bash
-# Checks the go for publishing the site from a kit run: the page tag 聪哥 named when he
+# Checks the go for publishing the site from a kit run: the page tag the owner named when he
 # started the run must be the page this commit pins, on main (docs/RELEASE.md, "The site").
 # The go names a tag, not a plain yes, so it can't publish a page nobody chose: if the pin
 # moved, the run stops. kit.yml runs this first, so a wrong go fails in seconds, and again

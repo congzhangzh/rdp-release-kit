@@ -19,7 +19,7 @@ verify them; they never compile.
 upstream signs) checked, no patches. **Preview** means: a fixed commit of
 a public branch that is never rewritten, labelled preview everywhere it
 appears, never mixed into a stable package's name or version. **Our
-release** (xrdp, since 2026-10-27, 聪哥's decision) is a preview that has
+release** (xrdp, since 2026-10-27, the owner's decision) is a preview that has
 become the only line of its product: a frozen release branch of the fork,
 its packages named and versioned without "preview"
 (`0.10.80+<pin's version>.<commit>`), because no stable line is left to
@@ -188,7 +188,7 @@ the site, and the page is fixed and released after it.
   from main (`gh workflow run kit.yml --ref main`): it builds everything and,
   like a push, records the demos and publishes a rolling release, which the
   site workflow then publishes.
-- **The site**: published at tag level, never for every submit (聪哥, 2026-11-05). There are
+- **The site**: published at tag level, never for every submit (the owner, 2026-11-05). There are
   two ways, and each is an act of the owner's: `site.yml` by hand from a release, or one go
   for a page tag once the kit has pinned it:
 

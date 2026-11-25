@@ -1143,7 +1143,7 @@ jobs:
           [ -n "$RELEASE" ] || { echo "no release tag from Publish" >&2; exit 1; }
           gh workflow run site.yml -R "$GITHUB_REPOSITORY" --ref main -f release="$RELEASE" -f publish=true
           echo "### The site: started from release $RELEASE, page $PAGE" >> "$GITHUB_STEP_SUMMARY"
-      # the site, like freerdp-tk (聪哥 2026-11-15: "the site's flow should be very much like
+      # the site, like freerdp-tk (the owner 2026-11-15: "the site's flow should be very much like
       # freerdp-tk's"): every Latest this job publishes starts site.yml, whose own gates decide
       # (the login tests before the deploy, the live check, the rollback: the web never breaks).
       # A run started with publish_page already did that above
@@ -1155,7 +1155,7 @@ jobs:
         run: |
           gh workflow run site.yml -R "$GITHUB_REPOSITORY" --ref main -f release="$RELEASE" -f publish=true
           echo "### The site: started from release $RELEASE" >> "$GITHUB_STEP_SUMMARY"
-      # downstream, phase 1 (聪哥 2026-11-15): a fully green Latest (this job needs every job,
+      # downstream, phase 1 (the owner 2026-11-15): a fully green Latest (this job needs every job,
       # the demos included) tells freerdp-tk, whose own workflow pins these clients, runs its
       # tests and publishes by its own rule. Without the secret it says so and does nothing;
       # it never fails the release

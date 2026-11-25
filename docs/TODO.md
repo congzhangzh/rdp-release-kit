@@ -46,7 +46,7 @@ says who owns it, what it waits on, and where it lives.
   them and logs which were held: read `tk-demo/run.log` in the next round to confirm.
 - **Sound on the Windows runner** can't be tested (no playback device; Scream's driver
   won't install unattended). It's proven by hand on a Windows 11 PC (−12.0 dBFS, 321
-  packets in 16 s) and by 聪哥's own test.
+  packets in 16 s) and by the owner's own test.
 - **The Windows test's recorder sometimes runs far too long**: in kit run 41208207833 (first
   attempt) the web demo against the Windows host recorded for 2088 s instead of minutes, and
   the job hit its 45-minute limit; FreeRDP was fine (the page showed the demo, then a normal
@@ -68,7 +68,7 @@ says who owns it, what it waits on, and where it lives.
 - **This machine** is short of memory (about 2 GB free), and Claude Code stops background
   watchers. Check rounds by hand.
 
-## AV2 (聪哥 chose these on 2026-10-31)
+## AV2 (the owner chose these on 2026-10-31)
 
 - **AV2 on by default**: kit branch `av2-default` (xrdp packages AV2 first, both hosts with
   `/gfx-av2`, the tests). Watch the demo recordings' frame rate: AV2 encodes in software.
@@ -83,9 +83,9 @@ says who owns it, what it waits on, and where it lives.
   on 11-03 (`2fb7f3d5f`) and it merges cleanly onto master `a5d85a31f`. It waits for the maintainer,
   with no nudge.
 - **This host**: the xrdp AV2 package (`xrdp-20261031.7`, debian-forky) is downloaded and
-  checked. The restart waits for 聪哥, since live xrdp sessions are running.
+  checked. The restart waits for the owner, since live xrdp sessions are running.
 
-## Decisions waiting for 聪哥
+## Decisions waiting for the owner
 
 - **Signing the Mac app.** It is ad hoc, so each update asks for Screen Recording and
   Accessibility again (freerdp-d0 measured it). The choices are a Developer ID (paid, and
@@ -102,7 +102,7 @@ says who owns it, what it waits on, and where it lives.
 - FreeRDP, closed without merging: #13953 (-sec-nla turns extended NLA off too), closed by
   akallabeth on 2026-11-02 with no comment. Master has nothing replacing it, so integration-all
   keeps it as an integration-only patch (part shadow-pam-help, c5ad9c986; in the Mac host since
-  20261031.10). Whether to ask upstream why is 聪哥's call.
+  20261031.10). Whether to ask upstream why is the owner's call.
 - freerdp-tk: congzhangzh/freerdp-tk#5 (the client version check: an unknown version is
   tried, not refused).
 - LibreSSL: libressl/portable#1452.
@@ -110,15 +110,15 @@ says who owns it, what it waits on, and where it lives.
 
 ## Work in progress elsewhere (other sessions own it)
 
-- freerdp-d0: a Mac login-window service (stage 1, 聪哥 said go). Input there works only
+- freerdp-d0: a Mac login-window service (stage 1, the owner said go). Input there works only
   through `IOHIDPostEvent` (deprecated since macOS 11, it needs the console session's
   privilege). Then a second LaunchAgent plist in the kit's Mac host.
-- avm-6e: AVM upstream submissions (its own ask to 聪哥), and the AV2 encoder in xrdp.
+- avm-6e: AVM upstream submissions (its own ask to the owner), and the AV2 encoder in xrdp.
 
 ## This host
 
 - Install the xrdp package with AV2 from the next kit release (Debian forky deb). Before
-  restarting xrdp, check for live sessions and tell 聪哥. Then put AV2 first:
+  restarting xrdp, check for live sessions and tell the owner. Then put AV2 first:
   `sudo sed -i 's/^order = \[ "AV1"/order = [ "AV2", "AV1"/' /etc/xrdp/gfx.toml`.
 
 ## Kit branches
@@ -129,4 +129,4 @@ says who owns it, what it waits on, and where it lives.
 | `safepoint-2` | the second safe point: the first plus AVM `20261031.2`, client `20261031.7`, host `20261031.8` |
 | `host-sound` | PR #18: the safe point plus AVM `.2` and the client candidate; rebase onto main after the safe point, then use it for pins 1 and 2 |
 | `mac-host` | local only; waits for pin 3 |
-| `windows-host`, `xrdp-av2`, `libressl-psk`, `demo-ready` | merged; safe to delete with 聪哥's word |
+| `windows-host`, `xrdp-av2`, `libressl-psk`, `demo-ready` | merged; safe to delete with the owner's word |
