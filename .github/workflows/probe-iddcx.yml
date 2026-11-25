@@ -30,7 +30,7 @@ jobs:
             zip: VirtualDisplayDriver-ARM64.Driver.Only.zip
             sha256: dcd487161469c726bab60f174a7e7f70ee02afd437cad0d5c0e6755953de5a25
     runs-on: ${{ matrix.runner }}
-    timeout-minutes: 30
+    timeout-minutes: 20
     env:
       OUT: ${{ github.workspace }}\probe-out
     steps:

@@ -80,28 +80,43 @@ New-Item -ItemType Directory -Force -Path 'C:\VirtualDisplayDriver' | Out-Null
 Copy-Item -Path (Join-Path $dir 'vdd_settings.xml') -Destination 'C:\VirtualDisplayDriver\vdd_settings.xml' -Force
 Save 'vdd_settings.xml' (Get-Content 'C:\VirtualDisplayDriver\vdd_settings.xml')
 
-# 5. the driver package into the store; trust its signer only if Windows asks
-$add = (pnputil /add-driver $inf.FullName /install) 2>&1 | Out-String
-Save 'pnputil-1.txt' $add
-$trusted = 'no'
-if ($LASTEXITCODE -ne 0) {
-    $cert = (Get-AuthenticodeSignature -FilePath (Join-Path $dir 'mttvdd.cat')).SignerCertificate
-    if ($cert) {
-        foreach ($store in @('TrustedPublisher', 'Root')) {
-            $s = New-Object System.Security.Cryptography.X509Certificates.X509Store($store, 'LocalMachine')
-            $s.Open('ReadWrite'); $s.Add($cert); $s.Close()
-        }
-        $trusted = $cert.Thumbprint
+# 5. the driver package into the store. Run 1 (45653105707) hung in pnputil until the job
+# timeout: Windows' "install this device software?" prompt, 🔎. So the signer is trusted
+# first (TrustedPublisher skips that prompt for a signature that chains to a trusted root),
+# and every installer step has a deadline: on a timeout the screen is captured (the prompt
+# itself is the evidence) and the process is killed.
+$cert = (Get-AuthenticodeSignature -FilePath (Join-Path $dir 'mttvdd.cat')).SignerCertificate
+$s = New-Object System.Security.Cryptography.X509Certificates.X509Store('TrustedPublisher', 'LocalMachine')
+$s.Open('ReadWrite'); $s.Add($cert); $s.Close()
+Say "stage=trust store=LocalMachine\TrustedPublisher thumbprint=$($cert.Thumbprint)"
+
+function Bounded([string] $name, [string] $exe, [string[]] $arguments, [int] $seconds) {
+    $log = Join-Path $Out "$name.txt"
+    $p = Start-Process -FilePath $exe -ArgumentList $arguments -NoNewWindow -PassThru `
+        -RedirectStandardOutput $log -RedirectStandardError (Join-Path $Out "$name.err.txt")
+    if ($p.WaitForExit($seconds * 1000)) {
+        Say "stage=$name ok=$($p.ExitCode -eq 0) rc=$($p.ExitCode)"
+        return
     }
-    $add = (pnputil /add-driver $inf.FullName /install) 2>&1 | Out-String
-    Save 'pnputil-2.txt' $add
+    $shot = Join-Path $Out "hang-$name"
+    New-Item -ItemType Directory -Force -Path $shot | Out-Null
+    & (Join-Path $Out 'bin\dxgi-probe.exe') $shot *> (Join-Path $Out "hang-$name.txt")
+    Get-ChildItem -Path $shot -Filter '*.bmp' | ForEach-Object {
+        $img = [System.Drawing.Image]::FromFile($_.FullName)
+        $img.Save([IO.Path]::ChangeExtension($_.FullName, '.png'), [System.Drawing.Imaging.ImageFormat]::Png)
+        $img.Dispose(); Remove-Item $_.FullName
+    }
+    $windows = Get-Process | Where-Object { $_.MainWindowTitle } |
+        ForEach-Object { "$($_.ProcessName) pid=$($_.Id) title=""$($_.MainWindowTitle)""" }
+    Save "hang-$name-windows.txt" $windows
+    Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue
+    Say "stage=$name ok=False timeout=${seconds}s windows=$(@($windows).Count) (screen in hang-$name)"
 }
-Say "stage=add-driver ok=$($LASTEXITCODE -eq 0) rc=$LASTEXITCODE trusted_signer=$trusted"
+Add-Type -AssemblyName System.Drawing
+Bounded 'pnputil' 'pnputil.exe' @('/add-driver', $inf.FullName, '/install') 120
 
 # 6. the root device node
-$node = (& (Join-Path $Out 'bin\devnode.exe') $inf.FullName 'Root\MttVDD' 'Display') 2>&1 | Out-String
-Save 'devnode.txt' $node
-Say "stage=devnode ok=$($LASTEXITCODE -eq 0) rc=$LASTEXITCODE"
+Bounded 'devnode' (Join-Path $Out 'bin\devnode.exe') @($inf.FullName, 'Root\MttVDD', 'Display') 120
 
 # 7. wait for the monitor (up to 30 s), then after
 $deadline = (Get-Date).AddSeconds(30)
