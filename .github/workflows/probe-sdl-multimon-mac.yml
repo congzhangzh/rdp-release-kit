@@ -1,0 +1,124 @@
+# probe-sdl-multimon-mac: a record, not a kit test (freerdp-comp-sdl-g3, phase 2 of all monitors,
+# 2026-11-26, on the RM's go). Does the SDL client's /multimon that follows the server's monitors
+# (fork branch feature-sdl-multimon-server-layout) build and pass its tests on macOS, and does the
+# kit's own Mac client, the shipped shape, build from it? Publishes nothing; the artifacts carry
+# the logs. Never on main: this file and the TEST ONLY pin of sources.lock live on this branch only.
+#   unit:   FreeRDP at the probed commit, the SDL3 client with BUILD_TESTING on (Homebrew SDL3),
+#           its tests (TestSDL*, TestSDLServerLayout among them) and then every test, for the record
+#   client: build-macos.sh as kit.yml's macos job runs it (sources.lock's freerdp = the probed
+#           commit), then the client it made lists this runner's displays (/list:monitor)
+name: probe-sdl-multimon-mac
+
+on:
+  push:
+    branches: [probe-sdl-multimon-mac]
+
+permissions:
+  contents: read
+
+jobs:
+  unit:
+    runs-on: macos-15
+    timeout-minutes: 40
+    env:
+      FREERDP_REPO: https://github.com/congzhangzh/FreeRDP.git
+      FREERDP_SHA: 11f838e7962e933f1950e8142b886bc8d1f2ba91
+      HOMEBREW_NO_AUTO_UPDATE: 1
+      HOMEBREW_NO_INSTALL_CLEANUP: 1
+      OUT: ${{ github.workspace }}/probe-out
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: FreeRDP at the probed commit
+        run: |
+          mkdir -p "$OUT"
+          git init -q freerdp && cd freerdp
+          git fetch -q --depth 1 "$FREERDP_REPO" "$FREERDP_SHA" && git checkout -q FETCH_HEAD
+          git log -1 --format='%H %s' | tee "$OUT/SOURCE_COMMIT"
+          test "$(git rev-parse HEAD)" = "$FREERDP_SHA"
+
+      - name: Tools
+        run: |
+          for t in ninja; do command -v $t || brew install --quiet $t; done
+          brew install --quiet sdl3 sdl3_ttf openssl@3
+          sw_vers | tee "$OUT/sw_vers.txt"; sysctl -n machdep.cpu.brand_string | tee -a "$OUT/sw_vers.txt"
+          brew list --versions sdl3 sdl3_ttf | tee -a "$OUT/sw_vers.txt"
+
+      - name: The SDL3 client and its tests
+        run: |
+          set -o pipefail
+          cmake -G Ninja -S freerdp -B build -DCMAKE_BUILD_TYPE=Debug -DBUILD_TESTING=ON \
+            -DWITH_CLIENT=ON -DWITH_CLIENT_SDL3=ON -DWITH_CLIENT_SDL2=OFF -DWITH_CLIENT_MAC=OFF \
+            -DWITH_SERVER=OFF -DWITH_PROXY=OFF -DWITH_SAMPLE=OFF -DWITH_FFMPEG=OFF -DWITH_SWSCALE=OFF \
+            -DWITH_OPENH264=OFF -DWITH_GFX_AV1=OFF -DWITH_GFX_AV2=OFF -DWITH_X11=OFF -DWITH_WAYLAND=OFF \
+            -DWITH_PCSC=OFF -DWITH_KRB5=OFF -DWITH_FUSE=OFF -DWITH_CUPS=OFF -DWITH_UNICODE_BUILTIN=ON \
+            -DCHANNEL_URBDRC=OFF -DWITH_OPUS=OFF -DWITH_MANPAGES=OFF \
+            -DCMAKE_PREFIX_PATH="$(brew --prefix)" -DOPENSSL_ROOT_DIR="$(brew --prefix openssl@3)" \
+            2>&1 | tee "$OUT/configure.log"
+          # -k 0: every compile error, not just the first; a failed build fails the step
+          cmake --build build -- -k 0 > "$OUT/build.log" 2>&1 || { grep -E -A3 'error:|FAILED' "$OUT/build.log" | head -80; exit 1; }
+          grep -E 'warning:' "$OUT/build.log" | grep -E 'client/SDL' | tee "$OUT/sdl-warnings.txt" || true
+          cd build && ctest -R '^TestSDL' -V 2>&1 | tee "$OUT/ctest-sdl.log" | tail -30
+          # a filter that matches nothing passes too: at least the three SDL tests, all passed
+          grep -E '100% tests passed, 0 tests failed out of ([3-9]|[1-9][0-9]+)$' "$OUT/ctest-sdl.log"
+          grep -E 'Test +#[0-9]+: TestSDLServerLayout .* Passed' "$OUT/ctest-sdl.log"
+
+      - name: Every test, for the record (not the probe's verdict)
+        if: always()
+        run: cd build && ctest -j3 2>&1 | tee "$OUT/ctest-all.log" | tail -15 || true
+
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: probe-sdl-multimon-mac-unit
+          path: probe-out
+          retention-days: 14
+
+  client:
+    runs-on: macos-15
+    timeout-minutes: 60
+    env:
+      OUT: ${{ github.workspace }}/probe-out
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Cache sources
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/rdp-release-kit/sources
+          key: sources-${{ hashFiles('sources.lock') }}
+          restore-keys: sources-
+
+      - name: Cache compiled objects
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/rdp-release-kit/ccache/macos
+          key: ccache-macos-arm64-${{ github.sha }}
+          restore-keys: ccache-macos-arm64-
+
+      # bash 4.4+ for the build (macOS has 3.2), meson and nasm for dav1d (as kit.yml's macos job)
+      - name: Build tools
+        run: brew install bash meson nasm ccache
+
+      - name: Build (the kit's Mac client, the shipped shape)
+        env:
+          CCACHE_MAXSIZE: 1G
+        run: ./build-macos.sh arm64
+
+      - name: The client it made, on this runner
+        run: |
+          mkdir -p "$OUT" client
+          tar -xJf dist/sdl3-freerdp-*-macos-arm64.tar.xz -C client
+          ls dist | tee "$OUT/dist.txt"
+          bin=$(find client -name sdl3-freerdp -type f -perm -u+x | head -1)
+          echo "client: $bin" | tee "$OUT/client.txt"
+          "$bin" /version 2>&1 | tee -a "$OUT/client.txt" || true
+          # a display list needs the window server; a runner without one says so, which is a record too
+          "$bin" /list:monitor 2>&1 | tee "$OUT/list-monitor.txt" || true
+
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: probe-sdl-multimon-mac-client
+          path: probe-out
+          retention-days: 14
