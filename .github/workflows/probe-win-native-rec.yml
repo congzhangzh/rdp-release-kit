@@ -1,0 +1,77 @@
+# A record, not a kit test (demo 1.1's probe): the kit's native Windows client to the kit's
+# Windows shadow server on a GitHub Windows runner (x86_64), AV1 4:2:0, the demo's media page
+# playing (test/probe-win-native-rec.ps1). It takes the host and the client of the kit's Latest
+# release (as published, nothing built here) and publishes nothing: the video, its stills and
+# the logs are this run's artifact.
+name: probe-win-native-rec
+
+on:
+  push:
+    branches: [probe-win-native-rec]
+
+permissions:
+  contents: read
+
+jobs:
+  # the media behind the session, as kit.yml's demo-media job fetches it
+  demo-media:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/cache@v6
+        with:
+          path: ~/.cache/rdp-release-kit/demo
+          key: demo-media-${{ hashFiles('test/demo-assets.sh') }}
+      - run: |
+          dir=$(test/demo-assets.sh)
+          mkdir -p dist/demo-media
+          cp "$dir/bunny.webm" dist/demo-media/
+          du -sh dist/demo-media
+      - uses: actions/upload-artifact@v7
+        with:
+          name: demo-media
+          path: dist/demo-media
+          if-no-files-found: error
+          retention-days: 1
+
+  record:
+    needs: [demo-media]
+    runs-on: windows-2025
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        with:
+          name: demo-media
+          path: dl/media
+      # the kit's Latest release: the Windows host and client, checked against its SHA256SUMS
+      - name: The Windows host and client of the kit's Latest release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: pwsh
+        run: |
+          $tag = gh release view -R $env:GITHUB_REPOSITORY --json tagName -q .tagName
+          "kit release $tag"
+          New-Item -ItemType Directory -Force dl, out | Out-Null
+          Set-Content out/RELEASE $tag
+          gh release download $tag -R $env:GITHUB_REPOSITORY -D dl -p SHA256SUMS `
+            -p 'freerdp-host-*-windows-x86_64.zip' -p 'sdl3-freerdp-*-windows-x86_64.zip'
+          foreach ($z in Get-ChildItem dl/*.zip) {
+            $want = (Select-String -Path dl/SHA256SUMS -Pattern " \*?$([regex]::Escape($z.Name))$").Line -split '\s+' | Select-Object -First 1
+            if ($want -ne (Get-FileHash $z -Algorithm SHA256).Hash.ToLower()) { throw "$($z.Name): checksum" }
+            "$($z.Name): OK"
+          }
+          Expand-Archive (Get-ChildItem dl/freerdp-host-*.zip).FullName -DestinationPath host
+          Expand-Archive (Get-ChildItem dl/sdl3-freerdp-*.zip).FullName -DestinationPath client
+          Get-ChildItem host/*/freerdp-shadow-cli.exe, client/*/sdl-freerdp.exe | ForEach-Object { $_.FullName }
+      - name: The native client to the Windows shadow, recorded
+        shell: pwsh
+        run: >
+          ./test/probe-win-native-rec.ps1 (Get-ChildItem host -Directory | Select-Object -First 1).FullName
+          (Get-ChildItem client -Directory | Select-Object -First 1).FullName dl/media out
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: probe-win-native-rec
+          path: out
+          retention-days: 7
