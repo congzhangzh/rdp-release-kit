@@ -13,6 +13,7 @@ toolchain) gets an entry here in the same commit.
 
 ## 2026-11-26
 
+- **The README and the release notes name HEVC on the Mac again** (release manager; the product owner's rule): kit 20261126.2's HEVC web test passed (round 45734103854: Safari 55 HEVC 4:2:0 pictures decoded, 0 failed, the Mac's hardware VideoToolbox encoder; Chrome, a record, 24 and 0). HEVC: the Mac host with `/gfx-hevc:i420`, FreeRDP Web with `/gfx-codec-order:HEVC,AVC420` in its Extra options; AV1 stays the default.
 - **FreeRDP `20261125.6`** (release manager; freerdp-comp-hevc-g1): the client's decoder stats read the last decode for AV1, AV2 and AVC only, so FreeRDP Web counted 0 HEVC pictures (kit round 45727774210: 125 HEVC commands decoded and acked, 0 pictures counted). `release-20261125.6` (`2f6214935`) counts HEVC too, so the web HEVC test sees what the page decodes. The four FreeRDP pins move to it.
 
 ## 2026-11-25
