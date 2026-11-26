@@ -222,7 +222,10 @@ try {
   // into the half-size window; the macOS host can't take the client's size (/dynamic-resolution
   // changes nothing), so without it the window showed the screen's top-left 1:1 corner, where little
   // moves (probe v3, run 45765189407: 2.4 distinct pictures/s in the window, the session's 23/s)
-  const extra = "/gfx:AV2:off,AV1:i420" + (RECORD ? " /smart-sizing" : "");
+  // v4 (run 45766262749): /smart-sizing alone failed the connection: the page always passes
+  // /dynamic-resolution, and FreeRDP refuses both ("Smart sizing and dynamic resolution are mutually
+  // exclusive options"); the later -dynamic-resolution turns the page's off first
+  const extra = "/gfx:AV2:off,AV1:i420" + (RECORD ? " -dynamic-resolution /smart-sizing" : "");
   const url = `${PAGE}?v=${GATEWAY}&u=${encodeURIComponent(USER)}&extra=${encodeURIComponent(extra)}&fs=0`;
   await wd("POST", `/session/${sid}/url`, { url });
   const ready = await waitFor(async () => (await js("const s = document.getElementById('status'); return s ? s.textContent : null")) === "ready", 45000);
