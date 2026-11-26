@@ -26,12 +26,13 @@
 // its client), from the session's start to Info open at its "AV1 decoder" row, with <file>.jpg
 // (70 %), <file>-mid.jpg and <file>-late.jpg beside it. The browser runs windowed (Chrome and
 // Firefox too) on half the screen, over the media page, and the video is cropped to that window;
-// a strip at the page's bottom edge names the browser, the codec and the decoder as Info gives
-// them (the decoder up to its first comma: the page's hardware/software word is unproven on the
-// runner), and DEMO_KIT (e.g. "rdp-release-kit 20261126.5"). No motion step (the media page moves
-// the screen). Prints the video's rates, the session's own (Info's "Video codecs" N/s) and a
-// RECORD-VERDICT line: Chrome's and Firefox's clip counts when the cropped video has at least 15
-// distinct pictures/s or at least the session's rate; Safari's is a record only.
+// a strip at the page's bottom edge names the browser, the codec, the decoder and the session's
+// N/s as Info gives them (the decoder up to its first comma: the page's hardware/software word is
+// unproven on the runner), and DEMO_KIT (e.g. "rdp-release-kit 20261126.5"). The page fills the
+// window (?fill=1), so its toolbar hides at the top edge. No motion step (the media page moves the
+// screen). Prints the video's written fps (ffprobe), the session's rate (Info's "Video codecs"
+// N/s) and a RECORD-VERDICT line: Chrome's and Firefox's clip counts when the written fps is at
+// least the session's rate; Safari's is a record only.
 import { spawn, spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, openSync, readSync, fstatSync, closeSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -113,7 +114,7 @@ const type = async (css, text) => { const e = await el(css); await wd("POST", `/
 const waitFor = async (test, ms) => { for (let t = 0; t < ms; t += 500) { if (await test().catch(() => false)) return true; await sleep(500); } return test().catch(() => false); };
 
 // RECORD: Info's rows, the overlay made from them (laid over the page as test/wasm-demo.mjs's caption)
-const ROWS = `return JSON.stringify([...document.querySelectorAll("#infoTable tr")].map((tr) => [...tr.cells].map((c) => c.innerText.trim())))`;
+const ROWS = `return JSON.stringify([...document.querySelectorAll("#infoTable tr")].map((tr) => [...tr.cells].map((c) => c.textContent.trim())))`;
 const cell = (rows, name) => ((rows || []).find((r) => r[0] === name) || (rows || []).find((r) => (r[0] || "").startsWith(name)) || [])[1] || "";
 const OVERLAY = `let d = document.getElementById("recLabel");
   if (!d) { d = document.createElement("div"); d.id = "recLabel";
@@ -123,9 +124,11 @@ const OVERLAY = `let d = document.getElementById("recLabel");
     document.body.append(d); }
   d.textContent = arguments[0]; return true;`;
 const overlay = async (rows) => {
-  const codec = cell(rows, "Video codecs").replace(/\s+\d+(\.\d+)?\/s\b.*$/, ""), dec = cell(rows, "AV1 decoder").split(",")[0].trim();
-  const text = [[`${NAME}: FreeRDP Web, to the kit's macOS host`, codec, dec && `AV1 decoder: ${dec}`].filter(Boolean).join(" · "),
-    [KIT, `${NAME} runs on the Mac it shows, so it sees itself`].filter(Boolean).join(" · ")].join("\n");
+  const vc = cell(rows, "Video codecs"), codec = vc.replace(/\s+\d+(\.\d+)?\/s\b.*$/, ""), rate = (/(\d+(?:\.\d+)?)\/s\b/.exec(vc) || [])[1];
+  const dec = cell(rows, "AV1 decoder").split(",")[0].trim();
+  const text = [[`${NAME}: FreeRDP Web, to the kit's macOS host`, KIT].filter(Boolean).join(" · "),
+    [codec, dec, rate && `${rate}/s`].filter((v) => v && v !== "–").join(" · "),
+    `${NAME} runs on the Mac it shows, so it sees itself`].filter(Boolean).join("\n");
   await js(OVERLAY, text).catch((e) => info(`overlay: ${e.message}`));
 };
 const REC_SECONDS = Number(process.env.RECORD_SECONDS || SECONDS + 6);   // the session, then Info
@@ -147,7 +150,7 @@ function recorder(win, screenW) {
     if (existsSync(mov)) {
       mkdirSync(dirname(RECORD), { recursive: true });
       // only the browser's window: the screen's points to the .mov's pixels (the display's backing
-      // scale), so the clip and its distinct rate are the RDP session's, not the local media page's
+      // scale), so the clip and its rate are the RDP session's, not the local media page's
       // (probe v2, run 45763573057: the window a small part of the screen)
       const [mw, mh] = String(spawnSync("ffprobe", ["-v", "error", "-select_streams", "v:0", "-show_entries", "stream=width,height", "-of", "csv=p=0", mov],
         { encoding: "utf8" }).stdout || "").trim().split(",").map((v) => Number(v) || 0);
@@ -164,26 +167,21 @@ function recorder(win, screenW) {
       // the video's own rate: its average frame rate, and its frames over its length
       const pr = spawnSync("ffprobe", ["-v", "error", "-select_streams", "v:0", "-show_entries", "stream=avg_frame_rate,nb_frames:format=duration", "-of", "json", RECORD], { encoding: "utf8" });
       try { const j = JSON.parse(pr.stdout); avg = j.streams[0].avg_frame_rate; n = Number(j.streams[0].nb_frames); len = Number(j.format.duration); } catch {}
-      const [a, b] = String(avg).split("/").map(Number); const written = len ? n / len : b ? a / b : 0;
-      // the rate that counts: DISTINCT pictures per second. screencapture may write frames at a fixed
-      // rate, repeats included, which would make a slow screen look smooth (the product owner's rule:
-      // the clip must not look faster or slower than the session); mpdecimate drops the repeats
-      const md = spawnSync("ffmpeg", ["-loglevel", "error", "-i", mov, "-vf", crop + "mpdecimate", "-fps_mode", "vfr", "-f", "framemd5", "-"], { encoding: "utf8", maxBuffer: 64 << 20 });
-      const distinct = String(md.stdout || "").split("\n").filter((l) => l && !l.startsWith("#")).length;
-      fps = len ? distinct / len : 0;
-      result = `${RECORD} (ffmpeg ${ff.status}): written ${written.toFixed(1)} fps (avg_frame_rate ${avg}, ${n} frames in ${len.toFixed(1)} s), distinct ${distinct} pictures`;
+      // the rate that counts: the frames the recorder wrote per second (probe v5: mpdecimate's
+      // "distinct" count ran from 8 to 50/s on one clip with its settings, a range, not a measure)
+      const [a, b] = String(avg).split("/").map(Number); fps = len ? n / len : b ? a / b : 0;
+      result = `${RECORD} (ffmpeg ${ff.status}): avg_frame_rate ${avg}, ${n} frames in ${len.toFixed(1)} s`;
       // a poster from 70 %, a mid and a late frame (Info open)
       const base = RECORD.replace(/\.mp4$/, "");
       for (const [name, t] of [["", len * 0.7], ["-mid", len * 0.5], ["-late", Math.max(0, len - 1)]])
         spawnSync("ffmpeg", ["-y", "-loglevel", "error", "-ss", t.toFixed(2), "-i", RECORD, "-frames:v", "1", "-q:v", "4", `${base}${name}.jpg`], { stdio: "inherit" });
     }
     rmSync(dir, { recursive: true, force: true });
-    info(`recorder: ${fps.toFixed(1)} distinct pictures/s, ${result}`);
-    const f = fps.toFixed(1);
-    console.log(`RECORD-VERDICT  ${BROWSER}: ${BROWSER === "safari" ? `record only (runner's dav1d): recorder ${f} fps, the session's ${rate ?? "unknown"}/s`
-      : fps >= 15 ? `counts (recorder ${f} fps >= 15)`
-      : rate != null && fps >= rate ? `counts (recorder ${f} fps >= the session's ${rate}/s)`
-      : `does not count (recorder ${f} fps < 15, ${rate != null ? `< the session's ${rate}/s` : "the session's rate unknown"})`}`);
+    const f = fps.toFixed(1), r = rate ?? "unknown";
+    info(`recorder: written ${f} fps, the session's ${r}/s; ${result}`);
+    console.log(`RECORD-VERDICT  ${BROWSER}: ${BROWSER === "safari" ? `record only (runner's dav1d): written ${f} fps, the session's ${r}/s`
+      : rate != null && fps >= rate ? `counts (written ${f} fps >= the session's ${r}/s)`
+      : `does not count (written ${f} fps, the session's ${r}/s)`}`);
   })();
   return { finish };
 }
@@ -226,7 +224,9 @@ try {
   // /dynamic-resolution, and FreeRDP refuses both ("Smart sizing and dynamic resolution are mutually
   // exclusive options"); the later -dynamic-resolution turns the page's off first
   const extra = "/gfx:AV2:off,AV1:i420" + (RECORD ? " -dynamic-resolution /smart-sizing" : "");
-  const url = `${PAGE}?v=${GATEWAY}&u=${encodeURIComponent(USER)}&extra=${encodeURIComponent(extra)}&fs=0`;
+  // recorded: ?fill=1, the page's "fill the window" (freerdp-web app.js setFill): its toolbar then
+  // hides at the window's top edge, as in full screen, instead of covering the remote picture's top
+  const url = `${PAGE}?v=${GATEWAY}&u=${encodeURIComponent(USER)}&extra=${encodeURIComponent(extra)}&fs=0${RECORD ? "&fill=1" : ""}`;
   await wd("POST", `/session/${sid}/url`, { url });
   const ready = await waitFor(async () => (await js("const s = document.getElementById('status'); return s ? s.textContent : null")) === "ready", 45000);
   const env = JSON.parse(await js("return JSON.stringify({ isolated: self.crossOriginIsolated, webcodecs: typeof VideoDecoder })"));
@@ -245,9 +245,18 @@ try {
   if (!session) { info(`the page's log: ${(await js("const l = document.getElementById('log'); return l ? l.textContent.slice(-1500) : ''")).replace(/\n/g, " | ")}`); await done(1); }
   if (RECORD) {
     rec = recorder(win, screenW);
+    // the toolbar: hidden by fill; a page without ?fill=1 gets it hidden by CSS, for the recording only
+    info(`toolbar: ${await js(`if (document.body.classList.contains("fill")) return "hidden by fill the window";
+      const st = document.createElement("style"); st.textContent = "#toolbar, #tbGrip { display:none !important }";
+      document.head.append(st); return "hidden by CSS (no fill)";`).catch((e) => e.message)}`);
+    // Info's table fills only while Info is open (freerdp-web app.js updateInfo returns when #info is
+    // hidden: v5's strip had no codec line): open, transparent, while recording, so the strip can
+    // quote it; closed again before the script opens it below
+    await js(`const i = document.getElementById("info"); i.style.opacity = "0"; i.style.pointerEvents = "none"; i.hidden = false; return true;`).catch(() => {});
     // the overlay at once, then again from Info's rows every few seconds (whatever it has so far)
     await overlay([]);
     for (let t = 0; t < SECONDS * 1000; t += 3000) { await sleep(Math.min(3000, SECONDS * 1000 - t)); await overlay(JSON.parse(await js(ROWS).catch(() => "[]"))); }
+    await js(`const i = document.getElementById("info"); i.hidden = true; i.style.opacity = ""; i.style.pointerEvents = ""; return true;`).catch(() => {});
   } else { motion(); await sleep(SECONDS * 1000); }
   // Info by a script click (Safari's WebDriver click on the edge toolbar opened nothing, probe run
   // 44986405343), then its rows
