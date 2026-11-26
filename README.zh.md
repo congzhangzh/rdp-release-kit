@@ -130,7 +130,7 @@ sdl-freerdp /v:127.0.0.1:13388 /u:user
 - **保持屏幕自身的大小。** 显示器、它们的分辨率和缩放比例都保持电脑原样，
   客户端的窗口显示的就是那块屏幕，如果窗口较小则会缩小显示。
   客户端的 `/dynamic-resolution`、`/multimon` 布局和 HiDPI 缩放在这里都不起作用。
-- **多个显示器，客户端只有一个窗口。** Windows 默认共享所有显示器，在客户端的一个窗口里并排显示（`/monitors:<N>` 只共享其中一个，0 是主显示器）。Mac 只共享一个显示器。Linux 默认共享一个：在 X11 上用 `/monitors:all` 可以全部共享，GNOME（Mutter）会话只共享一个。客户端里每个显示器各开一个窗口的功能还没有。
+- **每个显示器一个窗口，只有 SDL 客户端支持。** Windows 默认共享所有显示器（`/monitors:<N>` 只共享其中一个，0 是主显示器）。Mac 只共享一个显示器。Linux 默认共享一个：在 X11 上用 `/monitors:all` 可以全部共享，GNOME（Mutter）会话只共享一个。服务器共享多个显示器时，SDL 客户端加 `/multimon` 会把每个显示器放进客户端一个屏幕上的单独窗口（尺寸不同时加黑边）；不加 `/multimon`，以及在 FreeRDP Web 和 freerdp-tk 里，它们在一个窗口里并排显示。
 - **开启了 FileVault 的 Mac 重启后**，会在 macOS 启动之前显示磁盘解锁界面：任何 RDP 服务器都无法显示它
   （计划内的重启用 `sudo fdesetup authrestart`）。LaunchAgent 应用要在你登录之后才启动；守护进程会显示登录窗口。
 

@@ -137,7 +137,7 @@ utilisé, par exemple : `AV1 encoder: Media Foundation 0 NVIDIA AV1 Encoder MFT
 - **Il conserve la taille propre de l'écran.** Les moniteurs, leur résolution et leur échelle restent
   tels que l'ordinateur les a, et la fenêtre du client montre cet écran, réduit s'il est plus petit.
   Les options `/dynamic-resolution`, la disposition `/multimon` et l'échelle HiDPI d'un client ne changent rien ici.
-- **Plusieurs écrans, une seule fenêtre côté client.** Windows partage tous ses écrans par défaut, côte à côte dans une seule fenêtre du client (`/monitors:<N>` n'en partage qu'un ; 0 est l'écran principal). Un Mac partage un seul écran. Linux en partage un par défaut : sous X11, `/monitors:all` les partage tous, et une session GNOME (Mutter) en partage un. Une fenêtre du client par écran n'existe pas encore.
+- **Une fenêtre par écran seulement dans le client SDL.** Windows partage tous ses écrans par défaut (`/monitors:<N>` n'en partage qu'un ; 0 est l'écran principal). Un Mac partage un seul écran. Linux en partage un par défaut : sous X11, `/monitors:all` les partage tous, et une session GNOME (Mutter) en partage un. Quand le serveur partage plusieurs écrans, le client SDL avec `/multimon` affiche chacun dans sa propre fenêtre, sur un écran du client (avec des bandes noires si les tailles diffèrent) ; sans `/multimon`, et dans FreeRDP Web et freerdp-tk, ils sont côte à côte dans une seule fenêtre.
 - **Un Mac redémarré avec FileVault activé** affiche l'écran de déverrouillage du disque avant le démarrage de macOS :
   aucun serveur RDP ne peut l'afficher (`sudo fdesetup authrestart` pour les redémarrages prévus). L'app LaunchAgent
   ne démarre qu'une fois que vous êtes connecté ; le daemon affiche la fenêtre de connexion.

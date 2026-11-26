@@ -138,7 +138,7 @@ in use, e.g. `AV1 encoder: Media Foundation 0 NVIDIA AV1 Encoder MFT (hardware, 
 - **It keeps the screen's own size.** The monitors, their resolution and their scale stay as
   the computer has them, and the client's window shows that screen, scaled if it's smaller.
   A client's `/dynamic-resolution`, `/multimon` layout and HiDPI scale change nothing here.
-- **Several monitors, one client window.** Windows shares all its monitors by default, side by side in one client window (`/monitors:<N>` shares just one; 0 is the primary). A Mac shares one monitor. Linux shares one by default: on X11, `/monitors:all` shares them all, and a GNOME (Mutter) session shares one. One client window per monitor isn't there yet.
+- **One window per monitor only in the SDL client.** Windows shares all its monitors by default (`/monitors:<N>` shares just one; 0 is the primary). A Mac shares one monitor. Linux shares one by default: on X11, `/monitors:all` shares them all, and a GNOME (Mutter) session shares one. When the server shares several, the SDL client with `/multimon` shows each in its own window on a client screen (letterboxed if the sizes differ); without `/multimon`, and in FreeRDP Web and freerdp-tk, they sit side by side in one window.
 - **A Mac restarted with FileVault on** shows the disk-unlock screen before macOS starts: no RDP
   server can show it (`sudo fdesetup authrestart` for planned restarts). The LaunchAgent app starts
   only once you've logged in; the daemon shows the login window.
