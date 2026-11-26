@@ -55,24 +55,26 @@ jobs:
         run: command -v ffmpeg || brew install --quiet ffmpeg
       # the kit's Latest release (build/publish-prerelease.sh with LATEST=1): the macOS host and
       # the web client it was released with, checked against its SHA256SUMS
-      - name: The macOS host and the web client of the kit's Latest release
+      - name: The macOS host, the web client and the macOS client of the kit's Latest release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           tag=$(gh release view -R "$GITHUB_REPOSITORY" --json tagName -q .tagName)
           echo "kit release $tag"; echo "DEMO_KIT=rdp-release-kit $tag" >> "$GITHUB_ENV"
-          mkdir -p dl/host dl/web out && echo "$tag" > out/RELEASE
+          mkdir -p dl/host dl/web dl/client out && echo "$tag" > out/RELEASE
           gh release download "$tag" -R "$GITHUB_REPOSITORY" -D dl -p SHA256SUMS \
-            -p 'freerdp-host-*-macos-arm64.zip' -p 'freerdp-web-*.zip'
-          cd dl && grep -E ' (freerdp-host-.*-macos-arm64|freerdp-web-.*)\.zip$' SHA256SUMS | shasum -a 256 -c -
+            -p 'freerdp-host-*-macos-arm64.zip' -p 'freerdp-web-*.zip' -p 'sdl3-freerdp-*-macos-arm64.tar.xz'
+          cd dl && grep -E ' ((freerdp-host-.*-macos-arm64|freerdp-web-.*)\.zip|sdl3-freerdp-.*-macos-arm64\.tar\.xz)$' SHA256SUMS |
+            shasum -a 256 -c -
           (cd host && ditto -x -k ../freerdp-host-*-macos-arm64.zip .)
           (cd web && ditto -x -k ../freerdp-web-*.zip .)
+          (cd client && tar -xf ../sdl3-freerdp-*-macos-arm64.tar.xz)
           xattr -dr com.apple.quarantine . || true
-          ls -d host/*/ web/index.html
-      - name: FreeRDP Web in Chrome, Firefox and Safari, recorded
+          ls -d host/*/ web/index.html client/*/bin/sdl-freerdp
+      - name: FreeRDP Web in Chrome, Firefox and Safari, then the native macOS client, recorded
         run: >
           test/probe-web-browsers-rec.sh "$(ls -d dl/host/freerdp-host-*-macos-arm64)"
-          "$PWD/dl/web" "$PWD/dl/media" out
+          "$PWD/dl/web" "$PWD/dl/media" out "$(ls -d "$PWD"/dl/client/sdl3-freerdp-*-macos-arm64)"
       - uses: actions/upload-artifact@v7
         if: always()
         with:
