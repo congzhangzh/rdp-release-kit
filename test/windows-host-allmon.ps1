@@ -25,6 +25,11 @@
 #      from where it was just before the post: the server must have put it there
 #   5. the second monitor moved to the other side, the same total size: a new Reset Graphics
 #      with the new place, and the pointer still lands right
+#  5b. (freerdp-comp-sdl-g3, phase 2 of all monitors) a /multimon client: with its own layout the
+#      server's list is the layout it sent ("no follow (same as sent)"); asking for half-size
+#      monitors (/sdl-hidpi:scale:50) it follows the server's list: a window per server monitor on
+#      that monitor, its picture, 0 failed frames, the server gets each point (where the pointer
+#      settles after the post is recorded as data first, see 5b)
 #   6. Ctrl+Alt+Del and the lock screen with both monitors: the server follows to Winlogon,
 #      duplicates both outputs again, the session holds
 # Everything listens on 127.0.0.1 only. The machine is thrown away afterwards.
@@ -196,11 +201,16 @@ Check "one monitor at the start" ((MonitorCount) -eq 1) "SM_CMONITORS $(MonitorC
 
 # the client: unscaled (it takes the server's size on each Reset Graphics), later placed with its
 # client area over the virtual desktop; the surface commands and Reset Graphics monitors at TRACE
-$env:WLOG_FILEAPPENDER_OUTPUT_FILE_NAME = "session.wlog"
-$env:WLOG_FILTER = "com.freerdp.channels.rdpgfx.client:TRACE"
-$session = Start-Process -FilePath "$ClientDir\sdl-freerdp.exe" -PassThru -ArgumentList `
-    "/v:127.0.0.1:$port", "/u:$user", "/p:$pass", "/cert:ignore", "/gfx:AV1:on"
-Remove-Item Env:\WLOG_FILTER
+# (a function: 5b ends this session and starts another for 6)
+function StartSession {
+    $env:WLOG_FILEAPPENDER_OUTPUT_FILE_NAME = "session.wlog"
+    $env:WLOG_FILTER = "com.freerdp.channels.rdpgfx.client:TRACE"
+    $p = Start-Process -FilePath "$ClientDir\sdl-freerdp.exe" -PassThru -ArgumentList `
+        "/v:127.0.0.1:$port", "/u:$user", "/p:$pass", "/cert:ignore", "/gfx:AV1:on"
+    Remove-Item Env:\WLOG_FILTER
+    $p
+}
+$session = StartSession
 [void](Until 30 { @(Resets).Count -ge 1 })
 Start-Sleep -Seconds 5
 $first = @(Resets) | Select-Object -First 1
@@ -439,6 +449,192 @@ Point "on the moved second monitor" $m2c2 $screens2 ([pscustomobject]@{ X = $sec
 Check "pointer B: on each monitor at least once" (($script:onMonitor -contains "primary") -and ($script:onMonitor -contains "second")) "where B held: $(if ($script:onMonitor) { $script:onMonitor -join ', ' } else { 'nowhere' })"
 Check "moved: the session holds" (-not $session.HasExited)
 Shot "moved"
+
+# ---- 5b. /multimon follows the server's monitors (freerdp-comp-sdl-g3, phase 2 of all monitors)
+# The client runs on the server's own machine, so its two screens are the server's two monitors:
+#   a. plain /multimon sends the layout the server has: "server layout: no follow (same as sent)"
+#   b. /multimon /sdl-hidpi:scale:50 asks for half-size monitors, which the shadow does not take:
+#      the client follows the server's list, one window per server monitor on that monitor (1:1)
+# A full-monitor colour window on each monitor (made after the client's windows, kept topmost) is
+# what the server captures there. The pointer's place after a posted move is recorded as data
+# (notes), not checked: SDL echoes posted moves, and on a 1:1 window the echo lands on the point it
+# came from (g6, runs 45692504667, 45714503610), so this round measures before a gate is designed.
+Stop $session
+Add-Type -Namespace Kit -Name Mm -MemberDefinition @'
+[StructLayout(LayoutKind.Sequential)] public struct P { public int X, Y; }
+[StructLayout(LayoutKind.Sequential)] public struct R { public int Left, Top, Right, Bottom; }
+public delegate bool EnumProc(System.IntPtr h, System.IntPtr l);
+[DllImport("user32.dll")] static extern bool EnumWindows(EnumProc cb, System.IntPtr l);
+[DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(System.IntPtr h, out uint pid);
+[DllImport("user32.dll")] static extern bool IsWindowVisible(System.IntPtr h);
+[DllImport("user32.dll")] public static extern System.IntPtr WindowFromPoint(P p);
+[DllImport("user32.dll")] public static extern System.IntPtr GetAncestor(System.IntPtr h, uint flags);
+[DllImport("user32.dll")] public static extern bool GetWindowRect(System.IntPtr h, out R r);
+[DllImport("user32.dll")] public static extern bool SetWindowPos(System.IntPtr h, System.IntPtr after, int x, int y, int cx, int cy, uint flags);
+public static System.IntPtr[] Of(uint pid) {
+    var list = new System.Collections.Generic.List<System.IntPtr>();
+    EnumWindows((h, l) => { uint p; GetWindowThreadProcessId(h, out p); if (p == pid && IsWindowVisible(h)) list.Add(h); return true; }, System.IntPtr.Zero);
+    return list.ToArray();
+}
+public static uint Pid(System.IntPtr h) { uint p; GetWindowThreadProcessId(h, out p); return p; }
+'@
+function MmLog($name) { @(Get-Content "$Out\$name.wlog" -ErrorAction SilentlyContinue) }
+function MmStart($name, [string[]]$extra) {
+    $env:WLOG_FILEAPPENDER_OUTPUT_FILE_NAME = "$name.wlog"
+    $env:WLOG_LEVEL = "INFO"
+    $p = Start-Process -FilePath "$ClientDir\sdl-freerdp.exe" -PassThru -ArgumentList (@(
+        "/v:127.0.0.1:$port", "/u:$user", "/p:$pass", "/cert:ignore", "/gfx:AV1:on", "/multimon",
+        "/sdl-stats-ipc:$name") + $extra)
+    $env:WLOG_LEVEL = "DEBUG"
+    $p
+}
+# one reading of /sdl-stats-ipc (a named pipe): the next line the client publishes, as JSON
+function MmStats($name) {
+    $c = New-Object System.IO.Pipes.NamedPipeClientStream(".", $name, [System.IO.Pipes.PipeDirection]::In)
+    try {
+        $c.Connect(5000)
+        $t = (New-Object System.IO.StreamReader($c)).ReadLineAsync()
+        if ($t.Wait(5000)) { $t.Result | ConvertFrom-Json } else { $null }
+    } catch { $null } finally { $c.Dispose() }
+}
+# the sum of the counters whose name ends in $suffix; none when no counter has that name (a check
+# on it must not pass for want of the counter)
+function Counters($stats, $suffix) {
+    if (-not $stats) { return $null }
+    $sum = 0; $n = 0
+    foreach ($p in $stats.counters.PSObject.Properties) { if ($p.Name.EndsWith($suffix)) { $sum += [long]$p.Value; $n++ } }
+    if ($n -eq 0) { return $null }
+    $sum
+}
+# the client's visible top-level windows and the monitor each one covers (by rect)
+function MmWindows($proc, $list) {
+    foreach ($h in [Kit.Mm]::Of([uint32]$proc.Id)) {
+        $r = New-Object Kit.Mm+R; [void][Kit.Mm]::GetWindowRect($h, [ref]$r)
+        $on = $list | Where-Object { $_.X -eq $r.Left -and $_.Y -eq $r.Top -and $_.W -eq ($r.Right - $r.Left) -and $_.H -eq ($r.Bottom - $r.Top) } | Select-Object -First 1
+        [pscustomobject]@{ H = $h; X = $r.Left; Y = $r.Top; W = $r.Right - $r.Left; H2 = $r.Bottom - $r.Top; Monitor = $on }
+    }
+}
+$screens3 = Screens
+$box3 = Box $screens3
+Note "5b: monitors $(($screens3 | ForEach-Object { "$($_.Device) $($_.W)x$($_.H)+$($_.X)+$($_.Y)$(if ($_.Primary) { ' primary' })" }) -join '; '), box $($box3.W)x$($box3.H)+$($box3.X)+$($box3.Y)"
+
+# a. the client's own layout is the server's
+$mmA = MmStart "multimon-same" @()
+[void](Until 40 { (MmLog "multimon-same") -match "server layout: (follow|no follow)" })
+Start-Sleep -Seconds 3
+$dec = @((MmLog "multimon-same") | Where-Object { $_ -match "server layout: (follow|no follow) \(" }) | Select-Object -Last 1
+Check "5b a: the server's list is the client's layout" ($dec -match "server layout: no follow \(same as sent\)") "$dec"
+$wins = @(MmWindows $mmA $screens3)
+Check "5b a: a window on each monitor" (($wins.Count -eq $screens3.Count) -and (@($wins | Where-Object { $_.Monitor }).Count -eq $screens3.Count)) "$(($wins | ForEach-Object { "$($_.W)x$($_.H2)+$($_.X)+$($_.Y)" }) -join '; ')"
+$st = MmStats "multimon-same"
+Check "5b a: frames, none failed" ($st -and (Counters $st "_PICTURES") -gt 0 -and ($null -ne (Counters $st "_FAILED")) -and (Counters $st "_FAILED") -eq 0) "pictures $(Counters $st '_PICTURES'), failed $(Counters $st '_FAILED')"
+Check "5b a: the session holds" (-not $mmA.HasExited)
+Stop $mmA
+
+# b. half-size monitors asked, the server's own followed
+$mmB = MmStart "multimon-follow" @("/sdl-hidpi:scale:50")
+[void](Until 40 { (MmLog "multimon-follow") -match "server layout: (follow|no follow)" })
+Start-Sleep -Seconds 3
+$lines = MmLog "multimon-follow"
+$dec = @($lines | Where-Object { $_ -match "server layout: (follow|no follow) \(" }) | Select-Object -Last 1
+Check "5b b: the client follows the server's monitors" ($dec -match "server layout: follow \(") "$dec"
+# the last plan: one line per window (window, monitor, source, display, target, scale)
+$plan = @{}
+foreach ($l in $lines) {
+    if ($l -match "server layout: window (\d+) <- monitor (\d+) (-?\d+),(-?\d+) (\d+)x(\d+) on display (\d+) at (-?\d+),(-?\d+) (\d+)x(\d+) scale ([0-9.]+)") {
+        $plan[$Matches[2]] = [pscustomobject]@{ Monitor = [int]$Matches[2]; SX = [int]$Matches[3]; SY = [int]$Matches[4]; SW = [int]$Matches[5]; SH = [int]$Matches[6]
+            TX = [int]$Matches[8]; TY = [int]$Matches[9]; TW = [int]$Matches[10]; TH = [int]$Matches[11]; Scale = [double]$Matches[12] }
+    }
+}
+Note "5b b: plan $(($plan.Values | Sort-Object Monitor | ForEach-Object { "monitor $($_.Monitor) $($_.SX),$($_.SY) $($_.SW)x$($_.SH) at $($_.TX),$($_.TY) $($_.TW)x$($_.TH) scale $($_.Scale)" }) -join '; ')"
+Check "5b b: a window line per server monitor" ($plan.Count -eq $screens3.Count) "$($plan.Count) of $($screens3.Count)"
+$wins = @(MmWindows $mmB $screens3)
+Check "5b b: a window on each monitor" (($wins.Count -eq $screens3.Count) -and (@($wins | Where-Object { $_.Monitor }).Count -eq $screens3.Count)) "$(($wins | ForEach-Object { "$($_.W)x$($_.H2)+$($_.X)+$($_.Y)" }) -join '; ')"
+# each window shows the server monitor it covers: the session's place of a monitor is its place
+# on the virtual desktop less the box's top left
+$colours = @{ $true = @("Yellow", @(255, 255, 0)); $false = @("Lime", @(0, 255, 0)) }
+$cw = @()
+foreach ($s in $screens3) { $cw += ColourWindow "5b-$($s.Primary)" $s.X $s.Y $s.W $s.H $colours[[bool]$s.Primary][0] 300 }
+Start-Sleep -Seconds 4
+foreach ($s in $screens3) {
+    $centre = New-Object Kit.Mm+P; $centre.X = $s.X + [int]($s.W / 2); $centre.Y = $s.Y + [int]($s.H / 2)
+    $top = [Kit.Mm]::GetAncestor([Kit.Mm]::WindowFromPoint($centre), 2)
+    $topPid = [Kit.Mm]::Pid($top)
+    $ours = @($cw | Where-Object { $_.Id -eq $topPid }).Count -gt 0
+    if (-not $ours) {
+        # keep the colour window in front: HWND_TOPMOST again
+        foreach ($p in $cw) { foreach ($h in [Kit.Mm]::Of([uint32]$p.Id)) { [void][Kit.Mm]::SetWindowPos($h, [IntPtr](-1), 0, 0, 0, 0, 0x0001 -bor 0x0002 -bor 0x0010) } }
+        Start-Sleep -Seconds 2
+        $topPid = [Kit.Mm]::Pid([Kit.Mm]::GetAncestor([Kit.Mm]::WindowFromPoint($centre), 2))
+        $ours = @($cw | Where-Object { $_.Id -eq $topPid }).Count -gt 0
+    }
+    Check "5b b: the colour window in front on $($s.Device)" $ours "window at the centre belongs to pid $topPid"
+}
+foreach ($w in $wins) {
+    $s = $w.Monitor
+    if (-not $s) { continue }
+    $want = $colours[[bool]$s.Primary]
+    $sx = $s.X - $box3.X; $sy = $s.Y - $box3.Y
+    $pl = $plan.Values | Where-Object { $_.SX -eq $sx -and $_.SY -eq $sy } | Select-Object -First 1
+    Check "5b b: the window on $($s.Device) shows the server monitor at $sx,$sy" ([bool]$pl) "$(if ($pl) { "monitor $($pl.Monitor) $($pl.SW)x$($pl.SH) at $($pl.TX),$($pl.TY) $($pl.TW)x$($pl.TH) scale $($pl.Scale)" } else { 'no plan line for it' })"
+    $rgb = $null
+    for ($i = 0; $i -lt 15; $i++) {
+        $bmp = ClientPicture $w.H
+        if ($bmp) {
+            $rgb = Colour $bmp ([pscustomobject]@{ X = [int]($bmp.Width / 2); Y = [int]($bmp.Height / 2) })
+            $dark = Colour $bmp ([pscustomobject]@{ X = 5; Y = 5 })
+            if ((Near $rgb $want[1]) -or $i -eq 14) { $bmp.Save("$Out\5b-window-$($s.Device -replace '[\\.]', '').png") }
+            $bmp.Dispose()
+            if (Near $rgb $want[1]) { break }
+        }
+        Start-Sleep -Seconds 1
+    }
+    Check "5b b: the window on $($s.Device) shows its monitor's picture" (Near $rgb $want[1]) "rgb $rgb at the centre, want $($want[0])"
+}
+$st = MmStats "multimon-follow"
+Check "5b b: frames, none failed" ($st -and (Counters $st "_PICTURES") -gt 0 -and ($null -ne (Counters $st "_FAILED")) -and (Counters $st "_FAILED") -eq 0) "pictures $(Counters $st '_PICTURES'), failed $(Counters $st '_FAILED')"
+
+# the pointer: a move posted to each window, the point the server got (a check), the pointer's
+# place after it settles (data)
+function MmPost($h, [int]$msg, [int]$wparam, $p) {
+    [long]$l = ([long]$p.Y -shl 16) -bor ([long]$p.X -band 0xFFFF)
+    [void][Kit.Win]::PostMessage($h, [uint32]$msg, [IntPtr]$wparam, [IntPtr]$l)
+}
+foreach ($w in $wins) {
+    $s = $w.Monitor
+    if (-not $s) { continue }
+    $pl = $plan.Values | Where-Object { $_.SX -eq ($s.X - $box3.X) -and $_.SY -eq ($s.Y - $box3.Y) } | Select-Object -First 1
+    if (-not $pl) { continue }
+    $q = [pscustomobject]@{ X = [int]($w.W / 2) + 37; Y = [int]($w.H2 / 2) + 29 }
+    $tx = $pl.SX + [int][math]::Floor(($q.X - $pl.TX) / $pl.Scale); $ty = $pl.SY + [int][math]::Floor(($q.Y - $pl.TY) / $pl.Scale)
+    [void][Kit.Win]::SetCursorPos($s.X + [int]($s.W / 4), $s.Y + [int]($s.H / 4))
+    Quiet
+    $pre = Cursor
+    $from = @(MouseEvents).Count
+    MmPost $w.H 0x0200 0 $q
+    [void](Until 5 { @(MouseEvents | Select-Object -Skip $from | Where-Object { $_.X -eq $tx -and $_.Y -eq $ty }).Count -ge 1 })
+    $after = @(MouseEvents | Select-Object -Skip $from)
+    Check "5b b: pointer on $($s.Device), the server got the point" (@($after | Where-Object { $_.X -eq $tx -and $_.Y -eq $ty }).Count -ge 1) "window point $($q.X),$($q.Y), want $tx,$ty; the server got $(($after | Select-Object -First 6 | ForEach-Object { "$($_.X),$($_.Y)" }) -join ' ')"
+    Quiet
+    $last = @(MouseEvents) | Select-Object -Last 1
+    $got = Cursor
+    Note "5b b: pointer data on $($s.Device): before $($pre.X),$($pre.Y); posted window point $($q.X),$($q.Y) (session $tx,$ty); server events $(($after | ForEach-Object { "$($_.Flags):$($_.X),$($_.Y)" }) -join ' '); last $($last.X),$($last.Y) + box $($box3.X),$($box3.Y) = $($box3.X + $last.X),$($box3.Y + $last.Y); pointer now $($got.X),$($got.Y)"
+}
+Check "5b b: the session holds" (-not $mmB.HasExited)
+Shot "5b-follow"
+Stop $mmB
+foreach ($p in $cw) { if ($p -and -not $p.HasExited) { Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue } }
+
+# a single-window session again for 6 (it posts its keys to that window): up once its Reset
+# Graphics is in session.wlog (the file appender appends), not only its window (g6's review)
+$r0 = @(Resets).Count
+$session = StartSession
+[void](Until 30 { @(Resets).Count -gt $r0 })
+[void](Until 10 { $session.Refresh(); $session.MainWindowHandle -ne [IntPtr]::Zero })
+Start-Sleep -Seconds 5
+$session.Refresh()
+$hwnd = $session.MainWindowHandle
+Check "5b: a single-window session again for 6" ((-not $session.HasExited) -and ($hwnd -ne [IntPtr]::Zero) -and (@(Resets).Count -gt $r0)) "Reset Graphics $(@(Resets).Count - $r0) new"
 
 # ---- 6. Ctrl+Alt+Del and the lock screen with both monitors (as windows-host.ps1 does it)
 function PostKey([int]$vk, [int]$scan, [bool]$extended, [bool]$up) {
