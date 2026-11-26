@@ -218,7 +218,12 @@ try {
   }
 
   const offset = logSize();
-  const url = `${PAGE}?v=${GATEWAY}&u=${encodeURIComponent(USER)}&extra=${encodeURIComponent("/gfx:AV2:off,AV1:i420")}&fs=0`;
+  // recorded: + /smart-sizing, as a user would type it, so the client scales the Mac's whole screen
+  // into the half-size window; the macOS host can't take the client's size (/dynamic-resolution
+  // changes nothing), so without it the window showed the screen's top-left 1:1 corner, where little
+  // moves (probe v3, run 45765189407: 2.4 distinct pictures/s in the window, the session's 23/s)
+  const extra = "/gfx:AV2:off,AV1:i420" + (RECORD ? " /smart-sizing" : "");
+  const url = `${PAGE}?v=${GATEWAY}&u=${encodeURIComponent(USER)}&extra=${encodeURIComponent(extra)}&fs=0`;
   await wd("POST", `/session/${sid}/url`, { url });
   const ready = await waitFor(async () => (await js("const s = document.getElementById('status'); return s ? s.textContent : null")) === "ready", 45000);
   const env = JSON.parse(await js("return JSON.stringify({ isolated: self.crossOriginIsolated, webcodecs: typeof VideoDecoder })"));
