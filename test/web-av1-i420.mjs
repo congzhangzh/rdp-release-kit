@@ -21,9 +21,19 @@
 // OUT (a directory for the page's log and Info), PASSWORD (default probe; the server may ignore it).
 // Safari needs `safaridriver --enable` once (sudo) and allows one WebDriver session at a time;
 // it cannot run headless, the others do.
-import { spawn } from "node:child_process";
-import { existsSync, mkdirSync, openSync, readSync, fstatSync, closeSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+// RECORD=<file.mp4> (off by default; a record, it changes no check): a video of the session in
+// this browser, ending on Info at its "AV1 decoder" row, with <file>.jpg (70 %), <file>-mid.jpg
+// and <file>-late.jpg beside it. Chrome through its own screencast (CDP, at the debuggerAddress
+// chromedriver gives), Firefox and Safari through WebDriver screenshots, as fast as the driver
+// answers; each frame lasts until the next. An overlay names the browser, the codec and the
+// decoder as Info gives them, and DEMO_KIT (e.g. "rdp-release-kit 20261126.5"); Safari's window
+// takes half the screen, so the Mac's screen it shows has the page behind it. Prints the
+// recorder's fps, the session's own rate (Info's "Video codecs" N/s) and a RECORD-VERDICT line:
+// the clip counts when the recorder made at least 15 fps or at least the session's rate.
+import { spawn, spawnSync } from "node:child_process";
+import { existsSync, mkdirSync, mkdtempSync, openSync, readSync, fstatSync, closeSync, rmSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { tmpdir } from "node:os";
 
 const [PAGE, GATEWAY, BROWSER] = process.argv.slice(2);
 const { SERVER_LOG } = process.env;
@@ -38,6 +48,8 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 let fails = 0;
 const check = (name, ok, detail = "") => { console.log(`${ok ? "PASS" : "FAIL"}  ${BROWSER}: ${name}${detail ? "  (" + detail + ")" : ""}`); if (!ok) fails++; };
 const info = (s) => console.log(`INFO  ${BROWSER}: ${s}`);
+const RECORD = process.env.RECORD || "", KIT = process.env.DEMO_KIT || "";
+const NAME = { safari: "Safari", chrome: "Chrome", firefox: "Firefox" }[BROWSER];
 
 // the driver: the runner image's (macOS images set CHROMEWEBDRIVER / GECKOWEBDRIVER to its folder)
 const which = (name, env, dir) => process.env[env] || (process.env[dir] && existsSync(join(process.env[dir], name)) ? join(process.env[dir], name) : name);
@@ -67,18 +79,26 @@ const driverLog = []; driver.stderr.on("data", (d) => driverLog.push(...d.toStri
 let driverGone = null; driver.on("error", (e) => { driverGone = e.message; }); driver.on("exit", (c, s) => { driverGone ??= `exited (code ${c}, signal ${s})`; });
 let sid = null;
 const motionProcs = [];
+let rec = null;
 const done = async (code) => {
+  if (rec) await rec.finish();
   if (sid) await fetch(`http://127.0.0.1:${PORT}/session/${sid}`, { method: "DELETE" }).catch(() => {});
   for (const p of motionProcs) p.kill();
   driver.kill();
   console.log(`${BROWSER}: ${code ? "FAILED" : "PASSED"}`); process.exit(code);
 };
 
-const wd = async (method, path, body) => {
-  const r = await fetch(`http://127.0.0.1:${PORT}${path}`, { method, headers: { "content-type": "application/json" }, body: body && JSON.stringify(body) });
-  const j = await r.json();
-  if (j.value?.error) throw new Error(`${path}: ${j.value.error}: ${j.value.message}`);
-  return j.value;
+// one command at a time: the recorder's screenshots go between the script's own commands
+let wdQueue = Promise.resolve();
+const wd = (method, path, body) => {
+  const p = wdQueue.then(async () => {
+    const r = await fetch(`http://127.0.0.1:${PORT}${path}`, { method, headers: { "content-type": "application/json" }, body: body && JSON.stringify(body) });
+    const j = await r.json();
+    if (j.value?.error) throw new Error(`${path}: ${j.value.error}: ${j.value.message}`);
+    return j.value;
+  });
+  wdQueue = p.catch(() => {});
+  return p;
 };
 const ELEMENT = "element-6066-11e4-a52e-4f735466cecf";
 const js = (script, ...args) => wd("POST", `/session/${sid}/execute/sync`, { script, args });
@@ -86,6 +106,88 @@ const el = async (css) => (await wd("POST", `/session/${sid}/element`, { using: 
 const click = async (css) => wd("POST", `/session/${sid}/element/${await el(css)}/click`, {});
 const type = async (css, text) => { const e = await el(css); await wd("POST", `/session/${sid}/element/${e}/clear`, {}); await wd("POST", `/session/${sid}/element/${e}/value`, { text }); };
 const waitFor = async (test, ms) => { for (let t = 0; t < ms; t += 500) { if (await test().catch(() => false)) return true; await sleep(500); } return test().catch(() => false); };
+
+// RECORD: Info's rows, the overlay made from them (laid over the page as test/wasm-demo.mjs's caption)
+const ROWS = `return JSON.stringify([...document.querySelectorAll("#infoTable tr")].map((tr) => [...tr.cells].map((c) => c.innerText.trim())))`;
+const cell = (rows, name) => ((rows || []).find((r) => r[0] === name) || (rows || []).find((r) => (r[0] || "").startsWith(name)) || [])[1] || "";
+const OVERLAY = `let d = document.getElementById("recLabel");
+  if (!d) { d = document.createElement("div"); d.id = "recLabel";
+    d.style.cssText = "position:fixed;left:50%;bottom:28px;transform:translateX(-50%);z-index:2147483646;pointer-events:none;" +
+      "max-width:80vw;padding:10px 18px;border-radius:8px;background:rgba(15,22,30,.88);color:#fff;" +
+      "font:500 20px/1.35 system-ui,sans-serif;text-align:center;white-space:pre-line";
+    document.body.append(d); }
+  d.textContent = arguments[0]; return true;`;
+const overlay = async (rows) => {
+  const codec = cell(rows, "Video codecs").replace(/\s+\d+(\.\d+)?\/s\b.*$/, ""), dec = cell(rows, "AV1 decoder");
+  const text = [`${NAME}: FreeRDP Web, to the kit's macOS host`, [codec, dec && `AV1 decoder: ${dec}`].filter(Boolean).join(" · "),
+    KIT, BROWSER === "safari" ? "Safari runs on the Mac it shows, so it sees itself" : ""].filter(Boolean).join("\n");
+  await js(OVERLAY, text).catch((e) => info(`overlay: ${e.message}`));
+};
+function recorder(caps) {
+  const dir = mkdtempSync(join(tmpdir(), `web-rec-${BROWSER}-`)), shots = [];
+  const keep = (data, t, ext) => {
+    const file = join(dir, `${String(shots.length).padStart(5, "0")}.${ext}`);
+    writeFileSync(file, Buffer.from(data, "base64")); shots.push({ file, t });
+  };
+  let on = true, how = "WebDriver screenshots", stop = null, finished = null;
+  const started = (async () => {
+    // Chrome: its screencast, through the DevTools endpoint chromedriver opened (as test/wasm-demo.mjs records)
+    const addr = caps?.["goog:chromeOptions"]?.debuggerAddress;
+    if (BROWSER === "chrome" && addr) {
+      try {
+        const target = (await (await fetch(`http://${addr}/json`)).json()).find((t) => t.type === "page");
+        const ws = new WebSocket(target.webSocketDebuggerUrl);
+        await new Promise((ok, no) => { ws.addEventListener("open", ok); ws.addEventListener("error", () => no(new Error("no WebSocket"))); });
+        let n = 0; const send = (method, params = {}) => ws.send(JSON.stringify({ id: ++n, method, params }));
+        ws.addEventListener("message", (e) => {
+          const m = JSON.parse(e.data); if (m.method !== "Page.screencastFrame") return;
+          if (on) keep(m.params.data, m.params.metadata.timestamp, "jpg");
+          send("Page.screencastFrameAck", { sessionId: m.params.sessionId });
+        });
+        send("Page.startScreencast", { format: "jpeg", quality: 88, maxWidth: 1280, maxHeight: 720, everyNthFrame: 1 });
+        how = `Chrome's screencast (DevTools at ${addr})`;
+        stop = async () => { try { send("Page.stopScreencast"); } catch {} await sleep(300); ws.close(); };
+      } catch (e) { info(`recording: no screencast (${e.message}), screenshots instead`); }
+    }
+    if (!stop) {
+      const loop = (async () => {
+        while (on) {
+          const png = await wd("GET", `/session/${sid}/screenshot`).catch(() => null);
+          if (png) keep(png, performance.now() / 1000, "png"); else await sleep(200);
+        }
+      })();
+      stop = () => loop;
+    }
+    info(`recording with ${how}`);
+  })();
+  // holdMs: keep recording that long first (Info open); rate: the session's own N/s, from Info
+  const finish = (holdMs = 0, rate = null) => finished ??= (async () => {
+    await started; await sleep(holdMs); on = false; await stop();
+    const secs = shots.length > 1 ? shots.at(-1).t - shots[0].t : 0, fps = secs ? (shots.length - 1) / secs : 0;
+    let result = "no frames";
+    if (shots.length) {
+      mkdirSync(dirname(RECORD), { recursive: true });
+      // each frame as long as it was on screen (test/wasm-demo.mjs's list), the last one 0.5 s
+      writeFileSync(join(dir, "list.txt"), shots.map((s, i) => `file '${s.file}'\nduration ${((shots[i + 1]?.t ?? s.t + 0.5) - s.t).toFixed(3)}`).join("\n")
+        + `\nfile '${shots.at(-1).file}'\n`);
+      const ff = spawnSync("ffmpeg", ["-y", "-loglevel", "error", "-f", "concat", "-safe", "0", "-i", join(dir, "list.txt"),
+        "-vf", "fps=30,scale=1280:720:force_original_aspect_ratio=decrease:flags=lanczos,pad=1280:720:(ow-iw)/2:(oh-ih)/2,format=yuv420p",
+        "-c:v", "libx264", "-crf", "28", "-preset", "slow", "-an", "-movflags", "+faststart", RECORD], { stdio: "inherit" });
+      result = `${RECORD} (ffmpeg ${ff.status})`;
+      // a poster from 70 %, a mid and a late frame (Info open)
+      const len = secs + 0.5, base = RECORD.replace(/\.mp4$/, "");
+      for (const [name, t] of [["", len * 0.7], ["-mid", len * 0.5], ["-late", Math.max(0, len - 0.7)]])
+        spawnSync("ffmpeg", ["-y", "-loglevel", "error", "-ss", t.toFixed(2), "-i", RECORD, "-frames:v", "1", "-q:v", "4", `${base}${name}.jpg`], { stdio: "inherit" });
+    }
+    rmSync(dir, { recursive: true, force: true });
+    info(`recorder: ${shots.length} frames in ${secs.toFixed(1)} s, ${fps.toFixed(1)} fps, ${how} -> ${result}`);
+    const f = fps.toFixed(1);
+    console.log(`RECORD-VERDICT  ${BROWSER}: ${fps >= 15 ? `counts (recorder ${f} fps >= 15)`
+      : rate != null && fps >= rate ? `counts (recorder ${f} fps >= the session's ${rate}/s)`
+      : `does not count (recorder ${f} fps < 15, ${rate != null ? `< the session's ${rate}/s` : "the session's rate unknown"})`}`);
+  })();
+  return { finish };
+}
 
 // the macOS screen changes meanwhile: ScreenCaptureKit hands the server a frame only then
 function motion() {
@@ -99,16 +201,24 @@ try {
   for (let i = 0; i < 50 && !driverGone && !(up = await fetch(`http://127.0.0.1:${PORT}/status`).then((r) => r.ok, () => false)); i++) await sleep(200);
   if (!up) { check(`its WebDriver (${driverCmd[0]}) answers`, false, driverGone || driverLog.slice(-4).join(" | ") || "no answer in 10 s"); await done(1); }
   // Safari refuses a session for a while after the last one ended ("already paired"): try again
+  let caps = null;
   for (let i = 0; i < 5 && !sid; i++) {
-    try { sid = (await wd("POST", "/session", { capabilities: { alwaysMatch: capabilities } })).sessionId; }
+    try { ({ sessionId: sid, capabilities: caps } = await wd("POST", "/session", { capabilities: { alwaysMatch: capabilities } })); }
     catch (e) { info(`no session yet: ${e.message.slice(0, 160)}`); await sleep(3000); }
   }
   if (!sid) { check("a WebDriver session", false); await done(1); }
   info(`browser ${await js("return navigator.userAgent")}`);
+  // RECORD: Safari's window on half the screen, in its middle, over the media page behind
+  if (RECORD && BROWSER === "safari") {
+    const [w, h] = JSON.parse(await js("return JSON.stringify([screen.availWidth, screen.availHeight])"));
+    await wd("POST", `/session/${sid}/window/rect`, { x: Math.round(w / 4), y: Math.round(h / 4), width: Math.round(w / 2), height: Math.round(h / 2) })
+      .then((r) => info(`window ${JSON.stringify(r)} on a ${w}x${h} screen`), (e) => info(`window rect: ${e.message}`));
+  }
 
   const offset = logSize();
   const url = `${PAGE}?v=${GATEWAY}&u=${encodeURIComponent(USER)}&extra=${encodeURIComponent("/gfx:AV2:off,AV1:i420")}&fs=0`;
   await wd("POST", `/session/${sid}/url`, { url });
+  if (RECORD) rec = recorder(caps);
   const ready = await waitFor(async () => (await js("const s = document.getElementById('status'); return s ? s.textContent : null")) === "ready", 45000);
   const env = JSON.parse(await js("return JSON.stringify({ isolated: self.crossOriginIsolated, webcodecs: typeof VideoDecoder })"));
   // the browser's own answer for the configuration FreeRDP asks for (av1_webcodecs.js: av01.0.13M.08, 4:2:0)
@@ -125,7 +235,11 @@ try {
   check("a session started", session);
   if (!session) { info(`the page's log: ${(await js("const l = document.getElementById('log'); return l ? l.textContent.slice(-1500) : ''")).replace(/\n/g, " | ")}`); await done(1); }
   motion();
-  await sleep(SECONDS * 1000);
+  if (RECORD) {
+    // the overlay at once, then again from Info's rows every few seconds (whatever it has so far)
+    await overlay([]);
+    for (let t = 0; t < SECONDS * 1000; t += 3000) { await sleep(Math.min(3000, SECONDS * 1000 - t)); await overlay(JSON.parse(await js(ROWS).catch(() => "[]"))); }
+  } else await sleep(SECONDS * 1000);
   // Info by a script click (Safari's WebDriver click on the edge toolbar opened nothing, probe run
   // 44986405343), then its rows
   await js("document.getElementById('tbInfo').click(); return true").catch((e) => info(`Info: ${e.message}`));
@@ -140,6 +254,15 @@ try {
       webcodecs: reg ? [...reg.decoders.values()].map((d) => ({ state: d.decoder ? d.decoder.state : null, profile: d.profile })) : null,
       decoderLines: log.split("\\n").filter((l) => /AV1 decoder:|using dav1d|needs dav1d|av1-webcodecs/.test(l)).slice(-6),
       log: log.slice(-20000) });`));
+  if (rec) {
+    // the clip ends on Info, its "AV1 decoder" row in view, the overlay from what Info said
+    await overlay(page.rows);
+    await js(`const r = [...document.querySelectorAll("#infoTable tr")].find((tr) => tr.cells[0] && tr.cells[0].innerText.trim() === "AV1 decoder");
+      if (r) r.scrollIntoView({ block: "center" }); return !!r;`).catch(() => {});
+    const vc = cell(page.rows, "Video codecs"), m = /(\d+(?:\.\d+)?)\/s\b/.exec(vc);
+    info(`the session's rate: ${m ? m[1] + "/s" : "unknown"} (Info's Video codecs: "${vc}")`);
+    await rec.finish(5000, m ? Number(m[1]) : null);
+  }
   // the session ends; the server's last encoder lines land in its log
   await wd("POST", `/session/${sid}/url`, { url: "about:blank" }).catch(() => {});
   for (const p of motionProcs) p.kill();
