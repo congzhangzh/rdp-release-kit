@@ -142,15 +142,21 @@ function recorder() {
       // the video's own rate: its average frame rate, and its frames over its length
       const pr = spawnSync("ffprobe", ["-v", "error", "-select_streams", "v:0", "-show_entries", "stream=avg_frame_rate,nb_frames:format=duration", "-of", "json", RECORD], { encoding: "utf8" });
       try { const j = JSON.parse(pr.stdout); avg = j.streams[0].avg_frame_rate; n = Number(j.streams[0].nb_frames); len = Number(j.format.duration); } catch {}
-      const [a, b] = String(avg).split("/").map(Number); fps = len ? n / len : b ? a / b : 0;
-      result = `${RECORD} (ffmpeg ${ff.status}): avg_frame_rate ${avg}, ${n} frames in ${len.toFixed(1)} s`;
+      const [a, b] = String(avg).split("/").map(Number); const written = len ? n / len : b ? a / b : 0;
+      // the rate that counts: DISTINCT pictures per second. screencapture may write frames at a fixed
+      // rate, repeats included, which would make a slow screen look smooth (the product owner's rule:
+      // the clip must not look faster or slower than the session); mpdecimate drops the repeats
+      const md = spawnSync("ffmpeg", ["-loglevel", "error", "-i", mov, "-vf", "mpdecimate", "-fps_mode", "vfr", "-f", "framemd5", "-"], { encoding: "utf8", maxBuffer: 64 << 20 });
+      const distinct = String(md.stdout || "").split("\n").filter((l) => l && !l.startsWith("#")).length;
+      fps = len ? distinct / len : 0;
+      result = `${RECORD} (ffmpeg ${ff.status}): written ${written.toFixed(1)} fps (avg_frame_rate ${avg}, ${n} frames in ${len.toFixed(1)} s), distinct ${distinct} pictures`;
       // a poster from 70 %, a mid and a late frame (Info open)
       const base = RECORD.replace(/\.mp4$/, "");
       for (const [name, t] of [["", len * 0.7], ["-mid", len * 0.5], ["-late", Math.max(0, len - 1)]])
         spawnSync("ffmpeg", ["-y", "-loglevel", "error", "-ss", t.toFixed(2), "-i", RECORD, "-frames:v", "1", "-q:v", "4", `${base}${name}.jpg`], { stdio: "inherit" });
     }
     rmSync(dir, { recursive: true, force: true });
-    info(`recorder: ${fps.toFixed(1)} fps, ${result}`);
+    info(`recorder: ${fps.toFixed(1)} distinct pictures/s, ${result}`);
     const f = fps.toFixed(1);
     console.log(`RECORD-VERDICT  ${BROWSER}: ${BROWSER === "safari" ? `record only (runner's dav1d): recorder ${f} fps, the session's ${rate ?? "unknown"}/s`
       : fps >= 15 ? `counts (recorder ${f} fps >= 15)`
