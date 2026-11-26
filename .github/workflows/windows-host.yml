@@ -202,3 +202,77 @@ jobs:
             out/freerdp-tk-windows.jpg
           if-no-files-found: error
           retention-days: 3
+
+  # Two monitors (x86_64): the shadow server shares every monitor (test/windows-host-allmon.ps1).
+  # The runner has one; an IddCx virtual display driver adds the second during a session:
+  # VirtualDrivers/Virtual-Display-Driver (MIT), release 25.7.23, its driver-only zip pinned by
+  # SHA256 (probe-iddcx run 45666679353 installed it and captured both outputs on windows-2025).
+  # Not on the ARM64 runner: there the monitor appears but DXGI captures it black (same probe run).
+  # A runner of its own, beside the main test: a fresh desktop, nothing locked.
+  two-monitors:
+    needs: build
+    runs-on: windows-2025
+    timeout-minutes: 40
+    env:
+      # the driver-only zip of release 25.7.23 (x86), as probe-iddcx pinned it
+      VDD_SHA256: e24210692b442b39af763536330ce78b423f19342b7a7792c26de3944e418b3a
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        with:
+          name: freerdp-host-windows-x86_64
+          path: dl/host
+      - if: inputs.from_run
+        uses: actions/download-artifact@v8
+        with:
+          name: sdl3-freerdp-windows-x86_64
+          path: dl/client
+      - if: ${{ !inputs.from_run }}
+        name: The latest release's client
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: pwsh
+        run: gh release download -R $env:GITHUB_REPOSITORY -D dl/client -p 'sdl3-freerdp-*-windows-x86_64.zip'
+      # the driver from the cache when a round had it, keyed by its SHA256 (the test checks the
+      # hash again either way): a live GitHub download only on a miss
+      - id: vdd
+        uses: actions/cache@v6
+        with:
+          path: dl/vdd/vdd.zip
+          key: vdd-25.7.23-x86-${{ env.VDD_SHA256 }}
+      - if: steps.vdd.outputs.cache-hit != 'true'
+        name: The pinned driver (cache miss)
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path dl/vdd | Out-Null
+          Invoke-WebRequest -Uri 'https://github.com/VirtualDrivers/Virtual-Display-Driver/releases/download/25.7.23/VirtualDisplayDriver-x86.Driver.Only.zip' -OutFile dl/vdd/vdd.zip
+          $h = (Get-FileHash -Algorithm SHA256 dl/vdd/vdd.zip).Hash.ToLowerInvariant()
+          if ($h -ne $env:VDD_SHA256) { Remove-Item dl/vdd/vdd.zip; throw "the driver zip is $h, not the pinned one" }
+
+      - name: Unpack, the device node tool (MSVC of the image)
+        shell: pwsh
+        run: |
+          Expand-Archive (Get-ChildItem dl/host/*.zip | Select-Object -First 1).FullName -DestinationPath host
+          Expand-Archive (Get-ChildItem dl/client/*.zip | Select-Object -First 1).FullName -DestinationPath client
+          New-Item -ItemType Directory -Force -Path tools | Out-Null
+          $vs = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -property installationPath
+          $vcvars = Join-Path $vs 'VC\Auxiliary\Build\vcvarsall.bat'
+          $src = Join-Path $env:GITHUB_WORKSPACE 'test\windows-host-allmon\devnode.c'
+          cmd /c "`"$vcvars`" x64 >nul && cd /d tools && cl /nologo /W3 /O2 `"$src`" setupapi.lib newdev.lib"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Get-ChildItem host/*/*.exe, client/*/*.exe, tools/*.exe, dl/vdd/vdd.zip | ForEach-Object { "$($_.Name)  $($_.Length)" }
+
+      - name: Two monitors
+        timeout-minutes: 25
+        shell: pwsh
+        run: >
+          ./test/windows-host-allmon.ps1 (Get-ChildItem host -Directory | Select-Object -First 1).FullName
+          (Get-ChildItem client -Directory | Select-Object -First 1).FullName out dl/vdd/vdd.zip
+          $env:VDD_SHA256 tools/devnode.exe
+
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: windows-host-two-monitors
+          path: out
+          retention-days: 7
