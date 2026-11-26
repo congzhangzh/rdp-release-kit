@@ -458,6 +458,7 @@ await clickOn("#tbInfo");
 await caption("Info: codecs, frame rate, bandwidth, sound");
 await sleep(4500);
 const infoText = await ev("document.getElementById('infoTable').innerText");
+writeFileSync(join(out, "info.txt"), infoText);   // wasm-session.sh checks its Video codecs row
 console.log("info at the end:\n" + infoText.split("\n").filter(l => /Video|Audio|AV1 frames|AV1 decoder|AV2|results|H\.264|Network in/.test(l)).join("\n"));
 // what the page's decode counters saw, and each H.264 decoder's state: "none" on every one
 // means FreeRDP opened it but no H.264 key frame ever came (the picture came another way,
