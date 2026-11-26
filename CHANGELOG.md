@@ -11,6 +11,10 @@ from right now, and what our own changes to a source fix:
 Every change that alters what is built (a pin, a build option, a patch, a
 toolchain) gets an entry here in the same commit.
 
+## 2026-11-26
+
+- **FreeRDP `20261125.6`** (release manager; freerdp-comp-hevc-g1): the client's decoder stats read the last decode for AV1, AV2 and AVC only, so FreeRDP Web counted 0 HEVC pictures (kit round 45727774210: 125 HEVC commands decoded and acked, 0 pictures counted). `release-20261125.6` (`2f6214935`) counts HEVC too, so the web HEVC test sees what the page decodes. The four FreeRDP pins move to it.
+
 ## 2026-11-25
 
 - **FreeRDP `20261125.5`: all monitors on Windows; HEVC with AVC on; no more stalled sessions after unchanged H.264 frames** (release manager; freerdp-comp-shadow-g5/g6, freerdp-comp-hevc-g1): the Windows shadow server shares every monitor (one GFX surface per monitor, one DXGI duplication per output, the pointer over the whole virtual desktop; a monitor added, removed or moved during the session reaches the client). The new Windows host test `two-monitors` proves it on windows-2025 with a virtual display: both monitors' pictures read back from the client, the pointer exact on each, a same-size move, Ctrl+Alt+Del and the lock screen (3 green in a row). The server sends HEVC to a client that confirmed it on caps 11.2 or later with AVC still allowed as the fallback (the shadow had wanted AVC_DISABLED, which means no AVC at all). A round whose AVC420, AVC444 or HEVC encoder found no changed pixels had taken a frame id and sent nothing; after 8 of them the server held every frame for good: such an id is now given back. The web HEVC test checks the right flags and that frames keep flowing. The four FreeRDP pins move to `release-20261125.5` (`59fdb53d9`).
