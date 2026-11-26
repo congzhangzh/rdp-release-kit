@@ -222,6 +222,8 @@ await caption("GNOME on Wayland through xrdp, on one screen");
   const d = await ev(`[...document.querySelectorAll("#infoTable tr")].map(tr => [...tr.cells].map(x => x.innerText.trim()))
     .filter(c => /^AV[12] decoder/i.test(c[0] || "") && c[1] && !/^[–-]$/.test(c[1])).map(c => c[0] + ": " + c[1]).join(" · ")`)
     || await ev(AV2_DECODER);
+  // the rows, tab-separated as innerText gives them: wasm-session.sh checks Video codecs (AV1)
+  writeFileSync(join(out, "info.txt"), await ev("document.getElementById('infoTable').innerText"));
   await ev("(b => (b && b.click(), true))(document.getElementById('tbInfo'))");
   const line = await titleLine(d);
   await ev(`window.__demoKit && window.__demoKit(${JSON.stringify(line)})`);

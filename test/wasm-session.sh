@@ -438,6 +438,14 @@ fi
 # unprivileged container): the client connects to GNOME without the clipboard channel
 QUERY=""
 [ "$SERVER" != gnome ] || QUERY="?extra=-clipboard"
+# the demos of our xrdp (GNOME, KDE, All screens) are AV1 4:2:0, as their titles say: the page offers
+# AV2 first, and xrdp took it (the product owner, 2026-11-26: phase 2 of the demo plan is xrdp + AV1,
+# AV2 is phase 3), so a demo asks for AV1 with 4:2:0 in Extra options, as a user would (and as the
+# Windows and Mac demos do); the plain login test keeps the page's own order and checks AV2
+DEMO_AV1=
+if [ -n "${DEMO_VIDEO:-}" ] && { [ "$SERVER" = xrdp-gnome ] || [ "$SERVER" = xrdp-kde ]; }; then
+    DEMO_AV1=1; QUERY="?extra=$(printf %s "/gfx:AV2:off,AV1:i420" | jq -sRr @uri)"
+fi
 DRIVER=$KIT/test/wasm-session.mjs
 [ -z "${DEMO_VIDEO:-}" ] || DRIVER=$KIT/test/wasm-demo.mjs
 # DEMO_SCREENS=1: the All screens demo, two screens side by side
@@ -454,7 +462,7 @@ pass=0; fail=0
 check() { if eval "$2"; then echo "PASS  $1"; pass=$((pass + 1)); else echo "FAIL  $1"; fail=$((fail + 1)); fi; }
 # the codec xrdp picks for the kit's clients: AV2 first where the packages have it (they
 # record --enable-av2 in xrdp's binary), else AV1
-xcodec() { "$ENGINE" exec "$NAME" grep -a -q -- "--enable-av2" /usr/sbin/xrdp 2> /dev/null && echo AV2 || echo AV1; }
+xcodec() { [ -z "$DEMO_AV1" ] && "$ENGINE" exec "$NAME" grep -a -q -- "--enable-av2" /usr/sbin/xrdp 2> /dev/null && echo AV2 || echo AV1; }
 # since freerdp_web 20261104.3 the page's log masks the user like the password; the client
 # still gets /u:tester, and the login checks below prove it
 check "the page started the client with a user" 'grep -Eq -- " /u:(tester|\*\*\*) " "$OUT/page.log"'
@@ -483,10 +491,13 @@ else
 check "an Xorg session started for tester" \
     '"$ENGINE" exec "$NAME" pgrep -u tester -f "Xorg .*xrdp/xorg.conf" > /dev/null'
 fi
-if [ -n "${XRDP_AV2:-}" ] && "$ENGINE" exec "$NAME" grep -a -q -- "--enable-av2" /usr/sbin/xrdp 2> /dev/null; then
+if [ -n "${XRDP_AV2:-}" ] && [ -z "$DEMO_AV1" ] && "$ENGINE" exec "$NAME" grep -a -q -- "--enable-av2" /usr/sbin/xrdp 2> /dev/null; then
     check "xrdp encodes the session in AV2 (AV2 first in gfx.toml), the page decodes it" \
         '"$ENGINE" exec "$NAME" grep -q -h "starting AV2 codec session" /var/log/xrdp.log /tmp/xrdp.out'
 fi
+# what the viewer reads: the page's Info (the driver keeps its rows in info.txt) names AV1, as the title
+[ -z "$DEMO_AV1" ] || check "the page's Info: Video codecs starts with AV1 ($(grep -m1 "^Video codecs" "$OUT/info.txt" 2> /dev/null | cut -f2 | cut -c1-40))" \
+    'grep -q "^Video codecs	AV1" "$OUT/info.txt"'
 check "RDP for a native client on 127.0.0.1:$LOCAL_RDP_PORT" 'timeout 3 bash -c "exec 3<> /dev/tcp/127.0.0.1/$LOCAL_RDP_PORT"'
 [ "$SERVER" != xrdp ] || check "the session runs its $SHELL_PROC" '"$ENGINE" exec "$NAME" pgrep -u tester "$SHELL_PROC" > /dev/null'
 # a demo's screenshot has a terminal with typed text on the remote desktop:
