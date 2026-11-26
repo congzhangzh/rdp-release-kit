@@ -23,6 +23,10 @@ import { tmpdir } from "node:os";
 const [url, gateway, user, password, out, video] = process.argv.slice(2);
 const W = 960, H = 1080;   // each screen; the video is both, 1920 x 1080
 const LABEL = process.env.DEMO_LABEL || "xrdp + GNOME Wayland, All screens";
+// an AV2 session: the page's Info has no "AV2 decoder" row (its AV1 one says "–"), but its "AV2 results"
+// row counts the pictures libavm decoded, in software in the page (the product owner's review, item 5)
+const AV2_DECODER = `(() => { const r = [...document.querySelectorAll("#infoTable tr")].map(tr => [...tr.cells].map(x => x.innerText.trim()))
+  .find(c => /^AV2 results/.test(c[0] || "") && /pictures: [1-9]/.test(c[1] || "")); return r ? "AV2 decoder: libavm, software, in this page" : ""; })()`;
 // the title line names releases, never a commit (the product owner's review): DEMO_KIT (e.g.
 // "rdp-release-kit 20261124.6") when the caller knows it, then the page's own FreeRDP release,
 // read from its MANIFEST at run time (relRelease below)
@@ -95,7 +99,7 @@ const OVERLAY = labelled => `(() => {
   document.body.append(cap);
   if (${labelled}) {
     const tag = document.createElement("div"); tag.id = "demoLabel";
-    tag.style.cssText = "position:fixed;right:18px;top:18px;z-index:2147483646;pointer-events:none;padding:6px 12px;" +
+    tag.style.cssText = "position:fixed;right:18px;bottom:18px;z-index:2147483646;pointer-events:none;padding:6px 12px;" +
       "border-radius:6px;background:rgba(47,111,222,.92);color:#fff;font:600 16px/1.3 system-ui,sans-serif";
     tag.textContent = ${JSON.stringify(LABEL)};
     document.body.append(tag);
@@ -211,7 +215,8 @@ await caption("GNOME on Wayland through xrdp, on one screen");
   for (let i = 0; i < 20 && !(await ev("document.querySelectorAll('#infoTable tr').length > 3")); i++) await sleep(250);
   await sleep(1500);
   const d = await ev(`[...document.querySelectorAll("#infoTable tr")].map(tr => [...tr.cells].map(x => x.innerText.trim()))
-    .filter(c => /^AV[12] decoder/i.test(c[0] || "") && c[1] && !/^[–-]$/.test(c[1])).map(c => c[0] + ": " + c[1]).join(" · ")`);
+    .filter(c => /^AV[12] decoder/i.test(c[0] || "") && c[1] && !/^[–-]$/.test(c[1])).map(c => c[0] + ": " + c[1]).join(" · ")`)
+    || await ev(AV2_DECODER);
   await ev("(b => (b && b.click(), true))(document.getElementById('tbInfo'))");
   const line = await titleLine(d);
   await ev(`window.__demoKit && window.__demoKit(${JSON.stringify(line)})`);

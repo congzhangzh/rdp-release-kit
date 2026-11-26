@@ -57,6 +57,10 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 // the title line names releases, never a commit (the product owner's review): DEMO_KIT (e.g.
 // "rdp-release-kit 20261124.6") when the caller knows it, then the page's own FreeRDP release,
 // read from its MANIFEST at run time (relRelease below)
+// an AV2 session: the page's Info has no "AV2 decoder" row (its AV1 one says "–"), but its "AV2 results"
+// row counts the pictures libavm decoded, in software in the page (the product owner's review, item 5)
+const AV2_DECODER = `(() => { const r = [...document.querySelectorAll("#infoTable tr")].map(tr => [...tr.cells].map(x => x.innerText.trim()))
+  .find(c => /^AV2 results/.test(c[0] || "") && /pictures: [1-9]/.test(c[1] || "")); return r ? "AV2 decoder: libavm, software, in this page" : ""; })()`;
 const KIT = process.env.DEMO_KIT || "";
 // "FreeRDP release-20261123.11" from the page's MANIFEST ("  freerdp  20261123.11 <sha> …"), as its About reads it
 const RELEASE_JS = `fetch("MANIFEST").then(r => r.ok ? r.text() : "").then(t => {
@@ -327,7 +331,8 @@ await sleep(4500);
 // the decoder rows that name one (AV2's or AV1's; "–" is a codec the session doesn't use): none, no
 // decoder part, never a dash (the test round of 57b8995 showed "AV1 decoder: –" for an AV2 session)
 const decoderRow = await ev(`[...document.querySelectorAll("#infoTable tr")].map(tr => [...tr.cells].map(x => x.innerText.trim()))
-  .filter(c => /^AV[12] decoder/i.test(c[0] || "") && c[1] && !/^[–-]$/.test(c[1])).map(c => c[0] + ": " + c[1]).join(" · ")`);
+  .filter(c => /^AV[12] decoder/i.test(c[0] || "") && c[1] && !/^[–-]$/.test(c[1])).map(c => c[0] + ": " + c[1]).join(" · ")`)
+  || await ev(AV2_DECODER);
 const line = await titleLine(decoderRow);
 await ev(`window.__demoKit(${JSON.stringify(line)})`);
 console.log(`demo: title line: ${line}${decoderRow ? "" : " (no decoder row in Info)"}`);
@@ -434,10 +439,13 @@ if (WINDOWS_ANY) {
   await caption(`Drawn on the Mac, streamed to this browser in AV1 4:2:0${pcSound ? ", sound included" : ""}`);
   await sleep(6000);
 } else {
-  await caption("Web video with sound, and WebGL: Firefox on the server");
-  await typeRemote("webdemo\n");
+  // xrdp + GNOME: the video alone (webdemo video-only). With no GPU, Firefox drew the WebGL Aquarium
+  // in software on the CPUs that GNOME's compositor and xrdp's encoder use, at about 2 fps, which
+  // read as the remote desktop's speed (the product owner's review, item 4); as Windows, kit run 45549545203
+  await caption(XRDP_GNOME ? "Web video with sound: Firefox on the server" : "Web video with sound, and WebGL: Firefox on the server");
+  await typeRemote(XRDP_GNOME ? "webdemo video-only\n" : "webdemo\n");
   await sleep(14000);
-  await caption("Big Buck Bunny, © Blender Foundation, CC BY 3.0 · WebGL Aquarium, © Google, BSD");
+  await caption(XRDP_GNOME ? "Big Buck Bunny, © Blender Foundation, CC BY 3.0" : "Big Buck Bunny, © Blender Foundation, CC BY 3.0 · WebGL Aquarium, © Google, BSD");
   await sleep(8000);
   await caption("Drawn on the server, streamed to this browser, sound included");
   await sleep(6000);

@@ -1,6 +1,7 @@
 #!/bin/sh
 # The demo's page in Firefox: web video with sound next to WebGL, served from
-# the server's own 127.0.0.1 (media from demo-assets.sh, mounted at /demo)
+# the server's own 127.0.0.1 (media from demo-assets.sh, mounted at /demo).
+# "webdemo video-only": the video alone, no WebGL beside it (media.html's ?video-only)
 mkdir -p /tmp/webdemo /tmp/ff-demo
 ln -sf /demo-setup/media.html /tmp/webdemo/index.html
 ln -sf /demo/bunny.webm /tmp/webdemo/bunny.webm
@@ -9,4 +10,4 @@ cp /demo-setup/user.js /tmp/ff-demo/
 setsid -f python3 -m http.server 8000 --bind 127.0.0.1 --directory /tmp/webdemo > /dev/null 2>&1
 sleep 1
 exec setsid -f "$(command -v firefox-esr || command -v firefox)" --no-remote --profile /tmp/ff-demo --width 1720 --height 900 \
-    http://127.0.0.1:8000/ > /tmp/firefox.log 2>&1
+    "http://127.0.0.1:8000/${1:+?$1}" > /tmp/firefox.log 2>&1
