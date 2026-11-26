@@ -1,3 +1,4 @@
+# probe-sdl-multimon-mac v2 (two fixes, see the unit gate and the client step). v1:
 # probe-sdl-multimon-mac: a record, not a kit test (freerdp-comp-sdl-g3, phase 2 of all monitors,
 # 2026-11-26, on the RM's go). Does the SDL client's /multimon that follows the server's monitors
 # (fork branch feature-sdl-multimon-server-layout) build and pass its tests on macOS, and does the
@@ -60,7 +61,9 @@ jobs:
           grep -E 'warning:' "$OUT/build.log" | grep -E 'client/SDL' | tee "$OUT/sdl-warnings.txt" || true
           cd build && ctest -R '^TestSDL' -V 2>&1 | tee "$OUT/ctest-sdl.log" | tail -30
           # a filter that matches nothing passes too: at least the three SDL tests, all passed
-          grep -E '100% tests passed, 0 tests failed out of ([3-9]|[1-9][0-9]+)$' "$OUT/ctest-sdl.log"
+          # (ctest 3.x says "100% tests passed, 0 tests failed out of N", 4.x "100% tests passed out of N": v1's
+          # grep took only the first and failed a passing run, 45741738450)
+          grep -E '100% tests passed(, 0 tests failed)? out of ([3-9]|[1-9][0-9]+)$' "$OUT/ctest-sdl.log"
           grep -E 'Test +#[0-9]+: TestSDLServerLayout .* Passed' "$OUT/ctest-sdl.log"
 
       - name: Every test, for the record (not the probe's verdict)
@@ -110,7 +113,11 @@ jobs:
           mkdir -p "$OUT" client
           tar -xJf dist/sdl3-freerdp-*-macos-arm64.tar.xz -C client
           ls dist | tee "$OUT/dist.txt"
-          bin=$(find client -name sdl3-freerdp -type f -perm -u+x | head -1)
+          # (v1 looked for sdl3-freerdp and found nothing: the archive's names are listed, the client is the
+          # executable file whose name has freerdp in it)
+          find client -maxdepth 4 | sort | tee "$OUT/archive.txt" | head -40
+          bin=$(find client -type f -perm -u+x -name '*freerdp*' | head -1)
+          [ -n "$bin" ] || { echo "no client executable in the archive"; exit 1; }
           echo "client: $bin" | tee "$OUT/client.txt"
           "$bin" /version 2>&1 | tee -a "$OUT/client.txt" || true
           # a display list needs the window server; a runner without one says so, which is a record too
