@@ -25,11 +25,13 @@
 // this browser, from macOS's own screen recorder (screencapture -V, as test/mac-host.sh records
 // its client), from the session's start to Info open at its "AV1 decoder" row, with <file>.jpg
 // (70 %), <file>-mid.jpg and <file>-late.jpg beside it. The browser runs windowed (Chrome and
-// Firefox too) on half the screen, over the media page; an overlay names the browser, the codec
-// and the decoder as Info gives them, and DEMO_KIT (e.g. "rdp-release-kit 20261126.5"). No motion
-// step (the media page moves the screen). Prints the video's rate (ffprobe), the session's own
-// (Info's "Video codecs" N/s) and a RECORD-VERDICT line: Chrome's and Firefox's clip counts when
-// the video has at least 15 fps or at least the session's rate; Safari's is a record only.
+// Firefox too) on half the screen, over the media page, and the video is cropped to that window;
+// a strip at the page's bottom edge names the browser, the codec and the decoder as Info gives
+// them (the decoder up to its first comma: the page's hardware/software word is unproven on the
+// runner), and DEMO_KIT (e.g. "rdp-release-kit 20261126.5"). No motion step (the media page moves
+// the screen). Prints the video's rates, the session's own (Info's "Video codecs" N/s) and a
+// RECORD-VERDICT line: Chrome's and Firefox's clip counts when the cropped video has at least 15
+// distinct pictures/s or at least the session's rate; Safari's is a record only.
 import { spawn, spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, openSync, readSync, fstatSync, closeSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -68,6 +70,12 @@ const capabilities = {
 // RECORD: windowed, so the Mac's screen shows it (geckodriver's Firefox beside the media page's, each its own profile)
 for (const o of RECORD ? [capabilities["goog:chromeOptions"], capabilities["moz:firefoxOptions"]] : [])
   if (o) o.args = [...o.args.filter((a) => !/^-+headless/.test(a)), ...(BROWSER === "firefox" ? ["-no-remote"] : [])];
+// RECORD: nothing over the page but the page (probe v2's Chrome showed its clipboard prompt and the
+// "controlled by automated test software" bar): the page's origin may use the clipboard
+if (RECORD && BROWSER === "chrome") Object.assign(capabilities["goog:chromeOptions"], { excludeSwitches: ["enable-automation"],
+  prefs: { "profile.content_settings.exceptions.clipboard": { [`${new URL(PAGE).origin},*`]: { setting: 1 } } } });
+if (RECORD && BROWSER === "firefox") capabilities["moz:firefoxOptions"].prefs = { "dom.events.asyncClipboard.readText": true,
+  "dom.events.asyncClipboard.clipboardItem": true, "dom.events.testing.asyncClipboard": true };
 
 // the server's log from a byte offset on (WLog's file appender flushes every line)
 const logSize = () => { try { return fstatSync(openSync(SERVER_LOG, "r")).size; } catch { return 0; } };
@@ -82,7 +90,7 @@ const driverLog = []; driver.stderr.on("data", (d) => driverLog.push(...d.toStri
 let driverGone = null; driver.on("error", (e) => { driverGone = e.message; }); driver.on("exit", (c, s) => { driverGone ??= `exited (code ${c}, signal ${s})`; });
 let sid = null;
 const motionProcs = [];
-let rec = null;
+let rec = null, win = null, screenW = 0;
 const done = async (code) => {
   if (rec) await rec.finish();
   if (sid) await fetch(`http://127.0.0.1:${PORT}/session/${sid}`, { method: "DELETE" }).catch(() => {});
@@ -109,19 +117,20 @@ const ROWS = `return JSON.stringify([...document.querySelectorAll("#infoTable tr
 const cell = (rows, name) => ((rows || []).find((r) => r[0] === name) || (rows || []).find((r) => (r[0] || "").startsWith(name)) || [])[1] || "";
 const OVERLAY = `let d = document.getElementById("recLabel");
   if (!d) { d = document.createElement("div"); d.id = "recLabel";
-    d.style.cssText = "position:fixed;left:50%;bottom:28px;transform:translateX(-50%);z-index:2147483646;pointer-events:none;" +
-      "max-width:80vw;padding:10px 18px;border-radius:8px;background:rgba(15,22,30,.88);color:#fff;" +
-      "font:500 20px/1.35 system-ui,sans-serif;text-align:center;white-space:pre-line";
+    d.style.cssText = "position:fixed;left:0;right:0;bottom:0;z-index:2147483646;pointer-events:none;" +
+      "padding:2px 8px;background:rgba(15,22,30,.82);color:#fff;font:500 11px/1.3 system-ui,sans-serif;" +
+      "text-align:center;white-space:pre;overflow:hidden;text-overflow:ellipsis";
     document.body.append(d); }
   d.textContent = arguments[0]; return true;`;
 const overlay = async (rows) => {
-  const codec = cell(rows, "Video codecs").replace(/\s+\d+(\.\d+)?\/s\b.*$/, ""), dec = cell(rows, "AV1 decoder");
-  const text = [`${NAME}: FreeRDP Web, to the kit's macOS host`, [codec, dec && `AV1 decoder: ${dec}`].filter(Boolean).join(" · "),
-    KIT, `${NAME} runs on the Mac it shows, so it sees itself`].filter(Boolean).join("\n");
+  const codec = cell(rows, "Video codecs").replace(/\s+\d+(\.\d+)?\/s\b.*$/, ""), dec = cell(rows, "AV1 decoder").split(",")[0].trim();
+  const text = [[`${NAME}: FreeRDP Web, to the kit's macOS host`, codec, dec && `AV1 decoder: ${dec}`].filter(Boolean).join(" · "),
+    [KIT, `${NAME} runs on the Mac it shows, so it sees itself`].filter(Boolean).join(" · ")].join("\n");
   await js(OVERLAY, text).catch((e) => info(`overlay: ${e.message}`));
 };
 const REC_SECONDS = Number(process.env.RECORD_SECONDS || SECONDS + 6);   // the session, then Info
-function recorder() {
+// win: the browser's window, in screen points (WebDriver's rect), screenW: the screen's width in points
+function recorder(win, screenW) {
   const dir = mkdtempSync(join(tmpdir(), `web-rec-${BROWSER}-`)), mov = join(dir, "screen.mov"), t0 = Date.now();
   // bash as its parent, as mac-host.sh runs it: the runner grants Screen Recording to /bin/bash
   const cap = spawn("/bin/bash", ["-c", `screencapture -x -V ${REC_SECONDS} '${mov}'`], { stdio: ["ignore", "ignore", "pipe"] });
@@ -137,7 +146,20 @@ function recorder() {
     let result = `no video (screencapture ${code}${capErr ? ": " + capErr.trim().slice(-200) : ""})`, fps = 0, n = 0, len = 0, avg = "";
     if (existsSync(mov)) {
       mkdirSync(dirname(RECORD), { recursive: true });
-      const ff = spawnSync("ffmpeg", ["-y", "-loglevel", "error", "-i", mov, "-vf", "scale=1280:720:force_original_aspect_ratio=decrease:flags=lanczos,pad=1280:720:(ow-iw)/2:(oh-ih)/2,format=yuv420p",
+      // only the browser's window: the screen's points to the .mov's pixels (the display's backing
+      // scale), so the clip and its distinct rate are the RDP session's, not the local media page's
+      // (probe v2, run 45763573057: the window a small part of the screen)
+      const [mw, mh] = String(spawnSync("ffprobe", ["-v", "error", "-select_streams", "v:0", "-show_entries", "stream=width,height", "-of", "csv=p=0", mov],
+        { encoding: "utf8" }).stdout || "").trim().split(",").map((v) => Number(v) || 0);
+      let crop = "";
+      if (win && screenW && mw && mh) {
+        const k = mw / screenW, even = (v) => 2 * Math.floor(v / 2);
+        const x = even(Math.max(0, win.x * k)), y = even(Math.max(0, win.y * k));
+        const w = even(Math.min(win.width * k, mw - x)), h = even(Math.min(win.height * k, mh - y));
+        if (w > 0 && h > 0) crop = `crop=${w}:${h}:${x}:${y},`;
+        info(`crop: the window ${JSON.stringify(win)} on a ${screenW}-point screen, the .mov ${mw}x${mh} (scale ${k.toFixed(2)}): ${crop || "none"}`);
+      } else info(`crop: none (window ${JSON.stringify(win)}, screen ${screenW}, .mov ${mw}x${mh})`);
+      const ff = spawnSync("ffmpeg", ["-y", "-loglevel", "error", "-i", mov, "-vf", crop + "scale=1280:720:force_original_aspect_ratio=decrease:flags=lanczos,pad=1280:720:(ow-iw)/2:(oh-ih)/2,format=yuv420p",
         "-c:v", "libx264", "-crf", "28", "-preset", "slow", "-an", "-movflags", "+faststart", RECORD], { stdio: "inherit" });
       // the video's own rate: its average frame rate, and its frames over its length
       const pr = spawnSync("ffprobe", ["-v", "error", "-select_streams", "v:0", "-show_entries", "stream=avg_frame_rate,nb_frames:format=duration", "-of", "json", RECORD], { encoding: "utf8" });
@@ -146,7 +168,7 @@ function recorder() {
       // the rate that counts: DISTINCT pictures per second. screencapture may write frames at a fixed
       // rate, repeats included, which would make a slow screen look smooth (the product owner's rule:
       // the clip must not look faster or slower than the session); mpdecimate drops the repeats
-      const md = spawnSync("ffmpeg", ["-loglevel", "error", "-i", mov, "-vf", "mpdecimate", "-fps_mode", "vfr", "-f", "framemd5", "-"], { encoding: "utf8", maxBuffer: 64 << 20 });
+      const md = spawnSync("ffmpeg", ["-loglevel", "error", "-i", mov, "-vf", crop + "mpdecimate", "-fps_mode", "vfr", "-f", "framemd5", "-"], { encoding: "utf8", maxBuffer: 64 << 20 });
       const distinct = String(md.stdout || "").split("\n").filter((l) => l && !l.startsWith("#")).length;
       fps = len ? distinct / len : 0;
       result = `${RECORD} (ffmpeg ${ff.status}): written ${written.toFixed(1)} fps (avg_frame_rate ${avg}, ${n} frames in ${len.toFixed(1)} s), distinct ${distinct} pictures`;
@@ -188,7 +210,11 @@ try {
   if (RECORD) {
     const [w, h] = JSON.parse(await js("return JSON.stringify([screen.availWidth, screen.availHeight])"));
     await wd("POST", `/session/${sid}/window/rect`, { x: Math.round(w / 4), y: Math.round(h / 4), width: Math.round(w / 2), height: Math.round(h / 2) })
-      .then((r) => info(`window ${JSON.stringify(r)} on a ${w}x${h} screen`), (e) => info(`window rect: ${e.message}`));
+      .catch((e) => info(`window rect: ${e.message}`));
+    // the rect as the window took it, read back: what the recording is cropped to
+    win = await wd("GET", `/session/${sid}/window/rect`).catch(() => null);
+    screenW = Number(await js("return screen.width").catch(() => 0));
+    info(`window ${JSON.stringify(win)} on a ${w}x${h} screen (${screenW} points wide)`);
   }
 
   const offset = logSize();
@@ -210,7 +236,7 @@ try {
   check("a session started", session);
   if (!session) { info(`the page's log: ${(await js("const l = document.getElementById('log'); return l ? l.textContent.slice(-1500) : ''")).replace(/\n/g, " | ")}`); await done(1); }
   if (RECORD) {
-    rec = recorder();
+    rec = recorder(win, screenW);
     // the overlay at once, then again from Info's rows every few seconds (whatever it has so far)
     await overlay([]);
     for (let t = 0; t < SECONDS * 1000; t += 3000) { await sleep(Math.min(3000, SECONDS * 1000 - t)); await overlay(JSON.parse(await js(ROWS).catch(() => "[]"))); }
