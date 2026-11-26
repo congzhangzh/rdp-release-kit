@@ -203,6 +203,40 @@ jobs:
           if-no-files-found: error
           retention-days: 3
 
+  # the Windows client of sources.lock's freerdp, for two-monitors' /multimon step (5b), on a push
+  # of this branch alone (kit.yml's own windows job makes the same artifact when it calls this
+  # workflow with from_run)
+  client:
+    if: ${{ !inputs.from_run }}
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Cache sources
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/rdp-release-kit/sources
+          key: sources-${{ hashFiles('sources.lock') }}
+
+      - name: Cache compiled objects
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/rdp-release-kit/ccache
+          key: ccache-windows-x86_64-${{ github.sha }}
+          restore-keys: ccache-windows-x86_64-
+
+      - name: Build
+        env:
+          CCACHE_MAXSIZE: 1G
+        run: ./build-windows.sh x86_64
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: sdl3-freerdp-windows-x86_64
+          path: dist/*.zip
+          if-no-files-found: error
+          retention-days: 3
+
   # Two monitors (x86_64): the shadow server shares every monitor (test/windows-host-allmon.ps1).
   # The runner has one; an IddCx virtual display driver adds the second during a session:
   # VirtualDrivers/Virtual-Display-Driver (MIT), release 25.7.23, its driver-only zip pinned by
@@ -210,7 +244,9 @@ jobs:
   # Not on the ARM64 runner: there the monitor appears but DXGI captures it black (same probe run).
   # A runner of its own, beside the main test: a fresh desktop, nothing locked.
   two-monitors:
-    needs: build
+    needs: [build, client]
+    # client is skipped when kit.yml calls this workflow (its windows job made the client)
+    if: ${{ !cancelled() && needs.build.result == 'success' && (needs.client.result == 'success' || needs.client.result == 'skipped') }}
     runs-on: windows-2025
     timeout-minutes: 40
     env:
@@ -222,17 +258,11 @@ jobs:
         with:
           name: freerdp-host-windows-x86_64
           path: dl/host
-      - if: inputs.from_run
-        uses: actions/download-artifact@v8
+      # this run's client: kit.yml's windows job (from_run) or the client job above
+      - uses: actions/download-artifact@v8
         with:
           name: sdl3-freerdp-windows-x86_64
           path: dl/client
-      - if: ${{ !inputs.from_run }}
-        name: The latest release's client
-        env:
-          GH_TOKEN: ${{ github.token }}
-        shell: pwsh
-        run: gh release download -R $env:GITHUB_REPOSITORY -D dl/client -p 'sdl3-freerdp-*-windows-x86_64.zip'
       # the driver from the cache when a round had it, keyed by its SHA256 (the test checks the
       # hash again either way): a live GitHub download only on a miss
       - id: vdd
