@@ -10,8 +10,8 @@
   figure { margin:0; display:flex; flex-direction:column; min-height:0; }
   video, iframe { flex:1; min-height:0; width:100%; border:0; background:#000; }
   figcaption { padding:0 2px 6px; }
-  /* ?video-only: the video alone, the whole width (the Windows host's demo: no WebGL beside it on a
-     runner without a GPU, where the aquarium and the software encode shared the CPUs) */
+  /* ?video-only: the video alone, the whole width (the Windows host's and xrdp + GNOME's demos: no WebGL
+     beside it on a runner without a GPU, where the aquarium and the encode shared the CPUs) */
   body.video-only { grid-template-columns:1fr; }
   body.video-only figure.webgl { display:none; }
 </style>
