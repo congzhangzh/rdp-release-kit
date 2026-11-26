@@ -57,10 +57,12 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 // the title line names releases, never a commit (the product owner's review): DEMO_KIT (e.g.
 // "rdp-release-kit 20261124.6") when the caller knows it, then the page's own FreeRDP release,
 // read from its MANIFEST at run time (relRelease below)
-// an AV2 session: the page's Info has no "AV2 decoder" row (its AV1 one says "–"), but its "AV2 results"
-// row counts the pictures libavm decoded, in software in the page (the product owner's review, item 5)
+// an AV2 session: the page's Info has no "AV2 decoder" row (its AV1 one says "–"); its "Video codecs"
+// row names AV2 when the server sends it, and this page decodes AV2 only with libavm, in software
+// (freerdp-web app.js, the codec note) (the product owner's review, item 5; run 45756857554 showed
+// "Video codecs: AV2 4:4:4 …", "AV1 decoder: –" and no decoder results row)
 const AV2_DECODER = `(() => { const r = [...document.querySelectorAll("#infoTable tr")].map(tr => [...tr.cells].map(x => x.innerText.trim()))
-  .find(c => /^AV2 results/.test(c[0] || "") && /pictures: [1-9]/.test(c[1] || "")); return r ? "AV2 decoder: libavm, software, in this page" : ""; })()`;
+  .find(c => /^Video codecs/.test(c[0] || "") && /^AV2\\b/.test(c[1] || "")); return r ? "AV2 decoder: libavm, software, in this page" : ""; })()`;
 const KIT = process.env.DEMO_KIT || "";
 // "FreeRDP release-20261123.11" from the page's MANIFEST ("  freerdp  20261123.11 <sha> …"), as its About reads it
 const RELEASE_JS = `fetch("MANIFEST").then(r => r.ok ? r.text() : "").then(t => {
@@ -456,7 +458,7 @@ await clickOn("#tbInfo");
 await caption("Info: codecs, frame rate, bandwidth, sound");
 await sleep(4500);
 const infoText = await ev("document.getElementById('infoTable').innerText");
-console.log("info at the end:\n" + infoText.split("\n").filter(l => /Video|Audio|AV1 frames|AV1 decoder|H\.264|Network in/.test(l)).join("\n"));
+console.log("info at the end:\n" + infoText.split("\n").filter(l => /Video|Audio|AV1 frames|AV1 decoder|AV2|results|H\.264|Network in/.test(l)).join("\n"));
 // what the page's decode counters saw, and each H.264 decoder's state: "none" on every one
 // means FreeRDP opened it but no H.264 key frame ever came (the picture came another way,
 // e.g. Progressive or Planar); the Info panel adds its "H.264 frames" row only after a frame
