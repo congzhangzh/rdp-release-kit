@@ -6,8 +6,8 @@
 #                                  <demo media dir (test/demo-assets.sh's)> <out dir>
 # Only the web part of test/mac-host.sh, its own lines: the server with -auth on 127.0.0.1:4490
 # (WLOG_LEVEL=DEBUG, which web-av1-i420.mjs reads), websockify on 3390, the page on 8082 and the
-# media page on 8000, in Firefox full-size behind every session (Safari's window takes half the
-# screen over it). DEMO_KIT names the kit release in each video's overlay. Exits 1 when a
+# media page on 8000, in Firefox full-size behind every session (each browser, windowed, takes
+# half the screen over it; macOS's screencapture records the screen). DEMO_KIT names the kit release in each video's overlay. Exits 1 when a
 # browser's video is missing; the checks' PASS/FAIL lines are recorded, not judged.
 # Bash 3.2 (macOS's own) is enough here.
 set -u
@@ -57,6 +57,10 @@ sudo -n safaridriver --enable > "$OUT/web/safaridriver-enable.log" 2>&1 ||
     echo "INFO  safaridriver --enable: $(tail -1 "$OUT/web/safaridriver-enable.log")"
 missing=0
 for b in chrome firefox safari; do
+    # nothing over the media page but the browser: the runner's System Settings ("Software Update
+    # Available", probe v1's Firefox frames) and any Calculator closed; no motion step
+    osascript -e 'quit app "System Settings"' > /dev/null 2>&1 || true
+    osascript -e 'quit app "Calculator"' > /dev/null 2>&1 || true
     SERVER_LOG="$OUT/server-web.wlog" OUT="$OUT/web-i420" CHROME="$CHROME_BIN" FIREFOX="$FIREFOX" \
         RECORD="$OUT/web-av1-i420-$b.mp4" DEMO_KIT="${DEMO_KIT:-}" env SECONDS=30 \
         node "$KIT_TEST/web-av1-i420.mjs" http://127.0.0.1:8082/index.html 127.0.0.1:3390 $b \
