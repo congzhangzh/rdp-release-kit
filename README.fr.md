@@ -39,7 +39,7 @@ pas de sessions propres ; pour cela, voir [xrdp](README.md#xrdp-packages).
 | AV1 4:2:0 | sur la carte graphique via Media Foundation lorsqu'elle dispose d'un encodeur AV1 (testé : un GPU d'ordinateur portable NVIDIA), sinon libaom | sur la carte graphique via VA-API (pas encore éprouvé sur un vrai GPU), sinon libaom | libaom (aucune puce Apple n'encode l'AV1) |
 | Aussi | AV2 (libavm), H.264 AVC420 de Media Foundation pour les clients sans AV1, le son du PC | AV2, le son de la session (PipeWire), les touches via libei | AV2, H.264 de VideoToolbox, le son du Mac |
 | Connexion | un compte Windows (Network Level Authentication) | votre propre compte (PAM, sur TLS) : le gestionnaire de sessions vous confie à votre propre GNOME ; l'unité utilisateur n'accepte que le propriétaire du bureau | un compte macOS local (PAM, sur TLS) : via le daemon, tout utilisateur local sauf root à la fenêtre de connexion (puis vous vous connectez sur la fenêtre de connexion, comme devant le Mac), ou l'utilisateur de la console ; le LaunchAgent n'accepte que son propre utilisateur |
-| Testé en CI, à chaque version | Windows Server 2025 (x86_64) et Windows 11 sur ARM : AV1, connexions Windows, Ctrl+Alt+Suppr, écran de verrouillage, FreeRDP Web | GNOME headless et Xfce, sur x86_64 et ARM64 : gestionnaire de sessions (un GNOME connecté et un GNOME sans écran), unité utilisateur, AV1, AV2, touches, son, autre compte refusé | un runner macOS de GitHub : une session AV1 et une session AV2 face au LaunchAgent, et le daemon installé comme ci-dessous (le runner ne peut pas afficher sa fenêtre de connexion) |
+| Testé en CI, à chaque version | Windows Server 2025 (x86_64) et Windows 11 sur ARM : AV1, connexions Windows, Ctrl+Alt+Suppr, écran de verrouillage, deux écrans (x86_64), FreeRDP Web | GNOME headless et Xfce, sur x86_64 et ARM64 : gestionnaire de sessions (un GNOME connecté et un GNOME sans écran), unité utilisateur, AV1, AV2, touches, son, autre compte refusé | un runner macOS de GitHub : une session AV1 et une session AV2 face au LaunchAgent, et le daemon installé comme ci-dessous (le runner ne peut pas afficher sa fenêtre de connexion) |
 
 ### Installation
 
@@ -137,8 +137,7 @@ utilisé, par exemple : `AV1 encoder: Media Foundation 0 NVIDIA AV1 Encoder MFT
 - **Il conserve la taille propre de l'écran.** Les moniteurs, leur résolution et leur échelle restent
   tels que l'ordinateur les a, et la fenêtre du client montre cet écran, réduit s'il est plus petit.
   Les options `/dynamic-resolution`, la disposition `/multimon` et l'échelle HiDPI d'un client ne changent rien ici.
-- **Il partage un seul moniteur.** Un ordinateur à plusieurs moniteurs en partage un
-  (`/monitors:<N>` le choisit ; par défaut, le premier).
+- **Plusieurs écrans, une seule fenêtre côté client.** Windows partage tous ses écrans par défaut, côte à côte dans une seule fenêtre du client (`/monitors:<N>` n'en partage qu'un ; 0 est l'écran principal). Un Mac partage un seul écran. Linux en partage un par défaut : sous X11, `/monitors:all` les partage tous, et une session GNOME (Mutter) en partage un. Une fenêtre du client par écran n'existe pas encore.
 - **Un Mac redémarré avec FileVault activé** affiche l'écran de déverrouillage du disque avant le démarrage de macOS :
   aucun serveur RDP ne peut l'afficher (`sudo fdesetup authrestart` pour les redémarrages prévus). L'app LaunchAgent
   ne démarre qu'une fois que vous êtes connecté ; le daemon affiche la fenêtre de connexion.

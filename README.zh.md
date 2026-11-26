@@ -35,7 +35,7 @@ macOS：`freerdp-tk.command`，需先清除下载文件的隔离属性，见下�
 | AV1 4:2:0 | 显卡带有 AV1 编码器时，通过 Media Foundation 在显卡上编码（已测试：NVIDIA 笔记本 GPU），否则使用 libaom | 通过 VA-API 在显卡上编码（尚未在真实 GPU 上验证），否则使用 libaom | libaom（没有 Apple 芯片能编码 AV1） |
 | 其他 | AV2（libavm）、Media Foundation 提供的 H.264 AVC420（供不支持 AV1 的客户端使用）、电脑的声音 | AV2、会话的声音（PipeWire）、通过 libei 输入按键 | AV2、VideoToolbox 提供的 H.264、Mac 的声音 |
 | 登录 | Windows 账户（网络级别身份验证） | 你自己的账户（PAM，通过 TLS）：会话管理器把你交给你自己的 GNOME；用户单元只接受桌面的所有者 | 本机的 macOS 账户（PAM，通过 TLS）：通过守护进程时，在登录窗口可以是除 root 以外的任何本机用户（之后像坐在 Mac 前一样在登录窗口登录），或者是控制台上的用户；LaunchAgent 只接受它自己的用户 |
-| 每次发布都在 CI 中测试 | Windows Server 2025（x86_64）和 Windows 11 on ARM：AV1、Windows 登录、Ctrl+Alt+Del、锁屏界面、FreeRDP Web | x86_64 和 ARM64 上的 GNOME 无显示器会话和 Xfce：会话管理器（已登录的和无显示器的 GNOME）、用户单元、AV1、AV2、按键、声音、拒绝其他账户 | GitHub 的 macOS runner：针对 LaunchAgent 的一次 AV1 会话和一次 AV2 会话，以及按下文安装的守护进程（runner 无法显示登录窗口） |
+| 每次发布都在 CI 中测试 | Windows Server 2025（x86_64）和 Windows 11 on ARM：AV1、Windows 登录、Ctrl+Alt+Del、锁屏界面、双显示器（x86_64）、FreeRDP Web | x86_64 和 ARM64 上的 GNOME 无显示器会话和 Xfce：会话管理器（已登录的和无显示器的 GNOME）、用户单元、AV1、AV2、按键、声音、拒绝其他账户 | GitHub 的 macOS runner：针对 LaunchAgent 的一次 AV1 会话和一次 AV2 会话，以及按下文安装的守护进程（runner 无法显示登录窗口） |
 
 ### 安装
 
@@ -130,8 +130,7 @@ sdl-freerdp /v:127.0.0.1:13388 /u:user
 - **保持屏幕自身的大小。** 显示器、它们的分辨率和缩放比例都保持电脑原样，
   客户端的窗口显示的就是那块屏幕，如果窗口较小则会缩小显示。
   客户端的 `/dynamic-resolution`、`/multimon` 布局和 HiDPI 缩放在这里都不起作用。
-- **只共享一个显示器。** 有多个显示器的电脑只共享其中一个
-  （用 `/monitors:<N>` 选择；默认是第一个）。
+- **多个显示器，客户端只有一个窗口。** Windows 默认共享所有显示器，在客户端的一个窗口里并排显示（`/monitors:<N>` 只共享其中一个，0 是主显示器）。Mac 只共享一个显示器。Linux 默认共享一个：在 X11 上用 `/monitors:all` 可以全部共享，GNOME（Mutter）会话只共享一个。客户端里每个显示器各开一个窗口的功能还没有。
 - **开启了 FileVault 的 Mac 重启后**，会在 macOS 启动之前显示磁盘解锁界面：任何 RDP 服务器都无法显示它
   （计划内的重启用 `sudo fdesetup authrestart`）。LaunchAgent 应用要在你登录之后才启动；守护进程会显示登录窗口。
 
