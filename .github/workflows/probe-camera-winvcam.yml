@@ -31,7 +31,7 @@ jobs:
           - runner: windows-11-arm # Windows 11 Enterprise on Arm, build 26200
             arch: arm64
     runs-on: ${{ matrix.runner }}
-    timeout-minutes: 20
+    timeout-minutes: 40
     env:
       OUT: ${{ github.workspace }}\probe-out
       PROBE: ${{ github.workspace }}\test\probe-camera-winvcam\probe-camera-winvcam.ps1
@@ -50,8 +50,8 @@ jobs:
         shell: pwsh
         run: '& $env:PROBE -Stage build -Arch ${{ matrix.arch }} -Out $env:OUT -Runner ${{ matrix.runner }}'
 
-      - name: 4. Read it in process, then as a virtual camera
-        timeout-minutes: 10
+      - name: 4. Read it in process, then as a virtual camera (DLL logs, PnP, event channels, WER)
+        timeout-minutes: 25
         shell: pwsh
         run: '& $env:PROBE -Stage probe -Arch ${{ matrix.arch }} -Out $env:OUT -Runner ${{ matrix.runner }}'
 

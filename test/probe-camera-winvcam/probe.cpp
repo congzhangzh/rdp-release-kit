@@ -45,6 +45,7 @@
 #include <cstdarg>
 #include <cstdio>
 #include <cwchar>
+#include <new>
 #include <string>
 #include <vector>
 
@@ -258,6 +259,130 @@ namespace
 		return pass;
 	}
 
+	/* ------------------------------------------------------------- Start's callback */
+
+	std::string GuidString(const GUID& g)
+	{
+		char text[64];
+		(void)snprintf(text, sizeof(text), "{%08lX-%04X-%04X-%02X%02X-%02X%02X%02X%02X%02X%02X}",
+		               static_cast<unsigned long>(g.Data1), g.Data2, g.Data3, g.Data4[0], g.Data4[1],
+		               g.Data4[2], g.Data4[3], g.Data4[4], g.Data4[5], g.Data4[6], g.Data4[7]);
+		return text;
+	}
+
+	/* IMFVirtualCamera::Start's callback: logs every event the pipeline sends (an
+	 * MEExtendedType with MF_FRAMESERVER_VCAMEVENT_EXTENDED_*, or an MEError) */
+	class StartCallback final : public IMFAsyncCallback
+	{
+	  public:
+		explicit StartCallback(const char* step)
+		{
+			(void)snprintf(step_, sizeof(step_), "%s", step);
+		}
+		STDMETHODIMP QueryInterface(REFIID riid, void** ppv) override
+		{
+			if (!ppv)
+				return E_POINTER;
+			if ((riid == __uuidof(IUnknown)) || (riid == __uuidof(IMFAsyncCallback)))
+			{
+				*ppv = static_cast<IMFAsyncCallback*>(this);
+				AddRef();
+				return S_OK;
+			}
+			*ppv = nullptr;
+			return E_NOINTERFACE;
+		}
+		STDMETHODIMP_(ULONG) AddRef() override
+		{
+			return static_cast<ULONG>(InterlockedIncrement(&refs_));
+		}
+		STDMETHODIMP_(ULONG) Release() override
+		{
+			const LONG refs = InterlockedDecrement(&refs_);
+			if (refs == 0)
+				delete this;
+			return static_cast<ULONG>(refs);
+		}
+		STDMETHODIMP GetParameters(DWORD*, DWORD*) override
+		{
+			return E_NOTIMPL;
+		}
+		STDMETHODIMP Invoke(IMFAsyncResult* result) override
+		{
+			if (!result)
+				return S_OK;
+			IUnknown* unknown = nullptr;
+			IMFMediaEvent* event = nullptr;
+			if (SUCCEEDED(result->GetObject(&unknown)) && unknown)
+				(void)unknown->QueryInterface(IID_PPV_ARGS(&event));
+			if (!event && unknown)
+				unknown->Release(), unknown = nullptr;
+			if (!event && SUCCEEDED(result->GetState(&unknown)) && unknown)
+				(void)unknown->QueryInterface(IID_PPV_ARGS(&event));
+			if (unknown)
+				unknown->Release();
+			if (!event)
+			{
+				Line(step_, "INFO", "Start callback: result status 0x%08lX, no IMFMediaEvent",
+				     static_cast<unsigned long>(result->GetStatus()));
+				return S_OK;
+			}
+			MediaEventType type = 0;
+			GUID extended = GUID_NULL;
+			HRESULT status = S_OK;
+			(void)event->GetType(&type);
+			(void)event->GetExtendedType(&extended);
+			(void)event->GetStatus(&status);
+			Line(step_, "INFO", "Start callback: event type %lu extended %s status 0x%08lX",
+			     static_cast<unsigned long>(type), GuidString(extended).c_str(),
+			     static_cast<unsigned long>(status));
+			event->Release();
+			return S_OK;
+		}
+
+	  private:
+		volatile LONG refs_ = 1;
+		char step_[64];
+	};
+
+	/* PROBECAM_ON_START_FAIL: a command line run (and waited for, 90 s at most) while a
+	 * camera whose Start failed still exists, "{step}" replaced by the step's name; the
+	 * workflow snapshots PnP devices and event logs with it */
+	void RunStartFailHook(const char* step)
+	{
+		wchar_t command[4096];
+		const DWORD length = GetEnvironmentVariableW(L"PROBECAM_ON_START_FAIL", command, ARRAYSIZE(command));
+		if ((length == 0) || (length >= ARRAYSIZE(command)))
+			return;
+		std::wstring line(command);
+		wchar_t tag[64];
+		size_t n = 0;
+		for (const char* p = step; *p && (n + 1 < ARRAYSIZE(tag)); p++)
+			tag[n++] = ((*p >= 'A' && *p <= 'Z') || (*p >= 'a' && *p <= 'z') || (*p >= '0' && *p <= '9'))
+			               ? static_cast<wchar_t>(*p)
+			               : L'-';
+		tag[n] = L'\0';
+		for (size_t at = line.find(L"{step}"); at != std::wstring::npos; at = line.find(L"{step}"))
+			line.replace(at, 6, tag);
+		STARTUPINFOW si = {};
+		si.cb = sizeof(si);
+		PROCESS_INFORMATION pi = {};
+		std::vector<wchar_t> buffer(line.begin(), line.end());
+		buffer.push_back(L'\0');
+		if (!CreateProcessW(nullptr, buffer.data(), nullptr, nullptr, FALSE, 0, nullptr, nullptr, &si, &pi))
+		{
+			Line(step, "INFO", "start-fail hook did not start: error %lu", GetLastError());
+			return;
+		}
+		const DWORD wait = WaitForSingleObject(pi.hProcess, 90000);
+		DWORD code = 0;
+		(void)GetExitCodeProcess(pi.hProcess, &code);
+		CloseHandle(pi.hThread);
+		CloseHandle(pi.hProcess);
+		Line(step, "INFO", "start-fail hook ran: %s, exit code %lu",
+		     (wait == WAIT_OBJECT_0) ? "finished" : "timed out", code);
+	}
+
 	/* ------------------------------------------------------------- the steps */
 
 	using CreateVirtualCameraFn = HRESULT(WINAPI*)(MFVirtualCameraType, MFVirtualCameraLifetime,
@@ -391,7 +516,7 @@ namespace
 	{
 		char step[64];
 		(void)snprintf(step, sizeof(step), "vcam[%s/%s]", AccessName(access), LifetimeName(lifetime));
-		Arm(step, 120, 3);
+		Arm(step, 300, 3); /* the start-fail hook may take 90 s */
 
 		IMFVirtualCamera* camera = nullptr;
 		HRESULT hr = create(MFVirtualCameraType_SoftwareCameraSource, lifetime, access,
@@ -406,8 +531,18 @@ namespace
 		}
 
 		bool pass = false;
-		hr = camera->Start(nullptr);
+		StartCallback* callback = new (std::nothrow) StartCallback(step);
+		hr = camera->Start(callback);
 		Line(step, SUCCEEDED(hr) ? "PASS" : "FAIL", "Start hr=0x%08lX", static_cast<unsigned long>(hr));
+		if (FAILED(hr))
+		{
+			RunStartFailHook(step);
+			/* transient? one more try after the snapshot */
+			Sleep(3000);
+			hr = camera->Start(callback);
+			Line(step, SUCCEEDED(hr) ? "PASS" : "FAIL", "Start again (after 3 s) hr=0x%08lX",
+			     static_cast<unsigned long>(hr));
+		}
 		if (SUCCEEDED(hr))
 		{
 			WCHAR* link = nullptr;
@@ -455,6 +590,8 @@ namespace
 		Line(step, SUCCEEDED(hr) ? "PASS" : "FAIL", "Remove hr=0x%08lX", static_cast<unsigned long>(hr));
 		(void)camera->Shutdown();
 		camera->Release();
+		if (callback)
+			callback->Release();
 		Disarm();
 		return pass;
 	}
