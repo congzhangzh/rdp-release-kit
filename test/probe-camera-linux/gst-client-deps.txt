@@ -1,0 +1,5 @@
+# Ubuntu 24.04 packages of the CI-only gst client (build-gst-client.sh): built and run with them
+build-essential cmake ninja-build pkg-config git libssl-dev zlib1g-dev
+libx11-dev libxext-dev libxi-dev libxrender-dev libxfixes-dev libxkbfile-dev libxcursor-dev
+libxrandr-dev libxinerama-dev libxdamage-dev libxv-dev libxtst-dev libjson-c-dev liburiparser-dev
+libavcodec-dev libavutil-dev libswscale-dev libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev

@@ -1,0 +1,329 @@
+# Probe (branch probe-camera-linux only; publishes nothing, no secrets, uploads logs): the Linux
+# host's virtual camera, FreeRDP's shadow server camera (WITH_SHADOW_CAMERA, server/shadow/camera,
+# freerdp-comp-camera-g1's shadow lane), on a hosted Ubuntu runner with v4l2loopback. The Linux CI
+# gate of the camera's receiving side.
+#  - host: the kit's Linux host (build.sh HOST=1) as the release builds it, twice from the same
+#    FreeRDP commit: plain, and with CAMERA=1 (a probe-only switch in build.sh and
+#    build/build-sdl3-client.sh): -DWITH_SHADOW_CAMERA=ON -DCHANNEL_RDPECAM_SERVER=ON and a static
+#    LGPL FFmpeg 8.1.3 (sources.lock) of the h264 and mjpeg decoders and the h264 parser alone
+#    (configure must say LGPL 2.1, those decoders, no encoder); the release's checks on both
+#    (check-portable.sh inside the build, check-no-ffmpeg.sh here); their sizes compared (sizes).
+#  - client: the kit's Linux client with CAMERA=1: -DCHANNEL_RDPECAM=ON -DCHANNEL_RDPECAM_CLIENT=ON
+#    -DWITH_RDPECAM_UVC_H264=OFF, the V4L2 backend (the shipped configuration); the same checks.
+#  - gst-client: CI only, never shipped: xfreerdp with the GStreamer backend, built natively
+#    against Ubuntu's packages, whose FFmpeg (GPL, libx264) encodes H.264 for the h264 case.
+#  - test-ubuntu-module: no module (nodevice: exactly the PO's "camera: no v4l2loopback device; no camera. Load the module: …" line, the host
+#    runs), then Ubuntu's own v4l2loopback (fallback: exactly one line that it can't tell its
+#    readers, the camera on while connected, an app reads >= 60 changing frames).
+#  - test-source-module: v4l2loopback built from its source tag (0.15.4, CI only, a GPL module
+#    never in an archive): ondemand (no Start Streams before an app reads, Start when it opens the
+#    camera, Stop ~500 ms after it closes it, twice, the client's log agreeing), mjpg (the client's
+#    camera offers MJPG, the host decodes it), h264 (the CI-only client).
+# In each test the client's camera is /dev/video40, a second loopback device fed by GStreamer's
+# videotestsrc; the host writes /dev/video41 ("FreeRDP Camera"), which v4l2-ctl reads as an app
+# would (test/probe-camera-linux/). The host runs on its own Xvfb with /subsystem:x11.
+# Artifacts: logs (7 days); the packages the tests need (1 day).
+name: probe-camera-linux
+
+on:
+  push:
+    branches: [probe-camera-linux]
+
+permissions:
+  contents: read
+
+env:
+  FREERDP_REPO: https://github.com/congzhangzh/FreeRDP.git
+  FREERDP_BRANCH: feature-camera-shadow
+  # the probed commit, fixed: the branch may move on (stacked on feature-camera-unix)
+  FREERDP_SHA: 9164681573fbf6cfae5d85a401bfc2206c75fac2
+  # v4l2loopback with client usage events (0.13.0 and later), by its tag's commit
+  V4L2LOOPBACK_TAG: v0.15.4
+  V4L2LOOPBACK_SHA: 0f9ee86760b7f2bea174b7e3e7a1d38845da0ab4
+
+jobs:
+  host:
+    strategy:
+      fail-fast: false
+      matrix:
+        variant: [plain, camera]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Cache sources
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/rdp-release-kit/sources
+          key: sources-probe-camera-linux-${{ hashFiles('sources.lock') }}
+          restore-keys: sources-
+
+      - name: Cache compiled objects
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/rdp-release-kit/ccache
+          key: ccache-probe-camera-linux-host-${{ matrix.variant }}-${{ github.sha }}
+          restore-keys: |
+            ccache-probe-camera-linux-host-${{ matrix.variant }}-
+            ccache-linux-host-X64-
+
+      # both FreeRDP lines (the client's, the host's): the probed commit, in the job's copy of
+      # sources.lock (overrides are refused on CI)
+      - name: FreeRDP from the fork, the probed commit
+        run: test/probe-camera-linux/pin-freerdp.sh logs
+
+      - name: The Linux host (${{ matrix.variant }})
+        env:
+          CCACHE_MAXSIZE: 1G
+          HOST: "1"
+          CAMERA: ${{ matrix.variant == 'camera' && '1' || '' }}
+        run: ./build.sh dist 2>&1 | tee logs/build.txt
+
+      - name: The release's checks, and the sizes
+        run: |
+          mkdir -p scan
+          cp dist/freerdp-host-*.tar.xz scan/
+          build/check-no-ffmpeg.sh scan 2>&1 | tee logs/check-no-ffmpeg.txt
+          tar -C scan -xJf scan/freerdp-host-*.tar.xz
+          bin=$(ls -d scan/freerdp-host-*/bin)
+          for tool in freerdp-shadow-cli freerdp-shadow-sesman winpr-hash; do
+              build/check-portable.sh "$bin/$tool" 2.34 \
+                  'libpam\.so\.0|libsystemd\.so\.0|libpipewire-0\.3\.so\.0|libX11\.so\.6|libXext\.so\.6|libXdamage\.so\.1|libXfixes\.so\.3|libXinerama\.so\.1|libXtst\.so\.6' |
+                  tee -a logs/check-portable.txt
+          done
+          {
+              echo "variant=${{ matrix.variant }}"
+              echo "tarball=$(stat -c %s dist/freerdp-host-*.tar.xz)"
+              echo "shadow_cli=$(stat -c %s "$bin/freerdp-shadow-cli")"
+              echo "unpacked=$(du -sb scan/freerdp-host-*/ | cut -f1)"
+          } | tee logs/sizes.txt
+          sed -n '/^sources/,$p' scan/freerdp-host-*/MANIFEST | tee logs/manifest-sources.txt
+          if [ "${{ matrix.variant }}" = camera ]; then
+              grep -q 'camera: no v4l2loopback device' "$bin/freerdp-shadow-cli"
+              find scan/freerdp-host-*/licenses/ffmpeg -type f | tee -a logs/sizes.txt
+          elif grep -q 'camera: no v4l2loopback device' "$bin/freerdp-shadow-cli"; then
+              echo "the plain host has the camera" >&2
+              exit 1
+          fi
+
+      - name: The build's logs
+        if: always()
+        run: |
+          mkdir -p logs/build
+          cp ~/.cache/rdp-release-kit/work-*-host/log/*.log logs/build/ 2> /dev/null || true
+          grep -E '^(WITH_SHADOW_CAMERA|CHANNEL_RDPECAM_SERVER|WITH_VIDEO_FFMPEG|WITH_SWSCALE|AVCODEC_LIBRARIES|WITH_SHADOW_MUTTER):' \
+              ~/.cache/rdp-release-kit/work-*-host/build/freerdp_linux_host/CMakeCache.txt > logs/camera-cache.txt 2>&1 || true
+          sed -n '1,/^Enabled/p;/^Enabled decoders:/,/^$/p;/^Enabled parsers:/,/^$/p;/^Enabled encoders:/,/^$/p' \
+              logs/build/ffmpeg.log > logs/ffmpeg-summary.txt 2> /dev/null || true
+
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: probe-camera-linux-host-${{ matrix.variant }}-logs
+          path: logs
+          retention-days: 7
+      - uses: actions/upload-artifact@v7
+        with:
+          name: probe-camera-linux-host-${{ matrix.variant }}
+          path: dist/freerdp-host-*.tar.xz
+          if-no-files-found: error
+          retention-days: 1
+
+  client:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 150
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Cache sources
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/rdp-release-kit/sources
+          key: sources-probe-camera-linux-${{ hashFiles('sources.lock') }}
+          restore-keys: sources-
+
+      - name: Cache compiled objects
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/rdp-release-kit/ccache
+          key: ccache-probe-camera-linux-client-${{ github.sha }}
+          restore-keys: |
+            ccache-probe-camera-linux-client-
+            ccache-linux-X64-
+
+      - name: FreeRDP from the fork, the probed commit
+        run: test/probe-camera-linux/pin-freerdp.sh logs
+
+      - name: The Linux client, camera redirection on
+        env:
+          CCACHE_MAXSIZE: 1G
+          CAMERA: "1"
+        run: ./build.sh dist 2>&1 | tee logs/build.txt
+
+      - name: The release's checks
+        run: |
+          mkdir -p scan
+          cp dist/sdl3-freerdp-*.tar.xz scan/
+          build/check-no-ffmpeg.sh scan 2>&1 | tee logs/check-no-ffmpeg.txt
+          tar -C scan -xJf scan/sdl3-freerdp-*.tar.xz
+          exe=$(find scan -name sdl-freerdp -type f | head -1)
+          build/check-portable.sh "$exe" 2>&1 | tee logs/check-portable.txt
+          grep -E 'RDPECAM|WITH_V4L' scan/sdl3-freerdp-*/MANIFEST | tee logs/camera-buildconfig.txt || true
+          grep -a -q 'rdpecam-v4l.client' "$exe"
+          echo "tarball=$(stat -c %s dist/sdl3-freerdp-*.tar.xz)" | tee logs/sizes.txt
+
+      - name: The build's logs
+        if: always()
+        run: |
+          mkdir -p logs/build
+          cp ~/.cache/rdp-release-kit/work-x86_64/log/*.log logs/build/ 2> /dev/null || true
+          grep -E '^(CHANNEL_RDPECAM(_CLIENT)?|WITH_RDPECAM_[A-Z0-9_]+|V4L_INCLUDE_DIR):' \
+              ~/.cache/rdp-release-kit/work-x86_64/build/freerdp/CMakeCache.txt > logs/camera-cache.txt 2>&1 || true
+
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: probe-camera-linux-client-logs
+          path: logs
+          retention-days: 7
+      - uses: actions/upload-artifact@v7
+        with:
+          name: probe-camera-linux-client
+          path: dist/sdl3-freerdp-*.tar.xz
+          if-no-files-found: error
+          retention-days: 1
+
+  gst-client:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+      - name: FreeRDP, the probed commit
+        run: |
+          mkdir -p logs
+          git init -q freerdp
+          git -C freerdp fetch -q --depth 1 "$FREERDP_REPO" "$FREERDP_SHA"
+          git -C freerdp checkout -q FETCH_HEAD
+          git -C freerdp rev-parse HEAD | tee logs/freerdp-commit.txt
+          [ "$(git -C freerdp rev-parse HEAD)" = "$FREERDP_SHA" ]
+      - name: Ubuntu's packages
+        run: |
+          sudo apt-get update -q
+          # shellcheck disable=SC2046,SC2024  # one package per word; the log is ours
+          sudo apt-get install -y -q --no-install-recommends $(grep -v '^#' test/probe-camera-linux/gst-client-deps.txt) \
+              > logs/apt.log 2>&1
+      - name: The CI-only client (xfreerdp, GStreamer backend)
+        run: test/probe-camera-linux/build-gst-client.sh freerdp gst-client 2>&1 | tee logs/build.txt
+      - name: Logs
+        if: always()
+        run: cp gst-client/*.log logs/ 2> /dev/null || true
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: probe-camera-linux-gst-client-logs
+          path: logs
+          retention-days: 7
+      - uses: actions/upload-artifact@v7
+        with:
+          name: probe-camera-linux-gst-client
+          path: gst-client/xfreerdp
+          if-no-files-found: error
+          retention-days: 1
+
+  sizes:
+    needs: [host]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: probe-camera-linux-host-*-logs
+      - name: The host tarball, without and with the camera
+        run: |
+          get() { sed -n "s/^$2=//p" "probe-camera-linux-host-$1-logs/sizes.txt"; }
+          {
+              echo "| | plain | camera | difference |"
+              echo "|---|---|---|---|"
+              for what in tarball shadow_cli unpacked; do
+                  a=$(get plain $what) b=$(get camera $what)
+                  echo "| $what | $a | $b | $((b - a)) ($(awk "BEGIN { printf \"%+.1f %%\", ($b - $a) * 100 / $a }")) |"
+              done
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+
+  test-ubuntu-module:
+    needs: [host, client]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        with:
+          name: probe-camera-linux-host-camera
+          path: dl/host
+      - uses: actions/download-artifact@v8
+        with:
+          name: probe-camera-linux-client
+          path: dl/client
+      - name: Tools and the packages
+        run: test/probe-camera-linux/runner-setup.sh out
+      - name: "nodevice: no v4l2loopback"
+        run: test/probe-camera-linux/camera-e2e.sh nodevice dl/host/pkg dl/client/pkg/bin/sdl-freerdp out/nodevice
+      - name: Ubuntu's v4l2loopback
+        run: test/probe-camera-linux/module.sh ubuntu out/module
+      - name: "fallback: a module that can't tell its readers"
+        run: test/probe-camera-linux/camera-e2e.sh fallback dl/host/pkg dl/client/pkg/bin/sdl-freerdp out/fallback
+      - name: Results
+        if: always()
+        run: cat out/*/result.txt | tee -a "$GITHUB_STEP_SUMMARY" || true
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: probe-camera-linux-test-ubuntu-module
+          path: out
+          retention-days: 7
+
+  test-source-module:
+    needs: [host, client, gst-client]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        with:
+          name: probe-camera-linux-host-camera
+          path: dl/host
+      - uses: actions/download-artifact@v8
+        with:
+          name: probe-camera-linux-client
+          path: dl/client
+      - uses: actions/download-artifact@v8
+        with:
+          name: probe-camera-linux-gst-client
+          path: dl/gst-client
+      - name: Tools and the packages
+        run: |
+          test/probe-camera-linux/runner-setup.sh out
+          # the CI-only client runs with the packages it was built with
+          # shellcheck disable=SC2046,SC2024  # one package per word; the log is ours
+          sudo apt-get install -y -q --no-install-recommends $(grep -v '^#' test/probe-camera-linux/gst-client-deps.txt) \
+              > out/apt-gst-client.log 2>&1
+          chmod +x dl/gst-client/xfreerdp
+      - name: v4l2loopback from its source tag
+        run: test/probe-camera-linux/module.sh source out/module
+      - name: "ondemand: the client's camera runs only while an app reads"
+        run: test/probe-camera-linux/camera-e2e.sh ondemand dl/host/pkg dl/client/pkg/bin/sdl-freerdp out/ondemand
+      - name: "mjpg: the host decodes the client's MJPG"
+        if: always()
+        run: test/probe-camera-linux/camera-e2e.sh mjpg dl/host/pkg dl/client/pkg/bin/sdl-freerdp out/mjpg
+      - name: "h264: the host decodes H.264 (CI-only client)"
+        if: always()
+        run: test/probe-camera-linux/camera-e2e.sh h264 dl/host/pkg dl/gst-client/xfreerdp out/h264
+      - name: Results
+        if: always()
+        run: cat out/*/result.txt | tee -a "$GITHUB_STEP_SUMMARY" || true
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: probe-camera-linux-test-source-module
+          path: out
+          retention-days: 7

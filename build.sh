@@ -6,6 +6,8 @@
 #
 # Sources are downloaded once into ~/.cache/rdp-release-kit/sources;
 # compiled objects are kept by ccache in ~/.cache/rdp-release-kit/ccache.
+# CAMERA=1 (probe-camera-linux only) adds the camera: the shadow server's virtual camera to the
+# host, camera redirection (rdpecam, V4L2) to the client (build/build-sdl3-client.sh).
 # HOST=1 builds the Linux host instead (freerdp-host-<version>-linux-<arch>.tar.xz:
 # FreeRDP's shadow server for GNOME and X11 desktops, build/build-sdl3-client.sh),
 # in the same image with the host's headers on top (build/linux/host.Dockerfile).
@@ -59,6 +61,6 @@ fi
 # the single quotes are for the container's shell
 # shellcheck disable=SC2016
 "$ENGINE" run --rm -e GITHUB_SHA="${GITHUB_SHA:-$(git -C "$KIT" rev-parse HEAD 2> /dev/null)}" -v "$KIT":/kit:ro -v "$SOURCES":/sources -v "$OUT":/out -v "$WORK":/work \
-    "${CACHE[@]}" "${OVERRIDE[@]}" -e OWNER="$(owner)" -e HOST="${HOST:-}" "$IMAGE" \
+    "${CACHE[@]}" "${OVERRIDE[@]}" -e OWNER="$(owner)" -e HOST="${HOST:-}" -e CAMERA="${CAMERA:-}" "$IMAGE" \
     bash -c '/kit/build/build-sdl3-client.sh /kit /sources /out; rc=$?;
              [ -z "$OWNER" ] || chown -R "$OWNER" /out /work ${CCACHE_DIR:-}; exit $rc'

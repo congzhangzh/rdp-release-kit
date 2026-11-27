@@ -95,6 +95,57 @@ if [ -n "${HOST:-}" ]; then
     # applications copy PNG, an RDP client asks for a bitmap
     cmake_dep libpng -DPNG_SHARED=OFF -DPNG_STATIC=ON -DPNG_TESTS=OFF -DPNG_TOOLS=OFF
 
+    # probe-camera-linux only (CAMERA=1; not for main as it is): the shadow server's virtual
+    # camera (WITH_SHADOW_CAMERA, FreeRDP's server/shadow/camera): a client's camera (MS-RDPECAM)
+    # written to a v4l2loopback device. It decodes H.264 with FreeRDP's H.264 decoder and MJPG
+    # with freerdp_video_sample_convert, both through a static FFmpeg built as the client's
+    # below, with the same guards: LGPL 2.1, the h264 and mjpeg decoders and the h264 parser
+    # alone, no encoder (so the host still offers no H.264: freerdp_codec_supported() probes the
+    # encoder at run time), avcodec, avutil and swscale, no programs
+    CAMERA_OPTS=()
+    if [ -n "${CAMERA:-}" ]; then
+        if ! built ffmpeg; then
+            src=$(unpack ffmpeg)
+            rm -rf "$WORK/build/ffmpeg"
+            mkdir -p "$WORK/build/ffmpeg"
+            FFCC=()
+            [ ${#LAUNCHER[@]} = 0 ] || FFCC=(--cc="ccache ${CC:-gcc}")
+            (cd "$WORK/build/ffmpeg" && "$src/configure" --prefix="$DEPS" --libdir="$DEPS/lib" "${FFCC[@]}" \
+                --enable-static --disable-shared --enable-pic \
+                --disable-gpl --disable-nonfree --disable-version3 \
+                --disable-autodetect --enable-pthreads --disable-everything \
+                --disable-programs --disable-doc --disable-network \
+                --disable-avformat --disable-avdevice --disable-avfilter --disable-swresample \
+                --enable-avcodec --enable-avutil --enable-swscale \
+                --enable-decoder=h264,mjpeg --enable-parser=h264) > "$WORK/log/ffmpeg.log" 2>&1
+            ffcheck() {  # ffcheck <what> <ERE that a line of configure's summary must match>
+                grep -q -E "$2" "$WORK/log/ffmpeg.log" ||
+                    { echo "ffmpeg: configure does not say $1 (log/ffmpeg.log)" >&2; exit 1; }
+            }
+            ffcheck "LGPL 2.1" '^License: LGPL version 2\.1 or later$'
+            ffcheck pthreads '^threading support +pthreads$'
+            case $(uname -m) in
+                x86_64) ffcheck "nasm" '^x86 assembler +nasm$' ;;
+                aarch64) ffcheck "NEON" '^NEON enabled +yes$' ;;
+            esac
+            ffsection() { sed -n "/^Enabled $1:\$/,/^\$/p" "$WORK/log/ffmpeg.log" | sed 1d | xargs; }
+            [ "$(ffsection decoders)" = "h264 mjpeg" ] ||
+                { echo "ffmpeg: decoders: '$(ffsection decoders)', not h264 and mjpeg alone (log/ffmpeg.log)" >&2; exit 1; }
+            [ "$(ffsection parsers)" = "h264" ] ||
+                { echo "ffmpeg: parsers: '$(ffsection parsers)', not h264 alone (log/ffmpeg.log)" >&2; exit 1; }
+            [ -z "$(ffsection encoders)" ] || { echo "ffmpeg: encoders enabled: $(ffsection encoders)" >&2; exit 1; }
+            echo "== ffmpeg (camera): LGPL 2.1, decoders $(ffsection decoders), parsers $(ffsection parsers)"
+            make -C "$WORK/build/ffmpeg" -j"$JOBS" install >> "$WORK/log/ffmpeg.log" 2>&1
+            stamp ffmpeg
+        fi
+        # as the client: libavutil.a after libswscale.a, and libm, at the end of every link line
+        FFLIBS="$DEPS/lib/libavutil.a -lm -pthread"
+        CAMERA_OPTS=(-DCMAKE_C_STANDARD_LIBRARIES="$FFLIBS" -DCMAKE_CXX_STANDARD_LIBRARIES="$FFLIBS"
+            -DWITH_SHADOW_CAMERA=ON -DCHANNEL_RDPECAM=ON -DCHANNEL_RDPECAM_SERVER=ON
+            -DWITH_FFMPEG=ON -DWITH_VIDEO_FFMPEG=ON -DWITH_SWSCALE=ON -DWITH_SWSCALE_LOADING=OFF
+            -DWITH_DSP_FFMPEG=OFF -DWITH_FFMPEG_HWACCEL=OFF)
+    fi
+
     FREERDP=freerdp_linux_host
     host_source "$FREERDP"
     if overridden "$FREERDP"; then
@@ -136,7 +187,17 @@ if [ -n "${HOST:-}" ]; then
         -DWITH_SYSTEMD=ON -DWITH_UNICODE_BUILTIN=ON -DWITH_INTERNAL_MD4=ON \
         -DWITH_INTERNAL_RC4=ON -DWITH_SSO_MIB=OFF -DCHANNEL_URBDRC=OFF \
         -DWITHOUT_WINPR_3x_DEPRECATED=ON -DWITHOUT_FREERDP_3x_DEPRECATED=ON \
-        -DWITH_MANPAGES=OFF "${DEV[@]}" > "$WORK/log/freerdp.log" 2>&1
+        -DWITH_MANPAGES=OFF "${CAMERA_OPTS[@]}" "${DEV[@]}" > "$WORK/log/freerdp.log" 2>&1
+    # CAMERA=1: the camera is in, with our static LGPL FFmpeg and never a library of the image
+    if [ -n "${CAMERA:-}" ]; then
+        for found in "WITH_SHADOW_CAMERA:BOOL=ON" "CHANNEL_RDPECAM_SERVER:BOOL=ON" \
+            "WITH_SHADOW_MUTTER:BOOL=ON" "WITH_VIDEO_FFMPEG:BOOL=ON" "WITH_SWSCALE:BOOL=ON" \
+            "AVCODEC_LIBRARIES:FILEPATH=$DEPS/lib/libavcodec.a" "AVUTIL_LIBRARIES:FILEPATH=$DEPS/lib/libavutil.a" \
+            "SWSCALE_LIBRARIES:FILEPATH=$DEPS/lib/libswscale.a"; do
+            grep -q -x -F "$found" "$WORK/build/$FREERDP/CMakeCache.txt" ||
+                { echo "HOST=1 CAMERA=1: no $found in the CMake cache (log/freerdp.log)" >&2; exit 1; }
+        done
+    fi
     # what the host must have found: both subsystems' libraries and the encoders
     for found in PIPEWIRE SYSTEMD LIBEI PC_AOM PC_AVM; do
         grep -q "^${found}_FOUND:INTERNAL=1" "$WORK/build/$FREERDP/CMakeCache.txt" ||
@@ -176,6 +237,18 @@ if [ -n "${HOST:-}" ]; then
     # -W: names not cut short; grep without -q reads it all (pipefail)
     readelf -W --dyn-syms "$PKG/bin/freerdp-shadow-cli" | grep ' sd_journal_stream_fd' > /dev/null ||
         { echo "HOST=1: no journald appender in freerdp-shadow-cli (sd_journal_stream_fd)" >&2; exit 1; }
+    # CAMERA=1: the camera's code is in the server, the FFmpeg it links says LGPL 2.1, and its
+    # licence goes with it (LICENSE.md and the LGPL 2.1 only, as the client's)
+    if [ -n "${CAMERA:-}" ]; then
+        grep -a -q -F "camera: no v4l2loopback device" "$PKG/bin/freerdp-shadow-cli" ||
+            { echo "HOST=1 CAMERA=1: no camera in freerdp-shadow-cli" >&2; exit 1; }
+        for lib in avcodec avutil swscale; do
+            grep -a -q -F "lib$lib license: LGPL version 2.1 or later" "$DEPS/lib/lib$lib.a" ||
+                { echo "ffmpeg: lib$lib.a does not say LGPL 2.1" >&2; exit 1; }
+        done
+        mkdir -p "$PKG/licenses/ffmpeg"
+        cp "$WORK/src/ffmpeg/LICENSE.md" "$WORK/src/ffmpeg/COPYING.LGPLv2.1" "$PKG/licenses/ffmpeg/"
+    fi
     cp "$KIT/build/linux/freerdp-shadow.service" "$KIT/build/linux/freerdp-shadow-sesman.service" "$PKG/"
     cp "$KIT/build/linux/host-README.txt" "$PKG/README.txt"
     licenses "$PKG/licenses" "$FREERDP" openssl opus dav1d aom avm libei libpng zlib jansson
@@ -189,9 +262,11 @@ if [ -n "${HOST:-}" ]; then
         manifest_kit_line
         manifest_upstream_line
         echo "sources (sources.lock):"
-        for name in "$FREERDP" openssl opus dav1d aom avm libei libpng zlib jansson; do
+        for name in "$FREERDP" openssl opus dav1d aom avm libei libpng zlib jansson ${CAMERA:+ffmpeg}; do
             printf '  %-18s %-10s %s %s\n' "$name" "${VERSION[$name]}" "${SHA[$name]}" "$(manifest_url "$name")"
         done
+        [ -z "${CAMERA:-}" ] ||
+            echo "ffmpeg configuration: $(sed -n 's/^#define FFMPEG_CONFIGURATION "\(.*\)"$/\1/p' "$WORK/build/ffmpeg/config.h")"
         echo
         echo "from the host (readelf -d bin/freerdp-shadow-cli):"
         readelf -d "$PKG/bin/freerdp-shadow-cli" | sed -n 's/.*(NEEDED).*\[\(.*\)\]/  \1/p'
@@ -307,6 +382,15 @@ fi
 # the end of every link line (CMAKE_<LANG>_STANDARD_LIBRARIES; without it the link misses
 # av_csp_* in libswscale's format.o)
 FFLIBS="$DEPS/lib/libavutil.a -lm -pthread"
+# probe-camera-linux only (CAMERA=1; not for main as it is): camera redirection, the rdpecam client
+# channel with its V4L2 backend, without libusb (WITH_RDPECAM_UVC_H264=OFF: no libusb-1.0.so to
+# need; the formats V4L2 lists, MJPG and H.264 included, are passed through as they are). The
+# movie and GStreamer backends are off by name: neither would be found (no avformat, no GStreamer
+# under /deps), but their options would stay ON in the cache and in /buildconfig
+CAMERA_CLIENT_OPTS=()
+[ -z "${CAMERA:-}" ] ||
+    CAMERA_CLIENT_OPTS=(-DCHANNEL_RDPECAM=ON -DCHANNEL_RDPECAM_CLIENT=ON -DWITH_RDPECAM_UVC_H264=OFF
+        -DWITH_RDPECAM_MOVIE=OFF -DWITH_RDPECAM_GSTREAMER=OFF)
 configure "$WORK/build/freerdp" env PKG_CONFIG_LIBDIR="$DEPS/lib/pkgconfig" \
     cmake -G Ninja -S "$src" -B "$WORK/build/freerdp" -DCMAKE_BUILD_TYPE=Release "${LAUNCHER[@]}" \
     -DCMAKE_INSTALL_PREFIX=/opt/freerdp -DCMAKE_PREFIX_PATH=$DEPS \
@@ -326,8 +410,17 @@ configure "$WORK/build/freerdp" env PKG_CONFIG_LIBDIR="$DEPS/lib/pkgconfig" \
     -DWITH_GFX_AV2=ON -DWITH_AVM=ON \
     -DWITH_SYSTEMD=OFF -DWITH_UNICODE_BUILTIN=ON -DWITH_INTERNAL_MD4=ON \
     -DWITH_INTERNAL_RC4=ON -DWITH_SSO_MIB=OFF -DCHANNEL_URBDRC=OFF \
-    -DWITH_MANPAGES=OFF "${DEV[@]}" > "$WORK/log/freerdp.log" 2>&1
+    -DWITH_MANPAGES=OFF "${CAMERA_CLIENT_OPTS[@]}" "${DEV[@]}" > "$WORK/log/freerdp.log" 2>&1
 grep -q -e "AV1 decoder: dav1d" -e "configuration kept" "$WORK/log/freerdp.log"
+# CAMERA=1: the camera channel and its V4L2 backend (only the kernel's videodev2.h); no movie
+# or GStreamer backend (no avformat, no GStreamer under /deps)
+if [ -n "${CAMERA:-}" ]; then
+    for found in "CHANNEL_RDPECAM_CLIENT:BOOL=ON" "WITH_RDPECAM_UVC_H264:BOOL=OFF" \
+        "WITH_RDPECAM_MOVIE:BOOL=OFF" "WITH_RDPECAM_GSTREAMER:BOOL=OFF"; do
+        grep -q -x -F "$found" "$WORK/build/freerdp/CMakeCache.txt" ||
+            { echo "CAMERA=1: no $found in the CMake cache (log/freerdp.log)" >&2; exit 1; }
+    done
+fi
 # AV1 4:2:0 on the GPU through VA-API (libva loaded at run time: only its headers here, from
 # the image's libva-devel), dav1d as the fallback per stream
 grep -q -e "AV1 decoder: VA-API first" -e "configuration kept" "$WORK/log/freerdp.log"
@@ -337,6 +430,14 @@ grep -q -e "AV1 decoder: VA-API first" -e "configuration kept" "$WORK/log/freerd
 for found in "AVCODEC_LIBRARIES:FILEPATH=$DEPS/lib/libavcodec.a" "AVUTIL_LIBRARIES:FILEPATH=$DEPS/lib/libavutil.a" \
     "SWSCALE_LIBRARIES:FILEPATH=$DEPS/lib/libswscale.a" "WITH_GFX_AZURE:BOOL=ON" "WITH_VIDEO_FFMPEG:BOOL=ON" \
     "WITH_GFX_H264_DEFAULT:BOOL=OFF"; do
+    # CAMERA=1 (probe-camera-linux only): the camera branch is older than the release's FreeRDP
+    # and has no WITH_GFX_H264_DEFAULT yet (the cache keeps it as UNINITIALIZED, an option CMake
+    # does not know), so its client offers H.264 by default; said, not fatal
+    if [ -n "${CAMERA:-}" ] && [ "$found" = "WITH_GFX_H264_DEFAULT:BOOL=OFF" ] &&
+        ! grep -q '^WITH_GFX_H264_DEFAULT:BOOL=' "$WORK/build/freerdp/CMakeCache.txt"; then
+        echo "CAMERA=1: this FreeRDP has no WITH_GFX_H264_DEFAULT, its client offers H.264 by default (probe only)"
+        continue
+    fi
     grep -q -x -F "$found" "$WORK/build/freerdp/CMakeCache.txt" ||
         { echo "freerdp: no $found in its CMake cache (log/freerdp.log)" >&2; exit 1; }
 done
@@ -352,6 +453,11 @@ rm -rf "$WORK/pkg"
 mkdir -p "$PKG/bin" "$PKG/licenses"
 cp "$STAGE/opt/freerdp/bin/sdl-freerdp" "$PKG/bin/"
 strip --strip-debug "$PKG/bin/sdl-freerdp"
+# CAMERA=1: the V4L2 backend is in the client
+if [ -n "${CAMERA:-}" ]; then
+    grep -a -q -F "rdpecam-v4l.client" "$PKG/bin/sdl-freerdp" ||
+        { echo "CAMERA=1: no rdpecam v4l backend in sdl-freerdp" >&2; exit 1; }
+fi
 # the libavcodec it links (ours, by the CMake cache check above) is LGPL: what avcodec_license()
 # returns. Looked for in the library, not the client: a static link takes only what is called,
 # and FreeRDP calls neither avcodec_license() nor avcodec_configuration(), so their strings are
