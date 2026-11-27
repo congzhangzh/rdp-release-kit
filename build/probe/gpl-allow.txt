@@ -1,0 +1,4 @@
+# GPL code that build/check-no-ffmpeg.sh lets through, one archive glob per line, then why.
+# A match turns that archive's GPL hits into a warning shown in every round, instead of a failure.
+# Every line here is a decision of the product owner; remove it to make the check fail again.
+xrdp[_-]0.* xrdp's H.264 encoder: x264 (GPL-2.0-or-later) linked statically (build/build-xrdp-pkg.sh); found 2026-11-27, product owner's decision pending

@@ -1,0 +1,135 @@
+name: probe-hevc
+
+# Probe only (branch probe-hevc-client-ffmpeg), not part of a release: the Linux client with
+# FFmpeg's LGPL HEVC decoder, before and after, on one runner per architecture.
+#  - before: main's build of the client, as released today;
+#  - after: this branch's build, with FreeRDP from the fork branch feature-hevc-client-ffmpeg
+#    (the freerdp line of sources.lock moved to its head for this run: what a pin bump does;
+#    a SRC_freerdp override is refused in CI and would also compress the archive faster);
+#  - the sizes of both, the release check build/probe/check-no-ffmpeg.sh (a copy of the RM's
+#    a5b6108) on both, and test/hevc-session.sh with both clients against the CI-only HEVC
+#    sender (GPL FFmpeg + libx265, in its image only).
+# Uploads logs, sizes and the session's logs and screenshots only: no archive.
+on:
+  push:
+    branches: [probe-hevc-client-ffmpeg]
+  workflow_dispatch:
+    inputs:
+      freerdp_ref:
+        description: "Branch or commit of congzhangzh/FreeRDP for the after build"
+        type: string
+        default: feature-hevc-client-ffmpeg
+
+permissions:
+  contents: read
+
+jobs:
+  client:
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-24.04, ubuntu-24.04-arm]
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 300
+    env:
+      FREERDP_REPO: https://github.com/congzhangzh/FreeRDP.git
+      FREERDP_REF: ${{ inputs.freerdp_ref || 'd7a4bbee96185787c7a1c678534fd8ece33736b6' }}  # fork feature-hevc-client-ffmpeg, the probed commit
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          path: after
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+          path: before
+
+      - name: Cache sources
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/rdp-release-kit/sources
+          key: sources-probe-hevc-${{ hashFiles('after/sources.lock', 'before/sources.lock') }}
+          restore-keys: sources-
+      - name: Cache compiled objects
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/rdp-release-kit/ccache
+          key: ccache-probe-hevc-${{ runner.arch }}-${{ github.sha }}
+          restore-keys: |
+            ccache-probe-hevc-${{ runner.arch }}-
+            ccache-linux-${{ runner.arch }}-
+
+      # the work tree is shared: after reuses before's dependencies (their stamps are by
+      # SHA-256 and compiler) and builds FFmpeg and FreeRDP again
+      - name: Build before (main)
+        env:
+          CCACHE_MAXSIZE: 1G
+        run: |
+          rc=0
+          (cd before && ./build.sh "$GITHUB_WORKSPACE/out/before") || rc=$?
+          cp -r ~/.cache/rdp-release-kit/work-$(uname -m)/log "$GITHUB_WORKSPACE/out/before-log" || true
+          exit $rc
+
+      - name: Pin FreeRDP to ${{ env.FREERDP_REF }} (this run only)
+        run: |
+          sha=$(git ls-remote "$FREERDP_REPO" "refs/heads/$FREERDP_REF" | cut -f1)
+          [ -n "$sha" ] || sha=$FREERDP_REF
+          [[ $sha =~ ^[0-9a-f]{40}$ ]] || { echo "no commit for $FREERDP_REF" >&2; exit 1; }
+          sed -i -E "s|^freerdp +[^ ]+ +git\+[^ ]+ +[0-9a-f]{40}$|freerdp     probe-${sha:0:9} git+$FREERDP_REPO $sha|" after/sources.lock
+          grep -q "^freerdp     probe-${sha:0:9} git+$FREERDP_REPO $sha$" after/sources.lock
+          echo "FreeRDP for after: $FREERDP_REF = $sha" | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Build after (this branch)
+        env:
+          CCACHE_MAXSIZE: 1G
+        run: |
+          rc=0
+          (cd after && ./build.sh "$GITHUB_WORKSPACE/out/after") || rc=$?
+          cp -r ~/.cache/rdp-release-kit/work-$(uname -m)/log "$GITHUB_WORKSPACE/out/after-log" || true
+          exit $rc
+
+      - name: Sizes
+        run: |
+          size() {  # size <archive>: archive bytes, unpacked bytes, bin/sdl-freerdp bytes
+            local f=$1
+            printf '%s %s %s\n' "$(stat -c %s "$f")" \
+              "$(xz -l --robot "$f" | awk '$1 == "totals" { print $5 }')" \
+              "$(tar -tvJf "$f" | awk '$NF ~ /\/bin\/sdl-freerdp$/ { print $3 }')"
+          }
+          b=$(ls out/before/sdl3-freerdp-*.tar.xz); a=$(ls out/after/sdl3-freerdp-*.tar.xz)
+          read -r bt bu bb < <(size "$b"); read -r at au ab < <(size "$a")
+          {
+            echo "| $(uname -m) | archive | unpacked | bin/sdl-freerdp |"
+            echo "|---|---|---|---|"
+            echo "| before $(basename "$b") | $bt | $bu | $bb |"
+            echo "| after $(basename "$a") | $at | $au | $ab |"
+            echo "| change | $((at - bt)) ($(( (at - bt) * 1000 / bt )) ‰) | $((au - bu)) | $((ab - bb)) |"
+          } | tee out/sizes.md >> "$GITHUB_STEP_SUMMARY"
+          cat out/sizes.md
+          tar -xJOf "$a" --wildcards '*/MANIFEST' > out/after-MANIFEST
+          tar -xJOf "$b" --wildcards '*/MANIFEST' > out/before-MANIFEST
+
+      # the RM's release check (a5b6108, probe copy): no ffmpeg program and no GPL code in what
+      # would ship; out/after holds the client archive alone (the sender never leaves its image)
+      - name: No GPL code in the archives (build/probe/check-no-ffmpeg.sh)
+        run: |
+          command -v rpm2cpio > /dev/null || { sudo apt-get update -qq && sudo apt-get install -y -qq rpm2cpio; }
+          after/build/probe/check-no-ffmpeg.sh out/before
+          after/build/probe/check-no-ffmpeg.sh out/after
+
+      - name: HEVC against the CI-only sender (test/hevc-session.sh)
+        timeout-minutes: 60
+        run: >
+          after/test/hevc-session.sh "$(ls out/after/sdl3-freerdp-*.tar.xz)"
+          "$(ls out/before/sdl3-freerdp-*.tar.xz)" out/hevc-session
+
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: probe-hevc-${{ runner.arch == 'ARM64' && 'aarch64' || 'x86_64' }}
+          path: |
+            out/sizes.md
+            out/*-MANIFEST
+            out/before-log
+            out/after-log
+            out/hevc-session
+          retention-days: 7

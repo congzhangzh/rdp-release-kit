@@ -226,6 +226,49 @@ if ! built libfuse; then
     stamp libfuse
 fi
 
+# FFmpeg, the client's HEVC decoder (software; /gfx:HEVC asks for it, AV1 stays the default)
+# and its H.264 one (AVC, offered only when asked: WITH_GFX_H264_DEFAULT=OFF below). LGPL 2.1
+# only, never GPL, nonfree or version 3; the decoders and parsers of the two codecs alone,
+# static, no programs. libswscale too: FreeRDP's h264_ffmpeg.c needs it (WITH_SWSCALE stays
+# OFF, that is FreeRDP's own image scaling). Its SIMD code stays on: nasm on x86_64 (in the
+# image), NEON on aarch64, picked at run time for the CPU. --disable-autodetect also turns
+# the threads off, so pthreads by name: HEVC decodes on several cores. The build stops
+# unless configure says LGPL 2.1, pthreads, the assembly, these two decoders and no encoder;
+# its summary (the CPU extensions compiled in) stays at the top of log/ffmpeg.log
+if ! built ffmpeg; then
+    src=$(unpack ffmpeg)
+    rm -rf "$WORK/build/ffmpeg"
+    mkdir -p "$WORK/build/ffmpeg"
+    FFCC=()
+    [ ${#LAUNCHER[@]} = 0 ] || FFCC=(--cc="ccache ${CC:-gcc}")
+    (cd "$WORK/build/ffmpeg" && "$src/configure" --prefix="$DEPS" --libdir="$DEPS/lib" "${FFCC[@]}" \
+        --enable-static --disable-shared --enable-pic \
+        --disable-gpl --disable-nonfree --disable-version3 \
+        --disable-autodetect --enable-pthreads --disable-everything \
+        --disable-programs --disable-doc --disable-network \
+        --disable-avformat --disable-avdevice --disable-avfilter --disable-swresample \
+        --enable-avcodec --enable-avutil --enable-swscale \
+        --enable-decoder=hevc,h264 --enable-parser=hevc,h264) > "$WORK/log/ffmpeg.log" 2>&1
+    ffcheck() {  # ffcheck <what> <ERE that a line of configure's summary must match>
+        grep -q -E "$2" "$WORK/log/ffmpeg.log" ||
+            { echo "ffmpeg: configure does not say $1 (log/ffmpeg.log)" >&2; exit 1; }
+    }
+    ffcheck "LGPL 2.1" '^License: LGPL version 2\.1 or later$'
+    ffcheck pthreads '^threading support +pthreads$'
+    case $(uname -m) in
+        x86_64) ffcheck "nasm" '^x86 assembler +nasm$' ;;
+        aarch64) ffcheck "NEON" '^NEON enabled +yes$' ;;
+    esac
+    ffsection() { sed -n "/^Enabled $1:\$/,/^\$/p" "$WORK/log/ffmpeg.log" | sed 1d | xargs; }
+    [ "$(ffsection decoders)" = "h264 hevc" ] ||
+        { echo "ffmpeg: decoders: '$(ffsection decoders)', not h264 and hevc alone (log/ffmpeg.log)" >&2; exit 1; }
+    [ -z "$(ffsection encoders)" ] || { echo "ffmpeg: encoders enabled: $(ffsection encoders)" >&2; exit 1; }
+    echo "== ffmpeg: LGPL 2.1, $(grep -E '^(runtime cpu detection|x86 assembler|AVX2 enabled|AVX-512 enabled|NEON enabled) ' \
+        "$WORK/log/ffmpeg.log" | sed -E 's/  +/ /' | paste -sd, -)"
+    make -C "$WORK/build/ffmpeg" -j"$JOBS" install >> "$WORK/log/ffmpeg.log" 2>&1
+    stamp ffmpeg
+fi
+
 # FreeRDP: only the SDL3 client. Its native X11/Wayland helpers would make
 # libX11 and libwayland-client hard dependencies, so they are hidden (the
 # client then uses SDL's own window handling for RAIL moves). MD4 and RC4
@@ -254,19 +297,31 @@ if overridden freerdp; then
     fi
 fi
 # PKG_CONFIG_LIBDIR: pkg-config sees /deps only, so FreeRDP does not find
-# the host's wayland-client either
+# the host's wayland-client either.
+# FFmpeg: HEVC through the GFX channel's Azure extension (WITH_GFX_AZURE), decoded by
+# libavcodec (WITH_VIDEO_FFMPEG; no sound through it, WITH_DSP_FFMPEG=OFF, which would also
+# want libswresample). H.264 is built but offered only when asked for (/gfx:AVC420 or AVC444,
+# /gfx-codec-order): WITH_GFX_H264_DEFAULT=OFF, so a client given no codec offers what it did
+# before FFmpeg came in. FreeRDP's FindFFmpeg finds the static libraries by name, in the order
+# avcodec, avutil, swscale, and libswscale.a needs libavutil.a after it, and libm: both go at
+# the end of every link line (CMAKE_<LANG>_STANDARD_LIBRARIES; without it the link misses
+# av_csp_* in libswscale's format.o)
+FFLIBS="$DEPS/lib/libavutil.a -lm -pthread"
 configure "$WORK/build/freerdp" env PKG_CONFIG_LIBDIR="$DEPS/lib/pkgconfig" \
     cmake -G Ninja -S "$src" -B "$WORK/build/freerdp" -DCMAKE_BUILD_TYPE=Release "${LAUNCHER[@]}" \
     -DCMAKE_INSTALL_PREFIX=/opt/freerdp -DCMAKE_PREFIX_PATH=$DEPS \
     -DCMAKE_SKIP_RPATH=ON -DBUILD_SHARED_LIBS=OFF -DBUILD_TESTING=OFF \
     -DCMAKE_EXE_LINKER_FLAGS="-static-libstdc++" \
+    -DCMAKE_C_STANDARD_LIBRARIES="$FFLIBS" -DCMAKE_CXX_STANDARD_LIBRARIES="$FFLIBS" \
     -DOPENSSL_ROOT_DIR=$DEPS -DOPENSSL_USE_STATIC_LIBS=ON \
     -DCMAKE_DISABLE_FIND_PACKAGE_X11=ON \
     -DWITH_CLIENT=ON -DWITH_CLIENT_SDL=ON -DWITH_CLIENT_SDL3=ON -DWITH_CLIENT_SDL2=OFF \
     -DWITH_SDL_LINK_SHARED=OFF -DWITH_X11=OFF -DWITH_WAYLAND=OFF \
     -DWITH_SERVER=OFF -DWITH_SAMPLE=OFF \
     -DWITH_PULSE=ON -DWITH_ALSA=OFF -DWITH_OSS=OFF -DWITH_CUPS=OFF -DWITH_PCSC=OFF \
-    -DWITH_KRB5=OFF -DWITH_FUSE=ON -DWITH_FFMPEG=OFF -DWITH_SWSCALE=OFF \
+    -DWITH_KRB5=OFF -DWITH_FUSE=ON -DWITH_SWSCALE=OFF \
+    -DWITH_FFMPEG=ON -DWITH_VIDEO_FFMPEG=ON -DWITH_DSP_FFMPEG=OFF -DWITH_FFMPEG_HWACCEL=OFF \
+    -DWITH_GFX_AZURE=ON -DWITH_GFX_H264_DEFAULT=OFF \
     -DWITH_OPENH264=OFF -DWITH_GFX_AV1=ON -DWITH_DAV1D=ON -DWITH_AV1_VAAPI=ON -DWITH_OPUS=ON \
     -DWITH_GFX_AV2=ON -DWITH_AVM=ON \
     -DWITH_SYSTEMD=OFF -DWITH_UNICODE_BUILTIN=ON -DWITH_INTERNAL_MD4=ON \
@@ -276,6 +331,15 @@ grep -q -e "AV1 decoder: dav1d" -e "configuration kept" "$WORK/log/freerdp.log"
 # AV1 4:2:0 on the GPU through VA-API (libva loaded at run time: only its headers here, from
 # the image's libva-devel), dav1d as the fallback per stream
 grep -q -e "AV1 decoder: VA-API first" -e "configuration kept" "$WORK/log/freerdp.log"
+# HEVC and H.264 through our static LGPL FFmpeg, never a library of the image; H.264 not
+# offered by default (a FreeRDP without WITH_GFX_H264_DEFAULT would offer it: CMake only
+# warns about an option it does not know, so the cache must have it)
+for found in "AVCODEC_LIBRARIES:FILEPATH=$DEPS/lib/libavcodec.a" "AVUTIL_LIBRARIES:FILEPATH=$DEPS/lib/libavutil.a" \
+    "SWSCALE_LIBRARIES:FILEPATH=$DEPS/lib/libswscale.a" "WITH_GFX_AZURE:BOOL=ON" "WITH_VIDEO_FFMPEG:BOOL=ON" \
+    "WITH_GFX_H264_DEFAULT:BOOL=OFF"; do
+    grep -q -x -F "$found" "$WORK/build/freerdp/CMakeCache.txt" ||
+        { echo "freerdp: no $found in its CMake cache (log/freerdp.log)" >&2; exit 1; }
+done
 cmake --build "$WORK/build/freerdp" >> "$WORK/log/freerdp.log" 2>&1
 DESTDIR=$STAGE cmake --install "$WORK/build/freerdp" >> "$WORK/log/freerdp.log" 2>&1
 ccache_stats
@@ -288,9 +352,21 @@ rm -rf "$WORK/pkg"
 mkdir -p "$PKG/bin" "$PKG/licenses"
 cp "$STAGE/opt/freerdp/bin/sdl-freerdp" "$PKG/bin/"
 strip --strip-debug "$PKG/bin/sdl-freerdp"
+# the libavcodec it links (ours, by the CMake cache check above) is LGPL: what avcodec_license()
+# returns. Looked for in the library, not the client: a static link takes only what is called,
+# and FreeRDP calls neither avcodec_license() nor avcodec_configuration(), so their strings are
+# not in the client
+for lib in avcodec avutil swscale; do
+    grep -a -q -F "lib$lib license: LGPL version 2.1 or later" "$DEPS/lib/lib$lib.a" ||
+        { echo "ffmpeg: lib$lib.a does not say LGPL 2.1" >&2; exit 1; }
+done
 licenses "$PKG/licenses" freerdp sdl3 sdl3_ttf freetype openssl opus dav1d avm zlib jansson libfuse
 # its LICENSE points at this file, which licenses() does not match
 cp "$WORK/src/libfuse/LGPL2.txt" "$PKG/licenses/libfuse/"
+# FFmpeg: its LICENSE.md and the LGPL 2.1 it is built under; the GPL and LGPL 3 texts of its
+# source tree are left out (licenses() would take every COPYING*), none of that code is in
+mkdir -p "$PKG/licenses/ffmpeg"
+cp "$WORK/src/ffmpeg/LICENSE.md" "$WORK/src/ffmpeg/COPYING.LGPLv2.1" "$PKG/licenses/ffmpeg/"
 # shellcheck source=build/launcher.sh
 . "$KIT/build/launcher.sh"
 add_launcher "$PKG" linux "$ARCH"
@@ -305,9 +381,10 @@ check_launcher "$PKG"
     manifest_kit_line
     manifest_upstream_line
     echo "sources (sources.lock):"
-    for name in freerdp sdl3 sdl3_ttf freetype openssl opus dav1d avm zlib jansson libfuse; do
+    for name in freerdp sdl3 sdl3_ttf freetype openssl opus dav1d avm zlib jansson libfuse ffmpeg; do
         printf '  %-9s %-8s %s %s\n' "$name" "${VERSION[$name]}" "${SHA[$name]}" "$(manifest_url "$name")"
     done
+    echo "ffmpeg configuration: $(sed -n 's/^#define FFMPEG_CONFIGURATION "\(.*\)"$/\1/p' "$WORK/build/ffmpeg/config.h")"
     echo "$LAUNCHER_MANIFEST"
     echo
     "$PKG/bin/sdl-freerdp" /buildconfig 2> /dev/null | tr ' ' '\n' | grep -E '^WITH_' | sort
