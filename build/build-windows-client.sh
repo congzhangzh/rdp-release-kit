@@ -164,6 +164,22 @@ if [ -n "${HOST:-}" ]; then
           -DWITH_PLATFORM_SERVER=OFF -DWITH_SHADOW_WIN_DXGI=ON -DWITH_SHADOW_WIN_SERVICE=ON
           -DWITH_AOM=ON -DWITH_AOM_INTRABC_DV_FIX=ON -DWITH_WINPR_TOOLS=ON -DWITH_GFX_AV2=ON -DWITH_AVM=ON
           -DWITH_MEDIA_FOUNDATION=ON)
+    # the virtual camera: a client's camera (MS-RDPECAM) as "FreeRDP Camera" on the host
+    # (Windows build 22000 and later; MJPG with Windows' own decoder, H.264 with Media
+    # Foundation's), its media source freerdp-shadow-camera-source.dll in the package
+    # (OFF said, not left out: a local FreeRDP's kept build tree remembers an earlier ON)
+    if [ -n "${HOST_CAMERA:-}" ]; then
+        WHAT+=(-DWITH_SHADOW_CAMERA=ON -DCHANNEL_RDPECAM=ON)
+    else
+        WHAT+=(-DWITH_SHADOW_CAMERA=OFF)
+    fi
+fi
+
+# CLIENT_CAMERA=1 (CI probes only, never a release): camera redirection in the client, the
+# rdpecam client channel and its Media Foundation backend (sys:mf, loaded at run time, so
+# check-windows.sh still passes); the probe's test client plays a file as its camera
+if [ -z "${HOST:-}" ] && [ -n "${CLIENT_CAMERA:-}" ]; then
+    WHAT+=(-DCHANNEL_RDPECAM=ON -DCHANNEL_RDPECAM_CLIENT=ON)
 fi
 
 # FreeRDP: the SDL3 client only, static. Its fonts and icons are compiled
@@ -239,6 +255,14 @@ if [ -n "${HOST:-}" ]; then
         /llvm-mingw/bin/llvm-strip --strip-debug "$PKG/$tool.exe"
         "$KIT/build/check-windows.sh" "$PKG/$tool.exe"
     done
+    if [ -n "${HOST_CAMERA:-}" ]; then
+        # Frame Server loads it, where Media Foundation is (mfplat.dll is Windows' own)
+        f=$(find "$STAGE" -name "freerdp-shadow-camera-source.dll" | head -1)
+        [ -n "$f" ] || { echo "HOST_CAMERA=1: no freerdp-shadow-camera-source.dll in the build" >&2; exit 1; }
+        cp "$f" "$PKG/"
+        /llvm-mingw/bin/llvm-strip --strip-debug "$PKG/freerdp-shadow-camera-source.dll"
+        CHECK_WINDOWS_ALSO=mfplat "$KIT/build/check-windows.sh" "$PKG/freerdp-shadow-camera-source.dll"
+    fi
     licenses "$PKG/licenses" freerdp_host libressl opus dav1d aom avm zlib jansson llvm_mingw
     cp "$KIT/build/windows/host-README.txt" "$PKG/README.txt"
     {

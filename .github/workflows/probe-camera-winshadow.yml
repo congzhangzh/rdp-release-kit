@@ -1,0 +1,224 @@
+# probe-camera-winshadow: a record, not a kit test (yet). The shadow server's virtual camera on
+# the hosted Windows runners, as it would ship: the Windows host built with HOST_CAMERA=1
+# (WITH_SHADOW_CAMERA: "FreeRDP Camera", registered with MFCreateVirtualCamera, its media source
+# freerdp-shadow-camera-source.dll fed through a shared memory ring), run by
+# freerdp-shadow-service as SYSTEM, read by an app through Frame Server. freerdp-comp-camera-g1,
+# 2026-11-27 (W1, after W0 probe-camera-winvcam). Publishes nothing.
+#
+# Two FreeRDP pins, each written into the job's copy of sources.lock (overrides are refused on
+# CI; sources.lock is CI's only input), each a fixed commit of our fork:
+#  - the host: feature-camera-winshadow (the camera, on the shadow core's on-demand readers)
+#  - the CI-only test client: feature-camera-win (the rdpecam client channel's Media Foundation
+#    backend, sys:mf, whose file: plays a media file as the camera), built with CLIENT_CAMERA=1
+#    as probe-camera-win builds it; its exe and the test media (the CI's GPL FFmpeg, test data
+#    only) are 1-day artifacts, never in a zip
+# The checks (test/probe-camera-winshadow/probe-camera-winshadow.ps1):
+#  - windows-2025 (Server 2025, 26100) and windows-11-arm (26200): the registration as the SYSTEM
+#    service (its own row: the mode used, each mode's HRESULTs), the still read by an app, the
+#    readers counted, and on demand: no Start Streams before the app opens "FreeRDP Camera", Start
+#    Streams with it, moving frames, Stop Streams after
+#  - windows-2022 (Server 2022, 20348): the server says exactly why it has no camera and runs
+#    without one
+# The README's last camera sentence waits for the on-demand check (make-readme-camera.py).
+name: probe-camera-winshadow
+
+on:
+  push:
+    branches: [probe-camera-winshadow]
+
+permissions:
+  contents: read
+
+env:
+  FREERDP_REPO: https://github.com/congzhangzh/FreeRDP.git
+  # the host: the probed commit, fixed (the branch may move on)
+  HOST_BRANCH: feature-camera-winshadow
+  HOST_SHA: a216b0a9f4220e5bf897dfe4922c2c41ed6e57e3
+  # the test client with a camera of its own
+  CAMSRC_FREERDP_BRANCH: feature-camera-win
+  CAMSRC_FREERDP_COMMIT: 7e2cf4814995f99a8a8edd836bc20b323f625c0d
+
+jobs:
+  host:
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [x86_64, aarch64]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Cache sources
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/rdp-release-kit/sources
+          key: sources-probe-camera-winshadow-${{ hashFiles('sources.lock') }}
+          restore-keys: sources-
+
+      - name: Cache compiled objects
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/rdp-release-kit/ccache
+          key: ccache-probe-camera-winshadow-host-${{ matrix.arch }}-${{ github.sha }}
+          restore-keys: |
+            ccache-probe-camera-winshadow-host-${{ matrix.arch }}-
+            ccache-windows-host-${{ matrix.arch }}-
+
+      - name: FreeRDP for the host from the fork, the probed commit
+        run: |
+          mkdir -p logs
+          sha=$HOST_SHA
+          git ls-remote "$FREERDP_REPO" "refs/heads/$HOST_BRANCH" | tee logs/host-branch-head.txt
+          sed -i -E "s|^freerdp_host +[^ ]+ +git\+[^ ]+ +[0-9a-f]{40}\$|freerdp_host probe-${sha:0:9} git+$FREERDP_REPO $sha|" sources.lock
+          grep -E '^freerdp_host ' sources.lock | tee logs/host-probed.txt
+          grep -q " $sha\$" logs/host-probed.txt
+
+      - name: The Windows host ${{ matrix.arch }}, the camera on
+        env:
+          CCACHE_MAXSIZE: 1G
+          HOST: "1"
+          HOST_CAMERA: "1"
+        run: |
+          ./build-windows.sh ${{ matrix.arch }}
+          unzip -l dist/freerdp-host-*.zip | grep -E 'freerdp-shadow-(cli|service)\.exe|freerdp-shadow-camera-source\.dll' | tee logs/host-zip.txt
+          grep -q freerdp-shadow-camera-source.dll logs/host-zip.txt
+
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: probe-camera-winshadow-host-logs-${{ matrix.arch }}
+          path: logs
+          retention-days: 7
+      - uses: actions/upload-artifact@v7
+        with:
+          name: probe-camera-winshadow-host-${{ matrix.arch }}
+          path: dist/freerdp-host-*.zip
+          if-no-files-found: error
+          retention-days: 1
+
+  client:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Cache sources
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/rdp-release-kit/sources
+          key: sources-probe-camera-winshadow-${{ hashFiles('sources.lock') }}
+          restore-keys: sources-
+
+      - name: Cache compiled objects
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/rdp-release-kit/ccache
+          key: ccache-probe-camera-winshadow-client-x86_64-${{ github.sha }}
+          restore-keys: |
+            ccache-probe-camera-winshadow-client-x86_64-
+            ccache-probe-camera-win-x86_64-
+            ccache-windows-x86_64-
+
+      - name: FreeRDP for the test client from the fork, the probed commit
+        run: |
+          mkdir -p logs
+          sha=$CAMSRC_FREERDP_COMMIT
+          git ls-remote "$FREERDP_REPO" "refs/heads/$CAMSRC_FREERDP_BRANCH" | tee logs/client-branch-head.txt
+          sed -i -E "s|^freerdp +[^ ]+ +git\+[^ ]+ +[0-9a-f]{40}\$|freerdp     probe-${sha:0:9} git+$FREERDP_REPO $sha|" sources.lock
+          grep -E '^freerdp ' sources.lock | tee logs/client-probed.txt
+          grep -q " $sha\$" logs/client-probed.txt
+
+      # x86_64 only: Windows 11 on Arm runs it emulated, as probe-camera-win does
+      - name: The test client x86_64, camera redirection on (CLIENT_CAMERA=1, CI only)
+        env:
+          CCACHE_MAXSIZE: 1G
+          CLIENT_CAMERA: "1"
+        run: ./build-windows.sh x86_64
+
+      - name: The client's camera options, and its exe
+        run: |
+          build=~/.cache/rdp-release-kit/win-x86_64/build/freerdp/CMakeCache.txt
+          grep -E 'CHANNEL_RDPECAM(_CLIENT)?:BOOL|WITH_RDPECAM_MF:BOOL' "$build" | tee logs/rdpecam-configure.txt
+          grep -q 'CHANNEL_RDPECAM_CLIENT:BOOL=ON' "$build"
+          grep -q 'WITH_RDPECAM_MF:BOOL=ON' "$build"
+          mkdir -p unzipped camera-client
+          unzip -q dist/sdl3-freerdp-*-windows-x86_64.zip -d unzipped
+          exe=$(find unzipped -name sdl-freerdp.exe | head -1)
+          n=$(strings -a "$exe" | grep -c 'rdpecam-mf.client' || true)
+          echo "the mf backend's log tag in sdl-freerdp.exe: $n" | tee -a logs/rdpecam-configure.txt
+          [ "$n" -gt 0 ]
+          cp "$exe" camera-client/
+
+      - name: The test media (the CI's FFmpeg, test data only)
+        run: |
+          build/ci-ffmpeg.sh "$RUNNER_TEMP/ci-ffmpeg"
+          test/probe-camera-winshadow/make-test-media.sh "$RUNNER_TEMP/ci-ffmpeg/bin/ffmpeg" camera-client | tee logs/media.txt
+          rm -f camera-client/test.jpg
+
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: probe-camera-winshadow-client-logs
+          path: logs
+          retention-days: 7
+      - uses: actions/upload-artifact@v7
+        with:
+          name: probe-camera-winshadow-client
+          path: camera-client
+          if-no-files-found: error
+          retention-days: 1
+
+  probe:
+    needs: [host, client]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: windows-2025
+            arch: x86_64
+          - runner: windows-11-arm
+            arch: aarch64
+          - runner: windows-2022
+            arch: x86_64
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+    env:
+      OUT: ${{ github.workspace }}\probe-out
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        with:
+          name: probe-camera-winshadow-host-${{ matrix.arch }}
+          path: dl/host
+      - uses: actions/download-artifact@v8
+        with:
+          name: probe-camera-winshadow-client
+          path: dl/client
+
+      - name: The camera as the SYSTEM service registers it, read by an app, on demand
+        timeout-minutes: 20
+        shell: pwsh
+        run: |
+          $zip = (Get-ChildItem dl/host/*.zip | Select-Object -First 1).FullName
+          $client = (Resolve-Path dl/client/sdl-freerdp.exe).Path
+          $media = (Resolve-Path dl/client/test.mp4).Path
+          ./test/probe-camera-winshadow/probe-camera-winshadow.ps1 -HostZip $zip -Out $env:OUT `
+              -Client $client -ClientCamera "/dvc:rdpecam,sys:mf,file:$media,name:Kit Test Camera"
+
+      - name: Remove the service if a step stopped early
+        if: always()
+        shell: pwsh
+        run: |
+          $svc = Get-ChildItem probe-out/host -Recurse -Filter freerdp-shadow-service.exe -ErrorAction SilentlyContinue | Select-Object -First 1
+          if ($svc -and (Get-Service FreeRDPShadow -ErrorAction SilentlyContinue)) { & $svc.FullName uninstall }
+
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: probe-camera-winshadow-${{ matrix.runner }}
+          path: |
+            probe-out
+            !probe-out/host
+          retention-days: 7
+          if-no-files-found: warn

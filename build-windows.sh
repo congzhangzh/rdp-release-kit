@@ -9,6 +9,10 @@
 # KIT_CACHE=<dir> instead), compiled objects in its ccache directory.
 # HOST=1 builds the Windows host instead (dist/freerdp-host-<version>-windows-<arch>.zip:
 # FreeRDP's shadow server and freerdp-shadow-service, build/build-windows-client.sh).
+# HOST_CAMERA=1 (with HOST=1) adds the shadow server's virtual camera (WITH_SHADOW_CAMERA:
+# freerdp-shadow-camera-source.dll beside freerdp-shadow-cli.exe in the package).
+# CLIENT_CAMERA=1 (CI probes only, never a release): the client's camera redirection (the
+# rdpecam client channel, its Media Foundation backend sys:mf).
 # SRC_freerdp=<dir> builds FreeRDP from a local checkout, LTO=off then
 # without link-time optimisation (see build/overrides.sh; not for releases).
 set -euo pipefail
@@ -61,7 +65,8 @@ for arch in "${ARCHES[@]}"; do
     # shellcheck disable=SC2016
     if ! "$ENGINE" run --rm -e GITHUB_SHA="${GITHUB_SHA:-$(git -C "$KIT" rev-parse HEAD 2> /dev/null)}" -v "$KIT":/kit:ro -v "$SOURCES":/sources -v "$OUT":/out \
             -v "$work":/work "${CACHE[@]}" "${OVERRIDE[@]}" -e OWNER="$(owner)" -e ARCH="$arch" \
-            -e HOST="${HOST:-}" \
+            -e HOST="${HOST:-}" -e HOST_CAMERA="${HOST_CAMERA:-}" -e CLIENT_CAMERA="${CLIENT_CAMERA:-}" \
+            -e CMAKE_BUILD_PARALLEL_LEVEL="${CMAKE_BUILD_PARALLEL_LEVEL:-}" \
             "$IMAGE" \
             bash -c '/kit/build/build-windows-client.sh /kit /sources /out "$ARCH"; rc=$?;
                      [ -z "$OWNER" ] || chown -R "$OWNER" /out /work /sources ${CCACHE_DIR:-}
