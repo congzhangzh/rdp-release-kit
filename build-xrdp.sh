@@ -6,7 +6,8 @@
 #
 #   ./build-xrdp.sh [image ...]      default: every image in distros.list
 #
-# Packages go to dist/xrdp/<distro>/.
+# Packages go to dist/xrdp/<distro>/, their corresponding source (x264 is GPL) to
+# dist/xrdp/gpl-source/ (build/gpl-sources.sh).
 # Sources are downloaded once into ~/.cache/rdp-release-kit/sources; each
 # distribution keeps its own work tree in ~/.cache/rdp-release-kit/xrdp-<image>
 # (under KIT_CACHE=<dir> instead) and its compiled objects in its ccache
@@ -51,6 +52,9 @@ if [ "$(git -C "$KIT" rev-parse --is-shallow-repository 2> /dev/null)" = true ];
 fi
 KIT_REV=$(git -C "$KIT" rev-list --count HEAD 2> /dev/null) || KIT_REV=0
 echo "== packages: release 0kit$KIT_REV"
+# the kit commit, which the xrdp package's NOTICE.x264 names with the source assets
+# (build/gpl-sources.sh, below)
+KIT_SHA=$(git -C "$KIT" rev-parse HEAD 2> /dev/null) || KIT_SHA=unknown
 
 status=0
 for image in "${IMAGES[@]}"; do
@@ -83,7 +87,7 @@ for image in "${IMAGES[@]}"; do
     # shellcheck disable=SC2016
     if ! "$ENGINE" run --rm -v "$KIT":/kit:ro -v "$SOURCES":/sources -v "$OUT":/out \
             -v "$work":/work "${CACHE[@]}" "${OVERRIDE[@]}" -e OWNER="$(owner)" \
-            -e NO_AV1="$NO_AV1" -e NO_AV2="$NO_AV2" -e NO_SWAY="$NO_SWAY" -e NO_KDE="$NO_KDE" -e KIT_REV="$KIT_REV" "$builder" \
+            -e NO_AV1="$NO_AV1" -e NO_AV2="$NO_AV2" -e NO_SWAY="$NO_SWAY" -e NO_KDE="$NO_KDE" -e KIT_REV="$KIT_REV" -e KIT_SHA="$KIT_SHA" "$builder" \
             bash -c '/kit/build/build-xrdp-pkg.sh /kit /sources /out; rc=$?;
                      [ -z "$OWNER" ] || chown -R "$OWNER" /out /work /sources ${CCACHE_DIR:-}
                      exit $rc'; then
@@ -91,4 +95,12 @@ for image in "${IMAGES[@]}"; do
         status=1
     fi
 done
+# x264 is GPL-2.0-or-later and linked statically into xrdp (the product owner, 2026-11-27: we
+# keep it and comply): its corresponding source, xrdp's and the kit's build scripts, for the
+# release beside the packages, in dist/xrdp/gpl-source/ (build/gpl-sources.sh)
+if [ "$KIT_SHA" = unknown ]; then
+    echo "build-xrdp.sh: no git, so no source assets (dist/xrdp/gpl-source/): such a build is not released" >&2
+else
+    SOURCES=$SOURCES "$KIT/build/gpl-sources.sh" "$OUT/gpl-source" "$KIT_SHA" || status=1
+fi
 exit $status

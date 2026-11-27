@@ -496,9 +496,12 @@ jobs:
       - uses: actions/upload-artifact@v7
         with:
           name: ${{ steps.name.outputs.name }}
+          # with the corresponding source (x264 is GPL; build-xrdp.sh makes it in gpl-source/),
+          # so wherever the packages are released their source goes too
           path: |
             dist/xrdp/*/*.deb
             dist/xrdp/*/*.rpm
+            dist/xrdp/gpl-source/gpl-source-*.tar.xz
           if-no-files-found: error
           retention-days: 3
 
@@ -540,13 +543,17 @@ jobs:
           # names into '.': give the files those names first, so SHA256SUMS
           # matches what is downloaded
           mkdir -p upload
-          # PipeWire's xrdp module has its own pre-release (below)
-          find dist/xrdp -type f \( -name '*.deb' -o -name '*.rpm' \) \
+          # PipeWire's xrdp module has its own pre-release (below); the corresponding source
+          # (gpl-source-*, every job's the same) goes with the packages
+          find dist/xrdp -type f \( -name '*.deb' -o -name '*.rpm' -o -name 'gpl-source-*.tar.xz' \) \
               ! -name 'pipewire-module-xrdp-*' | while read -r f; do
             cp "$f" "upload/$(basename "$f" | tr '~+' '..')"
           done
-          (cd upload && sha256sum -- *.deb *.rpm > SHA256SUMS)
-          notes=$(build/release-notes.sh "xrdp $version, our release of xrdp (fork release-$version, commit $sha: its development branch with Wayland sessions for GNOME, KDE and sway, AV1 and pacing), and xorgxrdp's development branch, built and tested (an Xorg and a Wayland login) by rdp-release-kit $GITHUB_SHA. Published once, never replaced; the rolling release carries the same packages." xrdp)$'\n\n'"<!-- kit-key: $key -->"
+          (cd upload && sha256sum -- *.deb *.rpm gpl-source-*.tar.xz > SHA256SUMS)
+          # no GPL code without its source and licence (build/gpl-allow.txt)
+          command -v rpm2cpio > /dev/null || { sudo apt-get update -qq && sudo apt-get install -y -qq rpm2cpio; }
+          build/check-no-ffmpeg.sh upload
+          notes=$(build/release-notes.sh "xrdp $version, our release of xrdp (fork release-$version, commit $sha: its development branch with Wayland sessions for GNOME, KDE and sway, AV1 and pacing), and xorgxrdp's development branch, built and tested (an Xorg and a Wayland login) by rdp-release-kit $GITHUB_SHA. xrdp links x264 (GPL-2.0-or-later) statically: its source, the xrdp source and the kit's build scripts are the gpl-source-*.tar.xz assets (/usr/share/doc/xrdp/NOTICE.x264). Published once, never replaced; the rolling release carries the same packages." xrdp)$'\n\n'"<!-- kit-key: $key -->"
           build/publish-prerelease.sh "$tag" "$title" "$notes" upload/*
 
   # PipeWire's xrdp module for Fedora (Fedora does not package it): its own
@@ -725,8 +732,11 @@ jobs:
           tag=$(gh release list -R "$GITHUB_REPOSITORY" -L 1000 --json tagName,isPrerelease,isDraft,publishedAt \
             -q '[.[] | select(.isPrerelease and (.isDraft | not) and (.tagName | startswith("web-")))] | sort_by(.publishedAt) | last | .tagName')
           [ -n "$tag" ] || { echo "no web-* pre-release to take the xrdp packages from" >&2; exit 1; }
-          gh release download "$tag" -R "$GITHUB_REPOSITORY" -p '*.deb' -D dist/xrdp/debian-13
-          echo "xrdp packages of $tag:"; ls dist/xrdp/debian-13
+          # with their corresponding source (gpl-source-*, x264 is GPL), which the handoff carries on
+          gh release download "$tag" -R "$GITHUB_REPOSITORY" -p '*.deb' -p 'gpl-source-*.tar.xz' -D dist/xrdp/debian-13
+          mkdir -p dist/xrdp/gpl-source
+          find dist/xrdp/debian-13 -name 'gpl-source-*.tar.xz' -exec mv {} dist/xrdp/gpl-source/ \;
+          echo "xrdp packages of $tag:"; ls dist/xrdp/debian-13 dist/xrdp/gpl-source
 
       # the test driver uses Node's WebSocket (Node 22+); its checks use uvx
       - uses: actions/setup-node@v7
@@ -763,11 +773,13 @@ jobs:
           cp dist/wasm/freerdp-web-*.zip dist/handoff/freerdp-web-page.zip
           echo "$GITHUB_SHA" > dist/handoff/KIT_COMMIT
           # GitHub turns '~' in asset names into '.': name them so first
-          for f in dist/xrdp/debian-13/*.deb; do
+          for f in dist/xrdp/debian-13/*.deb dist/xrdp/gpl-source/gpl-source-*.tar.xz; do
             cp "$f" "dist/handoff/$(basename "$f" | tr '~+' '..')"
           done
           (cd dist/handoff && sha256sum freerdp-web-page.zip > freerdp-web-page.zip.sha256 &&
             sha256sum -- * > ../SHA256SUMS && mv ../SHA256SUMS .)
+          # the xrdp packages' x264 is GPL: never without its source and licence (build/gpl-allow.txt)
+          build/check-no-ffmpeg.sh dist/handoff
           notes=$(build/release-notes.sh "The web client for freerdp-web $page, built and tested (a browser login to xrdp over SSH) by rdp-release-kit $GITHUB_SHA. freerdp-web's workflow publishes it. Not a kit release. Published once, never replaced." web)$'\n\n'"<!-- kit-key: $key -->"
           build/publish-prerelease.sh "$tag" "$title" "$notes" dist/handoff/*
 
@@ -1077,7 +1089,8 @@ jobs:
           # every entry; an English text with no translation stays English (build/demo-i18n.py)
           build/demo-i18n.py dist/demo/demo.json
           # assets are flat and GitHub turns '~' and '+' into '.': name the
-          # files so first, so SHA256SUMS matches what is downloaded
+          # files so first, so SHA256SUMS matches what is downloaded. The xrdp packages'
+          # corresponding source (dist/gpl-source/gpl-source-*.tar.xz, x264 is GPL) is a .tar.xz too
           mkdir -p upload
           find dist -type f \( -name '*.tar.xz' -o -name '*.zip' -o -name '*.deb' -o -name '*.rpm' \
               -o -path 'dist/demo/*' \) \
@@ -1163,7 +1176,7 @@ jobs:
               --args $(cd upload && ls sdl3-freerdp-*-linux-*.tar.xz sdl3-freerdp-*-windows-*.zip sdl3-freerdp-*-macos-*.tar.xz) \
             > upload/install.json
           (cd upload && sha256sum install.json >> SHA256SUMS)
-          summary="Rolling release $tag of rdp-release-kit, built and tested from $GITHUB_SHA: FreeRDP's SDL3 client for Linux, Windows and macOS, built from our release of FreeRDP master ($freerdp, commit ${freerdp_commit:0:12}, with the fixes upstream has merged since its last release, such as the Opus microphone), each with freerdp-tk (a window to save and open connections) and the Python that runs it, and our xrdp for Debian, Ubuntu and Fedora (Xorg and Wayland sessions: GNOME, KDE, sway), on x86_64 and ARM64. Published once, never replaced.
+          summary="Rolling release $tag of rdp-release-kit, built and tested from $GITHUB_SHA: FreeRDP's SDL3 client for Linux, Windows and macOS, built from our release of FreeRDP master ($freerdp, commit ${freerdp_commit:0:12}, with the fixes upstream has merged since its last release, such as the Opus microphone), each with freerdp-tk (a window to save and open connections) and the Python that runs it, and our xrdp for Debian, Ubuntu and Fedora (Xorg and Wayland sessions: GNOME, KDE, sway), on x86_64 and ARM64. Published once, never replaced. xrdp links x264 (GPL-2.0-or-later) statically: its source, the xrdp source and the kit's build scripts are the \`gpl-source-*.tar.xz\` assets (\`/usr/share/doc/xrdp/NOTICE.x264\` in the package).
 
           ## Download and run
 

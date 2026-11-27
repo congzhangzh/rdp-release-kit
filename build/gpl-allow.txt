@@ -1,4 +1,7 @@
 # GPL code that build/check-no-ffmpeg.sh lets through, one archive glob per line, then why.
 # A match turns that archive's GPL hits into a warning shown in every round, instead of a failure.
 # Every line here is a decision of the product owner; remove it to make the check fail again.
-xrdp[_-]0.* xrdp's H.264 encoder: x264 (GPL-2.0-or-later) linked statically (build/build-xrdp-pkg.sh); found 2026-11-27, product owner's decision pending
+# An optional field after the glob makes the exception conditional (the GPL's terms, checked):
+#   sources=<glob>,<glob>...  the same upload must hold an asset matching each glob (the source)
+#   licence=<file name>       the archive itself must hold a file of that name (the licence)
+xrdp[_-]0.* sources=gpl-source-x264-*.tar.xz,gpl-source-xrdp-*.tar.xz,gpl-source-kit-build-*.tar.xz licence=LICENSE.x264 x264 in xrdp, GPL complied (source + licence shipped), PO 2026-11-27

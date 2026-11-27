@@ -255,6 +255,42 @@ rm -f "$SESSIONS"
 [ -z "$WLUP_GNOME" ] || grep -q '^\[GNOME\]$' "$INI"
 [ -z "$WLUP_KDE" ] || grep -q '^\[KDE\]$' "$INI"
 [ -n "$NO_SWAY" ] || grep -q '^\[Wayland\]$' "$INI"
+# x264 is GPL-2.0-or-later and linked statically into xrdp; the product owner decided
+# (2026-11-27) that we keep it and comply. The xrdp package carries x264's licence and says
+# where the corresponding source is: release assets beside the packages (build/gpl-sources.sh,
+# named by gpl_source_names). In the stage, so the .deb and the .rpm of every release get them
+DOC=$STAGE/xrdp/usr/share/doc/xrdp
+mkdir -p "$DOC"
+if overridden x264; then
+    cp "$WORK/src/x264/COPYING" "$DOC/LICENSE.x264"
+else
+    x264_src=$(fetch x264)
+    tar -xOf "$x264_src" x264/COPYING > "$DOC/LICENSE.x264"
+fi
+grep -q 'GNU GENERAL PUBLIC LICENSE' "$DOC/LICENSE.x264"
+read -r SRC_X264 SRC_XRDP SRC_KIT < <(gpl_source_names "${KIT_SHA:-unknown}")
+cat > "$DOC/NOTICE.x264" << EOF
+This xrdp package contains x264 (https://code.videolan.org/videolan/x264), commit
+${SHA[x264]}, linked statically into xrdp as its H.264 encoder.
+x264 is free software under the GNU General Public License, version 2 or later
+(GPL-2.0-or-later): LICENSE.x264 in this directory is its licence.
+
+The corresponding source is published with this package: the GitHub release of
+rdp-release-kit (https://github.com/congzhangzh/rdp-release-kit/releases) that
+holds this package also holds
+  $SRC_X264
+      x264's source, the commit above, exactly as the build fetched it
+  $SRC_XRDP
+      the source of xrdp (${VERSION[xrdp]}, commit ${SHA[xrdp]}),
+      its librfxcodec and libpainter, xorgxrdp and Opus, as fetched
+  $SRC_KIT
+      the scripts and patches that built this package: rdp-release-kit at
+      commit ${KIT_SHA:-unknown}
+EOF
+if [ -n "${OVERRIDES:-}" ]; then
+    printf '\nThis package is a local build, never published: %s came from local\ndirectories, not from the sources named above.\n' \
+        "$OVERRIDES" >> "$DOC/NOTICE.x264"
+fi
 XORG_ABI=$(pkg-config --variable=abi_videodrv xorg-server | cut -d. -f1)
 ARCH_DEB=$(dpkg --print-architecture 2> /dev/null || true)
 # N counts the kit's commits (build-xrdp.sh); a build with a local source
