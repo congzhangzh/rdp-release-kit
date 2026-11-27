@@ -94,8 +94,9 @@ AV2 from its fork release 20261030.1 (kit commit `b18b826`, release 20261031.3) 
 package whose release is not marked `no-av2` in `distros.list` (at that tag). The earlier libavm
 pins (20261030.1 to 20261031.1, from kit commit `1cec070`) were in the clients only, which
 contain no x264. Worked out from `git tag --contains` on each commit that moved the `avm` line
-(✅); each commit sits on a branch `release-<version>` of https://github.com/congzhangzh/avm
-(✅ `git ls-remote`, 2026-11-27: branches, not tags):
+(✅); each commit sits on a branch `release-<version>` of https://github.com/congzhangzh/avm,
+and since 2026-11-27 also has a lasting tag there, `gpl-source/libavm-<commit>` (✅ all eleven
+created and listed with the GitHub API, 2026-11-27):
 
 | Kit releases | libavm | Commit | Branch on the fork |
 |---|---|---|---|
@@ -112,8 +113,10 @@ contain no x264. Worked out from `git tag --contains` on each commit that moved 
 | 20261120.3 … 20261127.2 (43) | 20261119.6 | [`060f61204513`](https://github.com/congzhangzh/avm/commit/060f612045132f2b0ba747dc74de6ba09f69386b) | `release-20261119.6` |
 
 libavm 20261118.2 reached no kit release, only the pre-releases of kit commit `65313b1`
-(`xrdp-20261118.6-65313b15361a`, ✅ by its tag name). Branches can move or go, so these commits have no lasting name on
-the fork yet; a tag per commit (`gpl-source/libavm-<commit>`) would give them one.
+(`xrdp-20261118.6-65313b15361a`, ✅ by its tag name). Branches can move or go; the tags
+`gpl-source/libavm-<commit>` (e.g.
+https://github.com/congzhangzh/avm/tree/gpl-source/libavm-060f612045132f2b0ba747dc74de6ba09f69386b)
+are never moved or deleted, so each commit keeps a lasting name.
 
 ## Building a past release again
 
