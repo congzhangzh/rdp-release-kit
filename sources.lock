@@ -194,6 +194,13 @@ jansson     2.15.1   https://github.com/akheron/jansson/releases/download/v2.15.
 # file when it is read. Static, its library only (LGPL 2.1, licenses/libfuse/); the
 # host's fusermount3 does the mounting, and without it the client pastes no files
 libfuse     3.18.3   https://github.com/libfuse/libfuse/releases/download/fuse-3.18.3/fuse-3.18.3.tar.gz      bcd19582c5e30f7fe45dd86a5540e998590aa01903afc7ebcbeea6c8ac5421ee
+# FFmpeg, the Linux and Windows clients' HEVC (and H.264, offered only when asked) decoder
+# in software (on Windows when Media Foundation has none): libavcodec, libavutil and
+# libswscale, static, LGPL 2.1 (build-sdl3-client.sh and build-windows-client.sh stop unless
+# configure says so), the two decoders and parsers alone. The release tarball of ffmpeg.org,
+# its hash as downloaded on 2026-11-27, and its signature by FFmpeg's release key (signed.lock).
+# 8.1.3: the newest of the 8.1 line FreeRDP builds its mobile clients with (n8.1)
+ffmpeg      8.1.3    https://ffmpeg.org/releases/ffmpeg-8.1.3.tar.xz                                         7138d28c96d9d3e3af4ee3d8cad72741f8ffb40da90c1112235dea3ecd3178a3
 # libei, the Linux host's input through GNOME's RemoteDesktop (ConnectToEIS):
 # its client library, static (AlmaLinux 9 has none), by its release tag's commit
 libei       1.6.0    git+https://gitlab.freedesktop.org/libinput/libei.git                                   8a46bf3d4b6af7f25a61be53386cf618218114ef
