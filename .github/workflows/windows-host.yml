@@ -80,6 +80,9 @@ jobs:
       - name: The demo media
         if: matrix.arch == 'x86_64'
         run: |
+          # on a cache miss demo-assets.sh cuts the clip with ffmpeg, which the runner lacks: the
+          # CI-only static FFmpeg (build/ci-ffmpeg.sh; never in a release, check-no-ffmpeg.sh)
+          build/ci-ffmpeg.sh "$HOME/.cache/ci-ffmpeg" > /dev/null && PATH=$HOME/.cache/ci-ffmpeg/bin:$PATH
           dir=$(test/demo-assets.sh)
           mkdir -p dist/demo-media
           cp "$dir/bunny.webm" dist/demo-media/

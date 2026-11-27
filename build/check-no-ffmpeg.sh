@@ -22,7 +22,9 @@ status=0
 shopt -s nullglob
 gpl='libav[a-z]+ license: (GPL|nonfree)|--enable-(gpl|nonfree|libx264|libx265)\b|x264_encoder_open|x265_encoder_open|x265_api_get|H\.264/MPEG-4 AVC codec - Copy'
 allow=$(dirname "$0")/gpl-allow.txt
-tmp=$(mktemp -d "${RUNNER_TEMP:-${TMPDIR:-$HOME/tmp}}/check-no-ffmpeg.XXXXXX")
+base=${RUNNER_TEMP:-${TMPDIR:-$HOME/tmp}}
+mkdir -p "$base"
+tmp=$(mktemp -d "$base/check-no-ffmpeg.XXXXXX")
 trap 'rm -rf "$tmp"' EXIT
 # the source assets the allowed GPL code needs ("<glob> <archive>", from sources= of its allow line)
 needs=()
@@ -62,7 +64,7 @@ for f in "$dir"/*.tar.xz "$dir"/*.zip "$dir"/*.deb "$dir"/*.rpm; do
         *.tar.xz) tar -xJf "$f" -C "$out" ;;
         *.zip) unzip -q "$f" -d "$out" ;;
         *.deb) dpkg-deb -x "$f" "$out" ;;
-        *.rpm) if command -v rpm2cpio > /dev/null; then (cd "$out" && rpm2cpio "$f" | cpio -idm --quiet); else
+        *.rpm) if command -v rpm2cpio > /dev/null; then (abs=$(realpath "$f") && cd "$out" && rpm2cpio "$abs" | cpio -idm --quiet); else
                    echo "::error::check-no-ffmpeg: no rpm2cpio to look inside $(basename "$f")"; status=1; fi ;;
     esac
     while IFS= read -r -d '' bin; do
