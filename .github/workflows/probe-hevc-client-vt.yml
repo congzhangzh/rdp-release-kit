@@ -1,0 +1,107 @@
+# probe-hevc-client-vt: a record, not a kit test. Does FreeRDP's VideoToolbox decode HEVC 4:2:0
+# (freerdp-comp-hevc-g1, fork branch feature-hevc-client-vt, 2026-11-27, on the RM's go) on the
+# macOS runner the kit's mac-host-test uses? Publishes nothing; the artifact carries the logs.
+#   before: the base (fork release-20261126.1) with only the new test: it must FAIL (VideoToolbox
+#           refuses HEVC, and the kit's Mac client shape has no FFmpeg, so there is no decoder)
+#   A: the fix, the Mac client's shape + WITH_GFX_AZURE (VideoToolbox, no FFmpeg): VideoToolbox
+#      encodes and decodes, the test names the decoder, the gdi HEVC path counts a picture
+#   C: the fix without WITH_GFX_AZURE (the kit's Mac client today): it builds, H.264 passes
+name: probe-hevc-client-vt
+
+on:
+  push:
+    branches: [probe-hevc-client-vt]
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: macos-15
+    timeout-minutes: 40
+    env:
+      FREERDP_REPO: https://github.com/congzhangzh/FreeRDP.git
+      FREERDP_BASE: 19d87eca38c9b7c1771e994fbbc38089ee01a3d8
+      FREERDP_SHA: 02d1abc1993d2aa83e722a46575b8fcbbf26dd47
+      HOMEBREW_NO_AUTO_UPDATE: 1
+      HOMEBREW_NO_INSTALL_CLEANUP: 1
+      OUT: ${{ github.workspace }}/probe-out
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: FreeRDP, the base and the fix
+        run: |
+          mkdir -p "$OUT"
+          for d in base:$FREERDP_BASE fix:$FREERDP_SHA; do
+            dir=${d%%:*}; sha=${d#*:}
+            git init -q $dir
+            git -C $dir fetch -q --depth 1 "$FREERDP_REPO" "$sha" && git -C $dir checkout -q FETCH_HEAD
+            test "$(git -C $dir rev-parse HEAD)" = "$sha"
+            echo "$dir $(git -C $dir log -1 --format='%H %s')" | tee -a "$OUT/SOURCE_COMMIT"
+          done
+          # before = the base with only the new test
+          cp fix/libfreerdp/codec/test/TestFreeRDPCodecHEVC.c base/libfreerdp/codec/test/
+
+      - name: Tools
+        run: |
+          command -v ninja || brew install --quiet ninja
+          brew list openssl@3 > /dev/null 2>&1 || brew install --quiet openssl@3
+          sw_vers | tee "$OUT/sw_vers.txt"; sysctl -n machdep.cpu.brand_string | tee -a "$OUT/sw_vers.txt"
+
+      - name: VideoToolbox decoders of this runner
+        run: |
+          clang -O1 probe/vt-decoders.c -o vt-decoders -framework VideoToolbox -framework CoreMedia
+          ./vt-decoders | tee "$OUT/vt-decoders.txt"
+
+      - name: Configure helper
+        run: |
+          cat > "$RUNNER_TEMP/conf.sh" << 'EOS'
+          # conf.sh <source> <build> <ON|OFF>: the kit Mac client's codec shape (VideoToolbox, no FFmpeg)
+          set -euo pipefail
+          cmake -G Ninja -S "$1" -B "$2" -DCMAKE_BUILD_TYPE=Debug -DBUILD_TESTING=ON -DBUILD_TESTING_INTERNAL=ON \
+            -DWITH_GFX_AZURE=$3 -DWITH_APPLE_VIDEOTOOLBOX=ON -DWITH_FFMPEG=OFF -DWITH_SWSCALE=OFF \
+            -DWITH_CLIENT=OFF -DWITH_SERVER=OFF -DWITH_SHADOW=OFF -DWITH_PROXY=OFF -DWITH_SAMPLE=OFF \
+            -DWITH_OPENH264=OFF -DWITH_GFX_AV1=OFF -DWITH_GFX_AV2=OFF -DWITH_X11=OFF -DWITH_WAYLAND=OFF \
+            -DWITH_PCSC=OFF -DWITH_KRB5=OFF -DWITH_FUSE=OFF -DWITH_CUPS=OFF -DWITH_UNICODE_BUILTIN=ON \
+            -DWITH_JSON_DISABLED=ON -DCHANNEL_URBDRC=OFF -DWITH_OPUS=OFF -DWITH_MANPAGES=OFF \
+            -DOPENSSL_ROOT_DIR="$(brew --prefix openssl@3)"
+          EOS
+
+      - name: "before: the base + the new test must FAIL"
+        run: |
+          bash "$RUNNER_TEMP/conf.sh" base build-before ON > "$OUT/before-configure.log" 2>&1
+          cmake --build build-before --target TestFreeRDPCodec -- -k 0 > "$OUT/before-build.log" 2>&1 || { grep -E -A3 'error:|FAILED' "$OUT/before-build.log" | head -80; exit 1; }
+          cd build-before
+          if WLOG_LEVEL=INFO ctest -R TestFreeRDPCodecHEVC -V > "$OUT/before-ctest.log" 2>&1; then
+            tail -30 "$OUT/before-ctest.log"; echo "::error::the base passed the new test"; exit 1
+          fi
+          grep -E 'HEVC 4:|WRONG|tests passed' "$OUT/before-ctest.log"
+
+      - name: "A: the fix, WITH_GFX_AZURE, VideoToolbox decodes HEVC"
+        run: |
+          set -o pipefail
+          bash "$RUNNER_TEMP/conf.sh" fix build-a ON > "$OUT/a-configure.log" 2>&1
+          cmake --build build-a --target TestFreeRDPCodec TestGdi -- -k 0 > "$OUT/a-build.log" 2>&1 || { grep -E -A3 'error:|FAILED' "$OUT/a-build.log" | head -80; exit 1; }
+          grep -E 'warning:' "$OUT/a-build.log" | grep -E 'videotoolbox|hevc|h264\.c' || true
+          cd build-a && WLOG_LEVEL=INFO \
+            ctest -R 'TestFreeRDPCodec(HEVC|H264)|TestGdiGfxDecodeResult' -V 2>&1 | tee "$OUT/a-ctest.log" | tail -60
+
+      - name: "C: the fix without WITH_GFX_AZURE: it builds, H.264 passes"
+        run: |
+          set -o pipefail
+          bash "$RUNNER_TEMP/conf.sh" fix build-c OFF > "$OUT/c-configure.log" 2>&1
+          cmake --build build-c --target TestFreeRDPCodec TestGdi -- -k 0 > "$OUT/c-build.log" 2>&1 || { grep -E -A3 'error:|FAILED' "$OUT/c-build.log" | head -80; exit 1; }
+          cd build-c && WLOG_LEVEL=INFO \
+            ctest -R 'TestFreeRDPCodecH264|TestGdiGfx' -V 2>&1 | tee "$OUT/c-ctest.log" | tail -30
+
+      - name: Which decoder ran
+        if: always()
+        run: |
+          grep -h -E 'decoder: |decoded by|WRONG|no (en|de)coder|tests passed' "$OUT"/*-ctest.log || true
+
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: probe-hevc-client-vt
+          path: probe-out
+          retention-days: 14
