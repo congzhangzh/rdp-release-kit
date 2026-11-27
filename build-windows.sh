@@ -8,7 +8,8 @@
 # keeps its own work tree in ~/.cache/rdp-release-kit/win-<arch> (under
 # KIT_CACHE=<dir> instead), compiled objects in its ccache directory.
 # HOST=1 builds the Windows host instead (dist/freerdp-host-<version>-windows-<arch>.zip:
-# FreeRDP's shadow server and freerdp-shadow-service, build/build-windows-client.sh).
+# FreeRDP's shadow server and freerdp-shadow-service, with the virtual camera
+# freerdp-shadow-camera-source.dll, build/build-windows-client.sh).
 # SRC_freerdp=<dir> builds FreeRDP from a local checkout, LTO=off then
 # without link-time optimisation (see build/overrides.sh; not for releases).
 set -euo pipefail

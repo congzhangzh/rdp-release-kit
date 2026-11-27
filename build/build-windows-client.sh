@@ -8,8 +8,9 @@
 # (freerdp-shadow-cli, DXGI capture, AV1 with libaom), freerdp-shadow-service,
 # which runs it as SYSTEM on the console session (logon and lock screens,
 # UAC, Ctrl+Alt+Del), and winpr-hash, from freerdp_host: our FreeRDP release
-# with the Windows shadow work (FreeRDP#13931-#13935). The result is then
-# <output dir>/freerdp-host-<version>-windows-<arch>.zip.
+# with the Windows shadow work (FreeRDP#13931-#13935), and a client's camera as
+# the virtual camera "FreeRDP Camera" (freerdp-shadow-camera-source.dll). The
+# result is then <output dir>/freerdp-host-<version>-windows-<arch>.zip.
 #
 # One toolchain covers both architectures; aarch64 is native Windows on
 # ARM64 (GCC's mingw-w64 has no aarch64 target). Every library is built
@@ -165,6 +166,10 @@ if [ -n "${HOST:-}" ]; then
           -DWITH_PLATFORM_SERVER=OFF -DWITH_SHADOW_WIN_DXGI=ON -DWITH_SHADOW_WIN_SERVICE=ON
           -DWITH_AOM=ON -DWITH_AOM_INTRABC_DV_FIX=ON -DWITH_WINPR_TOOLS=ON -DWITH_GFX_AV2=ON -DWITH_AVM=ON
           -DWITH_MEDIA_FOUNDATION=ON)
+    # the virtual camera: a client's camera (MS-RDPECAM) as "FreeRDP Camera" on the host
+    # (Windows build 22000 and later; MJPG with Windows' own decoder, H.264 with Media
+    # Foundation's), its media source freerdp-shadow-camera-source.dll in the package
+    WHAT+=(-DWITH_SHADOW_CAMERA=ON -DCHANNEL_RDPECAM=ON -DCHANNEL_RDPECAM_SERVER=ON)
 fi
 
 # FreeRDP: the SDL3 client only, static. Its fonts and icons are compiled
@@ -230,6 +235,13 @@ configure "$WORK/build/$FREERDP" \
     -DWITH_MANPAGES=OFF "${LAUNCHER[@]}" "${DEV[@]}" > "$WORK/log/freerdp.log" 2>&1
 grep -q -e "AV1 decoder: dav1d" -e "configuration kept" "$WORK/log/freerdp.log"
 [ -n "${HOST:-}" ] || grep -q -e "Found FFmpeg" -e "configuration kept" "$WORK/log/freerdp.log"
+# the host's camera: the shadow server's virtual camera and the rdpecam server channel
+if [ -n "${HOST:-}" ]; then
+    for found in "WITH_SHADOW_CAMERA:BOOL=ON" "CHANNEL_RDPECAM_SERVER:BOOL=ON"; do
+        grep -q -x -F "$found" "$WORK/build/$FREERDP/CMakeCache.txt" ||
+            { echo "HOST=1: no $found in the CMake cache, no camera (log/freerdp.log)" >&2; exit 1; }
+    done
+fi
 # the client's camera: the channel and its Media Foundation backend (a FreeRDP without them
 # would build no camera: CMake only warns about an option it does not know)
 if [ -z "${HOST:-}" ]; then
@@ -256,6 +268,13 @@ if [ -n "${HOST:-}" ]; then
         /llvm-mingw/bin/llvm-strip --strip-debug "$PKG/$tool.exe"
         "$KIT/build/check-windows.sh" "$PKG/$tool.exe"
     done
+    # the camera's media source: Frame Server loads it, where Media Foundation is (mfplat.dll
+    # is Windows' own)
+    f=$(find "$STAGE" -name "freerdp-shadow-camera-source.dll" | head -1)
+    [ -n "$f" ] || { echo "HOST=1: no freerdp-shadow-camera-source.dll in the build" >&2; exit 1; }
+    cp "$f" "$PKG/"
+    /llvm-mingw/bin/llvm-strip --strip-debug "$PKG/freerdp-shadow-camera-source.dll"
+    CHECK_WINDOWS_ALSO=mfplat "$KIT/build/check-windows.sh" "$PKG/freerdp-shadow-camera-source.dll"
     licenses "$PKG/licenses" freerdp_host libressl opus dav1d aom avm zlib jansson llvm_mingw
     cp "$KIT/build/windows/host-README.txt" "$PKG/README.txt"
     {
