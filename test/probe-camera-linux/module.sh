@@ -6,9 +6,7 @@
 #           kernels ship 0.15.3 in linux-modules), else linux-modules-extra, else
 #           v4l2loopback-dkms; which one, and its version, are logged (version.txt)
 #   source  v4l2loopback built from its source tag (V4L2LOOPBACK_TAG, V4L2LOOPBACK_SHA, checked
-#           after the clone), CI only: a GPL module, never in an archive of ours. With
-#           V4L2LOOPBACK_COMPAT=<script>, that script is run on the tree first (0.12.7 predates
-#           the runners' kernels: compat-0.12.7.sh)
+#           after the clone), CI only: a GPL module, never in an archive of ours
 #   dkms    Ubuntu's own v4l2loopback-dkms from the archive (0.12.7 on 24.04), as a user installs
 #           it, no patch: the kernel, Secure Boot state, the DKMS build and its log, dkms status
 #           are logged first; if it does not build or load, the exact error is recorded and the
@@ -72,11 +70,6 @@ case $MODE in
         [ "$(git -C "$src" rev-parse HEAD)" = "$sha" ] ||
             { echo "v4l2loopback $tag is $(git -C "$src" rev-parse HEAD), not $sha" >&2; exit 1; }
         from="source $tag ($sha)"
-        if [ -n "${V4L2LOOPBACK_COMPAT:-}" ]; then
-            "$V4L2LOOPBACK_COMPAT" "$src"
-            git -C "$src" diff > "$OUT/compat.diff"
-            from="$from with $(basename "$V4L2LOOPBACK_COMPAT") ($(git -C "$src" diff --shortstat | xargs))"
-        fi
         # from its directory: its Makefile passes M=$(PWD) to kbuild
         (cd "$src" && make KERNELRELEASE="$KREL" v4l2loopback.ko) > "$OUT/module-build.log" 2>&1 ||
             { tail -30 "$OUT/module-build.log"; exit 1; }

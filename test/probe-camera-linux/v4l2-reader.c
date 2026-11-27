@@ -1,8 +1,14 @@
 /*
  * v4l2-reader: a CI-only diagnostic for probe-camera-linux, never shipped. It reads frames from a
  * capture device with read() (V4L2's read/write I/O), where v4l2-ctl --stream-mmap uses mmap
- * streaming: on the compat-built v4l2loopback 0.12.7 the mmap reader got 0 frames and was killed
- * (rc 137, run 46079009433 and its successor), and this tells read() apart from mmap.
+ * streaming, to tell the two apart.
+ *
+ * The fd is blocking and the first read() comes before any poll(): v4l2loopback answers poll()
+ * only for an opener it knows as a reader: in 0.12.7 and 0.13.0 opener->type READER, which only
+ * VIDIOC_STREAMON sets (v4l2loopback.c:1743 of 0.12.7), never read(); in 0.15.x the capture
+ * format token, which the first read() takes (start_fileio: REQBUFS and STREAMON). A reader that
+ * polls first waits for ever (run 46071318124: "no frame within the timeout" on 0.12.7 while the
+ * mmap reader got 150 frames). Each read() has an alarm() as its timeout.
  *
  *   v4l2-reader <device> <frames> <out file> [timeout s per frame, default 5]
  *
@@ -14,13 +20,18 @@
  */
 #include <errno.h>
 #include <fcntl.h>
-#include <poll.h>
+#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 #include <sys/ioctl.h>
 #include <linux/videodev2.h>
+
+static void on_alarm(int sig)
+{
+	(void)sig; /* only to interrupt read() with EINTR */
+}
 
 int main(int argc, char* argv[])
 {
@@ -32,7 +43,14 @@ int main(int argc, char* argv[])
 	const unsigned long want = strtoul(argv[2], NULL, 10);
 	const int timeout = (argc > 4) ? atoi(argv[4]) : 5;
 
-	const int fd = open(argv[1], O_RDONLY | O_NONBLOCK);
+	/* no SA_RESTART: the alarm interrupts a read() that waits too long */
+	struct sigaction sa;
+	memset(&sa, 0, sizeof(sa));
+	sa.sa_handler = on_alarm;
+	sigemptyset(&sa.sa_mask);
+	sigaction(SIGALRM, &sa, NULL);
+
+	const int fd = open(argv[1], O_RDONLY);
 	if (fd < 0)
 	{
 		printf("open %s: %s\n", argv[1], strerror(errno));
@@ -62,19 +80,14 @@ int main(int argc, char* argv[])
 	unsigned long got = 0;
 	while (got < want)
 	{
-		struct pollfd pfd = { .fd = fd, .events = POLLIN };
-		const int ready = poll(&pfd, 1, timeout * 1000);
-		if (ready <= 0)
-		{
-			printf("frame %lu: %s\n", got, (ready == 0) ? "no frame within the timeout" : strerror(errno));
-			break;
-		}
+		alarm((unsigned)timeout);
 		const ssize_t n = read(fd, frame, size);
+		const int err = errno;
+		alarm(0);
 		if (n < 0)
 		{
-			if (errno == EAGAIN)
-				continue;
-			printf("frame %lu: read: %s\n", got, strerror(errno));
+			printf("frame %lu: %s\n", got,
+			       (err == EINTR) ? "no frame within the timeout" : strerror(err));
 			break;
 		}
 		if ((size_t)n != size)

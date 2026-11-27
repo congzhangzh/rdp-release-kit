@@ -27,11 +27,6 @@
 #    and stops the job). Then the fallback case (the exact line, always on, frames to a reader,
 #    with the diagnostics of both sides of /dev/video41: DIAG=1, read() and mmap readers,
 #    dmesg), and the README's modprobe line with that module.
-#  - test-v4l2loopback-0.12.7 (informational, to compare): the fallback with the same version:
-#    v4l2loopback 0.12.7 from its source tag (CI only, a GPL module never in an archive), with
-#    compat-0.12.7.sh renaming the kernel APIs it predates (it does not build on 7.0 otherwise):
-#    exactly one line that it can't tell its readers ("before 0.13": it declares no version),
-#    the camera on while connected, an app reads >= 60 changing frames.
 # In each test the client's camera is /dev/video40, a second loopback device fed by GStreamer's
 # videotestsrc; the host writes /dev/video41 ("FreeRDP Camera"), which v4l2-ctl reads as an app
 # would (test/probe-camera-linux/). The host runs on its own Xvfb with /subsystem:x11.
@@ -358,45 +353,5 @@ jobs:
         if: always()
         with:
           name: probe-camera-linux-test-v4l2loopback-dkms
-          path: out
-          retention-days: 7
-
-  test-v4l2loopback-0-12-7:
-    needs: [host, client]
-    runs-on: ubuntu-24.04
-    timeout-minutes: 30
-    env:
-      # Ubuntu 24.04's packaged version (v4l2loopback-dkms 0.12.7-2ubuntu5.2), by its tag's commit
-      V4L2LOOPBACK_TAG: v0.12.7
-      V4L2LOOPBACK_SHA: 1ecf810f0d687b647caa3050ae30cf51b5902afd
-    steps:
-      - uses: actions/checkout@v7
-      - uses: actions/download-artifact@v8
-        with:
-          name: probe-camera-linux-host-camera
-          path: dl/host
-      - uses: actions/download-artifact@v8
-        with:
-          name: probe-camera-linux-client
-          path: dl/client
-      - name: Tools and the packages
-        run: test/probe-camera-linux/runner-setup.sh out
-      - name: v4l2loopback 0.12.7 from its source tag, the kernel APIs renamed
-        env:
-          V4L2LOOPBACK_COMPAT: test/probe-camera-linux/compat-0.12.7.sh
-        run: test/probe-camera-linux/module.sh source out/module
-      - name: "fallback: a module that can't tell its readers (informational: our compat build)"
-        env:
-          DIAG: "1"
-        run: test/probe-camera-linux/camera-e2e.sh fallback dl/host/pkg dl/client/pkg/bin/sdl-freerdp out/fallback
-      - name: Results and the kernel's log
-        if: always()
-        run: |
-          sudo dmesg 2>&1 | tee out/dmesg.txt > /dev/null || true
-          cat out/*/result.txt | tee -a "$GITHUB_STEP_SUMMARY" || true
-      - uses: actions/upload-artifact@v7
-        if: always()
-        with:
-          name: probe-camera-linux-test-v4l2loopback-0.12.7
           path: out
           retention-days: 7

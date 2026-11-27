@@ -296,6 +296,23 @@ case $CASE in
             check "the client's V4L2 capture started for each Start Streams" \
                 "[ \"\$(grep -c -F 'Camera format:' '$OUT/client.log')\" -ge $cycles ]" \
                 "$(grep -c -F 'Camera format:' "$OUT/client.log")"
+            if [ "$CASE" = ondemand ]; then
+                # one read() reader too, an INFO line after the cycles' checks (which count the mmap
+                # reader): on 0.15.x its first read() takes the capture stream (start_fileio: REQBUFS,
+                # STREAMON), so the client usage event reports it and it turns the client's camera on
+                gcc -O2 -Wall -Wextra -Werror -o "$OUT/v4l2-reader" "$HERE/v4l2-reader.c" > "$OUT/reader-build.log" 2>&1 ||
+                    cat "$OUT/reader-build.log"
+                starts=$(count_host 'Start Streams #')
+                mark "read() reader opens $CAM_DEV"
+                timeout 60 "$OUT/v4l2-reader" $CAM_DEV 150 "$OUT/read-io.yuyv" 5 > "$OUT/read-io.log" 2>&1
+                rc=$?
+                mark "read() reader closed $CAM_DEV (rc $rc)"
+                python3 "$HERE/frames.py" "$OUT/read-io.yuyv" $WIDTH $HEIGHT 60 > "$OUT/frames-read-io.txt" 2>&1
+                sleep 2
+                echo "INFO  read() on v4l2loopback ${MODULE_VERSION:-?}: rc $rc, $(tail -1 "$OUT/read-io.log"); $(tail -1 "$OUT/frames-read-io.txt"); Start Streams while it read: $(($(count_host 'Start Streams #') - starts))" |
+                    tee -a "$OUT/result.txt"
+                rm -f "$OUT/read-io.yuyv"
+            fi
         fi
         ;;
     h264)
