@@ -2,7 +2,7 @@
 # Makes the Mac bundles' usage strings from their sources, byte for byte (never retyped):
 #
 #   make-strings.py [--check] <PO strings draft> <PO usage descriptions> <PO README draft>
-#                   <PO README signing draft> <kit dir>
+#                   <PO README signing draft> <PO Gatekeeper draft> <kit dir>
 #
 #   <PO strings draft>   rdp-product-plan/drafts/mac-signing-strings.v1.md, section 1:
 #                        NSSystemExtensionUsageDescription of FreeRDP-Shadow.app, en/zh/ja/fr
@@ -11,8 +11,11 @@
 #   <PO README draft>    rdp-product-plan/drafts/readme-mac-camera.v1.md: the Mac client
 #                        README's camera paragraph, en/zh/ja/fr
 #   <PO README signing draft>  rdp-product-plan/drafts/readme-mac-signing.v1.md: the kit
-#                        READMEs' signing sentence (en/zh/ja/fr), README.md's Gatekeeper row and
-#                        its check-macos.sh cell
+#                        READMEs' signing sentence (en/zh/ja/fr) and README.md's check-macos.sh
+#                        cell
+#   <PO Gatekeeper draft>  rdp-product-plan/drafts/readme-mac-gatekeeper.v1.md: README.md's
+#                        Gatekeeper row and kit.yml's macOS client release-notes row, variants A
+#                        and B (GATEKEEPER below picks one, or neither)
 #
 # The README style rule (the RM, 2026-11-27): a README cell takes its target README's style.
 # README.fr.md writes ASCII apostrophes (and NBSP before ":" and ";"), so a fr README cell gets
@@ -27,8 +30,8 @@
 #   build/macos/client-README-camera.txt: the four README lines, appended to the client
 #   archive's README.txt by build-macos-client.sh
 #   README.md, README.zh.md, README.ja.md, README.fr.md: the old "signed ad hoc" sentence
-#   replaced by the signing sentence (on one line); README.md's Gatekeeper row and its
-#   check-macos.sh cell
+#   replaced by the signing sentence (on one line); README.md's check-macos.sh cell; with
+#   GATEKEEPER set, README.md's Gatekeeper row and kit.yml's macOS client row
 #   test/probe-camera-mac/expected-strings.txt: what check-bundle-strings.py compares a built
 #   bundle with, one line per string: <bundle>\t<key>\t<lang>\t<text>
 # --check: changes nothing, fails if any of these differs from what it would write.
@@ -86,11 +89,12 @@ def po_readme(path):
     return out
 
 
-# README.md's Gatekeeper row says a browser download "starts directly": true only once the
-# probe's signed job proved a quarantined download opens. Until then the row stays as it is and is
-# no generated text; the held patch remove-quarantine-step (with the xattr step's removal) sets
-# this to True.
-GATEKEEPER_ROW = False
+# README.md's Gatekeeper row and kit.yml's macOS client release-notes row say how a browser
+# download opens: true only once the probe's signed job proved it. Until then both stay as they
+# are and are no generated text (None). The held patch sets the variant the signed run supports,
+# together with the xattr step's removal: "A" (remove-quarantine-step.v4.patch: the whole archive
+# opens) or "B" (v5: the apps open, freerdp-tk.command is still refused).
+GATEKEEPER = None
 
 README_FILE = {"en": "README.md", "zh-Hans": "README.zh.md", "ja": "README.ja.md", "fr": "README.fr.md"}
 # the sentence each README had while the apps were signed ad hoc (it may wrap over two lines)
@@ -130,30 +134,38 @@ def po_signing(path):
             sentence[LANG[lm.group(1)]] = lm.group(2)
     if sorted(sentence) != sorted(LANG.values()):
         sys.exit(f"{path}: the sentence for {sorted(sentence)}, want en, zh, ja, fr")
-    row = re.search(r"^## README\.md:175.*?\n(\| macOS, a browser download \|.*\|)$", text, re.S | re.M)
     cell = re.search(r'"an ad-hoc signature" → "([^"]+)"', text)
-    if not row or not cell:
-        sys.exit(f"{path}: no README.md:175 row or check-macos.sh cell")
-    return sentence, row.group(1), cell.group(1)
+    if not cell:
+        sys.exit(f"{path}: no check-macos.sh cell")
+    return sentence, cell.group(1)
 
 
-# Variant B of README.md's Gatekeeper row, for a signed run in which the apps open from a
-# quarantined download but freerdp-tk.command is still refused: its second cell, the PO's words
-# (relayed by the coordinator, 2026-11-27; not in a draft file yet). GATEKEEPER_ROW = "B"
-# selects it (remove-quarantine-step.v3.patch); True selects the PO's row as it is (v2).
-GATEKEEPER_ROW_B = ("the client and the server start directly; freerdp-tk.command still needs "
-                    "`xattr -dr com.apple.quarantine <folder>` (a script can't carry a signature)")
+# kit.yml's macOS client row ("| macOS Apple Silicon |"): the text after this is the variant's (in a shell
+# double-quoted string there, where a backtick is written \`)
+KITYML = ".github/workflows/kit.yml"
+KITYML_ANCHOR = "(or \\`bin/sdl-freerdp /v:server /u:user\\`)"
 
 
-def gatekeeper_row(row):
-    """the PO's row, or variant B: the same row with its second cell replaced"""
-    if GATEKEEPER_ROW != "B":
-        return row
-    cells = row.split(" | ")
-    if len(cells) != 3:
-        sys.exit(f"the Gatekeeper row has {len(cells)} cells, want 3: {row}")
-    cells[1] = GATEKEEPER_ROW_B
-    return " | ".join(cells)
+def po_gatekeeper(path):
+    """{"A": (README row, kit.yml tail), "B": (...)} from the PO's Gatekeeper draft"""
+    text = Path(path).read_text(encoding="utf-8")
+    out = {}
+    for section, index in (("README.md:175 row", 0), ("kit.yml:", 1)):
+        m = re.search(rf"^## {re.escape(section)}.*?\n(.*?)(?=^## |\Z)", text, re.S | re.M)
+        if not m:
+            sys.exit(f"{path}: no section '{section}'")
+        for line in m.group(1).splitlines():
+            lm = re.match(r"^- (A|B): (.+)$", line)
+            if lm:
+                out.setdefault(lm.group(1), [None, None])[index] = lm.group(2)
+    if sorted(out) != ["A", "B"] or any(None in v for v in out.values()):
+        sys.exit(f"{path}: want a README row and a kit.yml text for A and B, got {out}")
+    return {k: tuple(v) for k, v in out.items()}
+
+
+def kityml_written(text):
+    """the PO's text as kit.yml holds it: in a double-quoted shell string"""
+    return text.replace("`", "\\`")
 
 
 def strings_file(bundle, lang, pairs):
@@ -180,16 +192,16 @@ def set_plist_line(text, key, value):
 def main():
     args = [a for a in sys.argv[1:] if a != "--check"]
     check = "--check" in sys.argv
-    if len(args) != 5:
+    if len(args) != 6:
         sys.exit("usage: make-strings.py [--check] <PO strings draft> <PO usage descriptions> "
                  "<PO README draft> <PO README signing draft> <kit dir>")
     host = po_section1(args[0])
     client = po_usage(args[1])
     readme = {lang: readme_style(lang, text) for lang, text in po_readme(args[2]).items()}
-    sentence, row, cell = po_signing(args[3])
-    row = gatekeeper_row(row)
+    sentence, cell = po_signing(args[3])
+    gatekeeper = po_gatekeeper(args[4])
     sentence = {lang: readme_style(lang, text) for lang, text in sentence.items()}
-    kit = Path(args[4])
+    kit = Path(args[5])
     files = {}
     for lang in ("zh-Hans", "ja", "fr"):
         files[kit / f"build/macos/host-lproj/{lang}.lproj/InfoPlist.strings"] = strings_file(
@@ -216,7 +228,8 @@ def main():
             if n != 1:
                 sys.exit(f"{p}: the old signing sentence found {n} times, want 1")
         if lang == "en":
-            if GATEKEEPER_ROW:
+            if GATEKEEPER:
+                row = gatekeeper[GATEKEEPER][0]
                 text, n = re.subn(r"^\| macOS, a browser download \|.*\|$", lambda _: row, text, flags=re.M)
                 if n != 1:
                     sys.exit(f"{p}: the Gatekeeper row found {n} times, want 1")
@@ -226,8 +239,18 @@ def main():
                     sys.exit(f"{p}: 'an ad-hoc signature' found {n} times, want 1")
         files[p] = text
         lines.append(f"kit-readme\t{README_FILE[lang]}\t{lang}\t{sentence[lang]}")
-    if GATEKEEPER_ROW:
-        lines.append(f"kit-readme\tREADME.md\ten\t{row}")
+    if GATEKEEPER:
+        lines.append(f"kit-readme\tREADME.md\ten\t{gatekeeper[GATEKEEPER][0]}")
+        p = kit / KITYML
+        tail = kityml_written(gatekeeper[GATEKEEPER][1])
+        text = p.read_text(encoding="utf-8")
+        # the macOS client's row only (the Linux row has the same "(or …)")
+        text, n = re.subn(r"^(\s*\| macOS Apple Silicon \|[^\n]*?" + re.escape(KITYML_ANCHOR) + r")[^\n]*\|$",
+                          lambda m: m.group(1) + tail, text, flags=re.M)
+        if n != 1:
+            sys.exit(f"{p}: the macOS client row found {n} times, want 1")
+        files[p] = text
+        lines.append(f"kit-readme\t{KITYML}\ten\t{KITYML_ANCHOR}{tail}")
     lines.append(f"kit-readme\tREADME.md\ten\t{cell}")
     files[kit / "test/probe-camera-mac/expected-strings.txt"] = "\n".join(lines) + "\n"
     bad = 0
