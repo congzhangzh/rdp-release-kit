@@ -1086,7 +1086,9 @@ jobs:
           done
           (cd upload && sha256sum -- * > ../SHA256SUMS) && mv SHA256SUMS upload/
           ls upload
-          # the demos' recorder (a GPL FFmpeg) is a CI tool: never in what is released
+          # the demos' recorder (a GPL FFmpeg) is a CI tool: never in what is released, and no GPL
+          # code ships outside build/gpl-allow.txt (rpm2cpio opens the .rpm files to look inside)
+          command -v rpm2cpio > /dev/null || { sudo apt-get update -qq && sudo apt-get install -y -qq rpm2cpio; }
           build/check-no-ffmpeg.sh upload
 
       - name: Attest build provenance
