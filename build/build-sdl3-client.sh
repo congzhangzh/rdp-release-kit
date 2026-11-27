@@ -15,7 +15,8 @@
 # libei) and X11 (any other X11 desktop); the server takes, at start, the first
 # that finds a monitor. AV1 with libaom, AV2 with libavm, Opus sound; the
 # session's clipboard (Mutter), its sound and a microphone (PipeWire, both
-# subsystems); logins through PAM. FreeRDP and every codec are linked statically; from the host it
+# subsystems); a client's camera as a v4l2loopback device (with a decoder-only LGPL FFmpeg:
+# h264, mjpeg); logins through PAM. FreeRDP and every codec are linked statically; from the host it
 # needs glibc, libgcc_s, PAM, libsystemd, PipeWire and the X11 libraries a
 # desktop has (build/check-portable.sh checks that list). The result is
 # <output dir>/freerdp-host-<version>-linux-<arch>.tar.xz, with a systemd user
@@ -96,6 +97,53 @@ if [ -n "${HOST:-}" ]; then
     # applications copy PNG, an RDP client asks for a bitmap
     cmake_dep libpng -DPNG_SHARED=OFF -DPNG_STATIC=ON -DPNG_TESTS=OFF -DPNG_TOOLS=OFF
 
+    # The shadow server's virtual camera (WITH_SHADOW_CAMERA, FreeRDP's server/shadow/camera): a
+    # client's camera (MS-RDPECAM) written to a v4l2loopback device. It decodes H.264 with
+    # FreeRDP's H.264 decoder and MJPG with freerdp_video_sample_convert, both through a static
+    # FFmpeg of its own, with the client's guards: LGPL 2.1, the h264 and mjpeg decoders and the
+    # h264 parser alone, no encoder (so the host still offers no H.264: freerdp_codec_supported()
+    # probes the encoder at run time), avcodec, avutil and swscale, no programs
+    if ! built ffmpeg; then
+        src=$(unpack ffmpeg)
+        rm -rf "$WORK/build/ffmpeg"
+        mkdir -p "$WORK/build/ffmpeg"
+        FFCC=()
+        [ ${#LAUNCHER[@]} = 0 ] || FFCC=(--cc="ccache ${CC:-gcc}")
+        (cd "$WORK/build/ffmpeg" && "$src/configure" --prefix="$DEPS" --libdir="$DEPS/lib" "${FFCC[@]}" \
+            --enable-static --disable-shared --enable-pic \
+            --disable-gpl --disable-nonfree --disable-version3 \
+            --disable-autodetect --enable-pthreads --disable-everything \
+            --disable-programs --disable-doc --disable-network \
+            --disable-avformat --disable-avdevice --disable-avfilter --disable-swresample \
+            --enable-avcodec --enable-avutil --enable-swscale \
+            --enable-decoder=h264,mjpeg --enable-parser=h264) > "$WORK/log/ffmpeg.log" 2>&1
+        ffcheck() {  # ffcheck <what> <ERE that a line of configure's summary must match>
+            grep -q -E "$2" "$WORK/log/ffmpeg.log" ||
+                { echo "ffmpeg: configure does not say $1 (log/ffmpeg.log)" >&2; exit 1; }
+        }
+        ffcheck "LGPL 2.1" '^License: LGPL version 2\.1 or later$'
+        ffcheck pthreads '^threading support +pthreads$'
+        case $(uname -m) in
+            x86_64) ffcheck "nasm" '^x86 assembler +nasm$' ;;
+            aarch64) ffcheck "NEON" '^NEON enabled +yes$' ;;
+        esac
+        ffsection() { sed -n "/^Enabled $1:\$/,/^\$/p" "$WORK/log/ffmpeg.log" | sed 1d | xargs; }
+        [ "$(ffsection decoders)" = "h264 mjpeg" ] ||
+            { echo "ffmpeg: decoders: '$(ffsection decoders)', not h264 and mjpeg alone (log/ffmpeg.log)" >&2; exit 1; }
+        [ "$(ffsection parsers)" = "h264" ] ||
+            { echo "ffmpeg: parsers: '$(ffsection parsers)', not h264 alone (log/ffmpeg.log)" >&2; exit 1; }
+        [ -z "$(ffsection encoders)" ] || { echo "ffmpeg: encoders enabled: $(ffsection encoders)" >&2; exit 1; }
+        echo "== ffmpeg (camera): LGPL 2.1, decoders $(ffsection decoders), parsers $(ffsection parsers)"
+        make -C "$WORK/build/ffmpeg" -j"$JOBS" install >> "$WORK/log/ffmpeg.log" 2>&1
+        stamp ffmpeg
+    fi
+    # as the client: libavutil.a after libswscale.a, and libm, at the end of every link line
+    FFLIBS="$DEPS/lib/libavutil.a -lm -pthread"
+    CAMERA_OPTS=(-DCMAKE_C_STANDARD_LIBRARIES="$FFLIBS" -DCMAKE_CXX_STANDARD_LIBRARIES="$FFLIBS"
+        -DWITH_SHADOW_CAMERA=ON -DCHANNEL_RDPECAM=ON -DCHANNEL_RDPECAM_SERVER=ON
+        -DWITH_FFMPEG=ON -DWITH_VIDEO_FFMPEG=ON -DWITH_SWSCALE=ON -DWITH_SWSCALE_LOADING=OFF
+        -DWITH_DSP_FFMPEG=OFF -DWITH_FFMPEG_HWACCEL=OFF)
+
     FREERDP=freerdp_linux_host
     host_source "$FREERDP"
     if overridden "$FREERDP"; then
@@ -131,13 +179,21 @@ if [ -n "${HOST:-}" ]; then
         -DWITH_PROXY=OFF -DWITH_PLATFORM_SERVER=OFF -DWITH_SAMPLE=OFF -DWITH_WINPR_TOOLS=ON \
         -DWITH_X11=ON -DWITH_WAYLAND=OFF -DWITH_XCURSOR=OFF -DWITH_XRANDR=OFF \
         -DWITH_PULSE=OFF -DWITH_ALSA=OFF -DWITH_OSS=OFF -DWITH_CUPS=OFF -DWITH_PCSC=OFF \
-        -DWITH_KRB5=OFF -DWITH_FUSE=OFF -DWITH_FFMPEG=OFF -DWITH_SWSCALE=OFF -DWITH_SOXR=OFF \
+        -DWITH_KRB5=OFF -DWITH_FUSE=OFF -DWITH_SOXR=OFF \
         -DWITH_OPENH264=OFF -DWITH_GFX_AV1=ON -DWITH_AOM=ON -DWITH_AOM_INTRABC_DV_FIX=ON -DWITH_DAV1D=ON -DWITH_AV1_VAAPI=ON -DWITH_OPUS=ON \
         -DWITH_GFX_AV2=ON -DWITH_AVM=ON -DWITH_SIMD=ON \
         -DWITH_SYSTEMD=ON -DWITH_UNICODE_BUILTIN=ON -DWITH_INTERNAL_MD4=ON \
         -DWITH_INTERNAL_RC4=ON -DWITH_SSO_MIB=OFF -DCHANNEL_URBDRC=OFF \
         -DWITHOUT_WINPR_3x_DEPRECATED=ON -DWITHOUT_FREERDP_3x_DEPRECATED=ON \
-        -DWITH_MANPAGES=OFF "${DEV[@]}" > "$WORK/log/freerdp.log" 2>&1
+        -DWITH_MANPAGES=OFF "${CAMERA_OPTS[@]}" "${DEV[@]}" > "$WORK/log/freerdp.log" 2>&1
+    # the camera is in, with our static LGPL FFmpeg and never a library of the image
+    for found in "WITH_SHADOW_CAMERA:BOOL=ON" "CHANNEL_RDPECAM_SERVER:BOOL=ON" \
+        "WITH_SHADOW_MUTTER:BOOL=ON" "WITH_VIDEO_FFMPEG:BOOL=ON" "WITH_SWSCALE:BOOL=ON" \
+        "AVCODEC_LIBRARIES:FILEPATH=$DEPS/lib/libavcodec.a" "AVUTIL_LIBRARIES:FILEPATH=$DEPS/lib/libavutil.a" \
+        "SWSCALE_LIBRARIES:FILEPATH=$DEPS/lib/libswscale.a"; do
+        grep -q -x -F "$found" "$WORK/build/$FREERDP/CMakeCache.txt" ||
+            { echo "HOST=1: no $found in the CMake cache, no camera (log/freerdp.log)" >&2; exit 1; }
+    done
     # what the host must have found: both subsystems' libraries and the encoders
     for found in PIPEWIRE SYSTEMD LIBEI PC_AOM PC_AVM; do
         grep -q "^${found}_FOUND:INTERNAL=1" "$WORK/build/$FREERDP/CMakeCache.txt" ||
@@ -177,6 +233,16 @@ if [ -n "${HOST:-}" ]; then
     # -W: names not cut short; grep without -q reads it all (pipefail)
     readelf -W --dyn-syms "$PKG/bin/freerdp-shadow-cli" | grep ' sd_journal_stream_fd' > /dev/null ||
         { echo "HOST=1: no journald appender in freerdp-shadow-cli (sd_journal_stream_fd)" >&2; exit 1; }
+    # the camera's code is in the server, the FFmpeg it links says LGPL 2.1, and its licence
+    # goes with it (LICENSE.md and the LGPL 2.1 only, as the client's)
+    grep -a -q -F "camera: no v4l2loopback device" "$PKG/bin/freerdp-shadow-cli" ||
+        { echo "HOST=1: no camera in freerdp-shadow-cli" >&2; exit 1; }
+    for lib in avcodec avutil swscale; do
+        grep -a -q -F "lib$lib license: LGPL version 2.1 or later" "$DEPS/lib/lib$lib.a" ||
+            { echo "ffmpeg: lib$lib.a does not say LGPL 2.1" >&2; exit 1; }
+    done
+    mkdir -p "$PKG/licenses/ffmpeg"
+    cp "$WORK/src/ffmpeg/LICENSE.md" "$WORK/src/ffmpeg/COPYING.LGPLv2.1" "$PKG/licenses/ffmpeg/"
     cp "$KIT/build/linux/freerdp-shadow.service" "$KIT/build/linux/freerdp-shadow-sesman.service" "$PKG/"
     cp "$KIT/build/linux/host-README.txt" "$PKG/README.txt"
     licenses "$PKG/licenses" "$FREERDP" openssl opus dav1d aom avm libei libpng zlib jansson
@@ -190,9 +256,10 @@ if [ -n "${HOST:-}" ]; then
         manifest_kit_line
         manifest_upstream_line
         echo "sources (sources.lock):"
-        for name in "$FREERDP" openssl opus dav1d aom avm libei libpng zlib jansson; do
+        for name in "$FREERDP" openssl opus dav1d aom avm libei libpng zlib jansson ffmpeg; do
             printf '  %-18s %-10s %s %s\n' "$name" "${VERSION[$name]}" "${SHA[$name]}" "$(manifest_url "$name")"
         done
+        echo "ffmpeg configuration: $(sed -n 's/^#define FFMPEG_CONFIGURATION "\(.*\)"$/\1/p' "$WORK/build/ffmpeg/config.h")"
         echo
         echo "from the host (readelf -d bin/freerdp-shadow-cli):"
         readelf -d "$PKG/bin/freerdp-shadow-cli" | sed -n 's/.*(NEEDED).*\[\(.*\)\]/  \1/p'
