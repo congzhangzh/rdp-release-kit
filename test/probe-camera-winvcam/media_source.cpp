@@ -46,6 +46,14 @@ namespace probecam
 {
 	namespace
 	{
+		/* IID_IKsControl (ks.h, ksproxy.h): which SDK header defines the symbol, if any,
+		 * differs between SDKs and MSVC builds (C2065 on windows-2022 and windows-11-arm with
+		 * SDK 26100), so it is spelled out here */
+		const IID kIID_IKsControl = { 0x28F54685,
+			                          0x06FD,
+			                          0x11D2,
+			                          { 0xB2, 0x7A, 0x00, 0xA0, 0xC9, 0x22, 0x31, 0x96 } };
+
 		template <class T> void SafeRelease(T*& p)
 		{
 			if (p)
@@ -394,7 +402,7 @@ namespace probecam
 				if ((riid == __uuidof(IUnknown)) || (riid == __uuidof(IMFMediaEventGenerator)) ||
 				    (riid == __uuidof(IMFMediaSource)) || (riid == __uuidof(IMFMediaSourceEx)))
 					*ppv = static_cast<IMFMediaSourceEx*>(this);
-				else if (riid == IID_IKsControl)
+				else if (riid == kIID_IKsControl)
 					*ppv = static_cast<IKsControl*>(this);
 				else
 				{
