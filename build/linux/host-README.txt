@@ -179,35 +179,43 @@ Remove it with
   sudo rm /etc/systemd/system/freerdp-shadow-sesman.service
   sudo rm -r /opt/freerdp-host
 
-The camera (DRAFT, probe-camera-linux: wording for the product owner, not final)
--------------------------------------------------------------------------------
+The camera
+----------
 
-[DRAFT] A client's camera becomes a camera of this computer, named "FreeRDP Camera", that any
+A client's camera becomes a camera of this computer, named "FreeRDP Camera", that any
 app here can use (a browser, a video call). The camera device is v4l2loopback, a kernel module
-you install from your distribution; this package does not ship it. Without it the server logs
-one line, "camera: no v4l2loopback device", and works as before.
+you install from your distribution; this package does not ship it. Without it the server says so
+in one log line and works as before.
 
-[DRAFT] Install the module, then load it with the camera's name:
+Install the module, then load it with the camera's name:
 
   Debian, Ubuntu:  sudo apt install v4l2loopback-dkms
-  Fedora:          sudo dnf install akmod-v4l2loopback      (from RPM Fusion "free")
+  Fedora:          sudo dnf install akmod-v4l2loopback
+                   (RPM Fusion "free", a third-party repository: enable it first, https://rpmfusion.org/Configuration)
   Arch:            sudo pacman -S v4l2loopback-dkms linux-headers
 
   sudo modprobe v4l2loopback exclusive_caps=1 card_label="FreeRDP Camera"
 
-[DRAFT] To load it at every boot:
+To load it at every boot:
 
   echo v4l2loopback | sudo tee /etc/modules-load.d/freerdp-camera.conf
   echo 'options v4l2loopback exclusive_caps=1 card_label="FreeRDP Camera"' |
       sudo tee /etc/modprobe.d/freerdp-camera.conf
 
-[DRAFT] exclusive_caps=1 is what browsers need (Chrome lists the camera only then). The server
+The server uses only a v4l2loopback device named "FreeRDP Camera" (the card_label above), never
+another one, so a camera of OBS or another tool is never touched. To use a different device, set
+FREERDP_SHADOW_CAMERA_SINK=v4l2:/dev/videoN.
+
+One client's camera at a time: the first connected client that shares one. A view-only client
+can't share its camera.
+
+exclusive_caps=1 is what browsers need (Chrome lists the camera only then). The server
 writes the camera from its start; it shows a still (a camera with a slash) until a client's
 camera feeds it. With v4l2loopback 0.13 or newer the client's camera runs only while an app here
 uses the camera; an older one (Ubuntu 24.04 has 0.12.7) cannot tell, and the client's camera then
 runs while the client is connected (the server says so in one log line).
 
-[DRAFT] Secure Boot: the DKMS (Debian, Ubuntu, Arch) and akmods (Fedora) builds sign the module with
+Secure Boot: the DKMS (Debian, Ubuntu, Arch) and akmods (Fedora) builds sign the module with
 a key of this machine (a MOK), which the firmware must trust before the module loads. Enrol it
 once, then reboot and confirm it in the blue MokManager screen:
 
@@ -215,7 +223,7 @@ once, then reboot and confirm it in the blue MokManager screen:
   Ubuntu:  sudo mokutil --import /var/lib/shim-signed/mok/MOK.der
   Fedora:  sudo kmodgenca -a && sudo mokutil --import /etc/pki/akmods/certs/public_key.der
 
-[DRAFT] The server needs to write the device: your user in the group "video"
+The server needs to write the device: your user in the group "video"
 (sudo usermod -aG video "$USER", then log in again) where the distribution does not grant it.
 
 What it cannot do
