@@ -397,10 +397,18 @@ if [ -n "${SCREENS:-}" ]; then
         echo "== $name ($script)"
         mkdir -p "$out"
         env GATEWAY=127.0.0.1:"$LOCAL_WS_PORT" PAGE="$page" "$@" node "$TESTS/$script" "$out" 2>&1 | tee "$out.log"
-        if [ "${PIPESTATUS[0]}" = 0 ]; then
+        local rc=${PIPESTATUS[0]} checks
+        checks=$(grep -cE '^(PASS|FAIL) ' "$out.log")
+        # a test that ran no check proves nothing, whatever its exit code (the product owner,
+        # 2026-11-27: screens-span ended "0 of 0 checks failed" in run 46064212420)
+        if [ "$checks" = 0 ]; then
+            echo "FAIL  $name: no check ran (exit $rc: the test stopped before its first check)"
+            tail -n 3 "$out.log" | sed 's/^/      /'   # its reason, here and not only in the artifact
+            status=1
+        elif [ "$rc" = 0 ]; then
             echo "PASS  $name: $(grep -c '^PASS ' "$out.log") checks"
         else
-            echo "FAIL  $name: $(grep -c '^FAIL ' "$out.log") of $(grep -cE '^(PASS|FAIL) ' "$out.log") checks failed"
+            echo "FAIL  $name: $(grep -c '^FAIL ' "$out.log") of $checks checks failed (exit $rc)"
             status=1
         fi
     }

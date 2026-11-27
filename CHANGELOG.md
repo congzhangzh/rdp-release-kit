@@ -13,6 +13,8 @@ toolchain) gets an entry here in the same commit.
 
 ## 2026-11-27
 
+- **A test that ran no check fails, and says why** (release manager; the product owner, 2026-11-27): round 46064212420's screens (xrdp-xorg) ended "screens-span: 0 of 0 checks failed", and the reason ("WASM did not become ready within the test connection deadline", the span run's page never connected) was only in the artifact. test/wasm-session.sh now fails a test that made no PASS/FAIL line whatever its exit code (a clean exit with no check used to pass) and prints its last three lines; test/mac-host.sh's FreeRDP Web checks (AV1 4:2:0, HEVC) likewise.
+
 - **FreeRDP 20261127.3** (release manager, round 46064212420): release-20261127.2 + 1 commit. The clients' LGPL FFmpeg has decoders only, and FreeRDP's codec check creates an H.264 encoder at start only to learn what the build supports, so every client session logged ERROR "Failed to initialize H264 encoder"; the Windows host's two-monitor test counted it. It is INFO now ("libavcodec has no h264 encoder"); an encoder that exists but fails still reports its own error.
 
 - **FreeRDP 20261127.2; round 46059859502's two findings** (release manager): FreeRDP release-20261127.2 (integration-all-next60 = release-20261127.1 + 1 commit): on a Windows without Microsoft's HEVC Video Extensions Media Foundation finds no HEVC decoder and libavcodec decodes, but mf_init closed with an ERROR "mf_init failure" for every surface, which the Windows host's two-monitor test rightly counted as a decoder error; that case is INFO now, real failures stay ERROR. And kit.yml's demo-media job, the second copy of the demo-media step, fetches the CI-only FFmpeg before a cache miss needs it too (the first fix, b81a054, covered only windows-host.yml's copy).

@@ -223,6 +223,8 @@ else
         SERVER_LOG="$OUT/server-web.wlog" OUT="$OUT/web-i420" CHROME="$CHROME_BIN" FIREFOX="$FIREFOX" \
             node "$KIT_TEST/web-av1-i420.mjs" http://127.0.0.1:8082/index.html 127.0.0.1:3390 $b \
             > "$OUT/web-i420-$b.log" 2>&1 && ok=1 || ok=0
+        # a run that made no check proves nothing, whatever its exit code
+        grep -qE '^(PASS|FAIL) ' "$OUT/web-i420-$b.log" || ok=0
         grep -E '^(PASS|FAIL|INFO|RESULT) ' "$OUT/web-i420-$b.log"
         check "web AV1 4:2:0 in $b: $(grep -m1 '^RESULT ' "$OUT/web-i420-$b.log" | cut -d: -f2- | sed 's/^ //')" $ok \
             "$(grep -c '^PASS ' "$OUT/web-i420-$b.log") of $(grep -cE '^(PASS|FAIL) ' "$OUT/web-i420-$b.log") checks"
@@ -245,6 +247,8 @@ else
         SERVER_LOG="$OUT/server-web-hevc.wlog" OUT="$OUT/web-hevc" CHROME="$CHROME_BIN" \
             node "$KIT_TEST/web-hevc.mjs" http://127.0.0.1:8082/index.html 127.0.0.1:3390 $b \
             > "$OUT/web-hevc-$b.log" 2>&1 && ok=1 || ok=0
+        # a run that made no check proves nothing, whatever its exit code
+        grep -qE '^(PASS|FAIL) ' "$OUT/web-hevc-$b.log" || ok=0
         grep -E '^(PASS|FAIL|INFO|RESULT) ' "$OUT/web-hevc-$b.log"
         result=$(grep -m1 '^RESULT ' "$OUT/web-hevc-$b.log" | cut -d: -f2- | sed 's/^ //')
         if [ $b = safari ]; then
