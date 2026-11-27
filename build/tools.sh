@@ -20,9 +20,11 @@ esac
 
 case $KIND in
     windows)
-        # make: FFmpeg's own build (the client's LGPL decoders, build-windows-client.sh)
+        # make, and a native C compiler (gcc, libc6-dev): FFmpeg's own build (the client's LGPL
+        # decoders, build-windows-client.sh) compiles helper programs for the build machine;
+        # without one its configure stops: "Host compiler lacks C11 support" (run 46025115343)
         PACKAGES=(cmake ninja-build meson nasm pkg-config python3 zip file curl git gnupg
-                  xz-utils ca-certificates ccache rsync make) ;;
+                  xz-utils ca-certificates ccache rsync make gcc libc6-dev) ;;
     wasm)
         PACKAGES=(ninja-build meson pkg-config zip ccache rsync) ;;
     xrdp)
