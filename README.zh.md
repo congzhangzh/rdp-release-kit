@@ -35,6 +35,7 @@ macOS：`freerdp-tk.command`，需先清除下载文件的隔离属性，见下�
 | AV1 4:2:0 | 显卡带有 AV1 编码器时，通过 Media Foundation 在显卡上编码（已测试：NVIDIA 笔记本 GPU），否则使用 libaom | 通过 VA-API 在显卡上编码（尚未在真实 GPU 上验证），否则使用 libaom | libaom（没有 Apple 芯片能编码 AV1） |
 | 其他 | AV2（libavm）、Media Foundation 提供的 H.264 AVC420（供不支持 AV1 的客户端使用）、电脑的声音 | AV2、会话的声音（PipeWire）、通过 libei 输入按键 | AV2、VideoToolbox 提供的 H.264 和 HEVC（HEVC：服务器 `/gfx-hevc:i420`；客户端为 FreeRDP Web，在额外选项中填 `/gfx-codec-order:HEVC,AVC420`）、Mac 的声音 |
 | 登录 | Windows 账户（网络级别身份验证） | 你自己的账户（PAM，通过 TLS）：会话管理器把你交给你自己的 GNOME；用户单元只接受桌面的所有者 | 本机的 macOS 账户（PAM，通过 TLS）：通过守护进程时，在登录窗口可以是除 root 以外的任何本机用户（之后像坐在 Mac 前一样在登录窗口登录），或者是控制台上的用户；LaunchAgent 只接受它自己的用户 |
+| 摄像头 | 摄像头（Windows）：已连接客户端的摄像头会以“FreeRDP Camera”出现在 Windows 应用中。需要 Windows 11 或 Windows Server 2025（版本号 22000 或更高）；Windows Server 2022 不支持虚拟摄像头。同一时间只用一个客户端的摄像头，即最先共享的那个；只读客户端不能共享。只有应用在读取虚拟摄像头时，客户端的摄像头才会开启。如果服务器上的应用看不到摄像头，请在“设置 > 隐私和安全性 > 摄像头”中打开“摄像头访问”和“允许桌面应用访问你的摄像头”。 | — | — |
 | 每次发布都在 CI 中测试 | Windows Server 2025（x86_64）和 Windows 11 on ARM：AV1、Windows 登录、Ctrl+Alt+Del、锁屏界面、双显示器（x86_64）、FreeRDP Web | x86_64 和 ARM64 上的 GNOME 无显示器会话和 Xfce：会话管理器（已登录的和无显示器的 GNOME）、用户单元、AV1、AV2、按键、声音、拒绝其他账户 | GitHub 的 macOS runner：针对 LaunchAgent 的一次 AV1 会话和一次 AV2 会话，以及按下文安装的守护进程（runner 无法显示登录窗口） |
 
 ### 安装
