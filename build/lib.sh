@@ -332,12 +332,13 @@ licenses() {
 }
 
 # gpl_source_names <kit commit>: the release assets with the xrdp packages' corresponding source
-# (x264 is GPL-2.0-or-later and linked statically), on one line: x264's, xrdp's, the kit's.
+# (x264 is GPL-2.0-or-later and linked statically), on one line: x264's, xrdp's, the kit's,
+# libavm's (the AV2 encoder, static beside x264 where AV2 is on: part of the same work).
 # build/gpl-sources.sh makes them, build-xrdp-pkg.sh names them in every xrdp package, and
 # build/gpl-allow.txt makes the release check demand them. No '+' or '~': GitHub renames those
 gpl_source_names() {
     echo "gpl-source-x264-${SHA[x264]}.tar.xz gpl-source-xrdp-${VERSION[xrdp]}.${SHA[xrdp]:0:8}.tar.xz" \
-        "gpl-source-kit-build-${1:0:12}.tar.xz"
+        "gpl-source-kit-build-${1:0:12}.tar.xz gpl-source-libavm-${SHA[avm]}.tar.xz"
 }
 
 # shown once on a failure (the trap also runs in subshells): the end of

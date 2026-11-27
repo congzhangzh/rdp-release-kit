@@ -4,4 +4,4 @@
 # An optional field after the glob makes the exception conditional (the GPL's terms, checked):
 #   sources=<glob>,<glob>...  the same upload must hold an asset matching each glob (the source)
 #   licence=<file name>       the archive itself must hold a file of that name (the licence)
-xrdp[_-]0.* sources=gpl-source-x264-*.tar.xz,gpl-source-xrdp-*.tar.xz,gpl-source-kit-build-*.tar.xz licence=LICENSE.x264 x264 in xrdp, GPL complied (source + licence shipped), PO 2026-11-27
+xrdp[_-]0.* sources=gpl-source-x264-*.tar.xz,gpl-source-xrdp-*.tar.xz,gpl-source-kit-build-*.tar.xz,gpl-source-libavm-*.tar.xz licence=LICENSE.x264 x264 in xrdp, GPL complied (source + licence shipped), PO 2026-11-27

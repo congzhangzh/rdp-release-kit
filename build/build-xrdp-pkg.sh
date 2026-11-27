@@ -268,7 +268,7 @@ else
     tar -xOf "$x264_src" x264/COPYING > "$DOC/LICENSE.x264"
 fi
 grep -q 'GNU GENERAL PUBLIC LICENSE' "$DOC/LICENSE.x264"
-read -r SRC_X264 SRC_XRDP SRC_KIT < <(gpl_source_names "${KIT_SHA:-unknown}")
+read -r SRC_X264 SRC_XRDP SRC_KIT SRC_AVM < <(gpl_source_names "${KIT_SHA:-unknown}")
 cat > "$DOC/NOTICE.x264" << EOF
 This xrdp package contains x264 (https://code.videolan.org/videolan/x264), commit
 ${SHA[x264]}, linked statically into xrdp as its H.264 encoder.
@@ -287,6 +287,15 @@ holds this package also holds
       the scripts and patches that built this package: rdp-release-kit at
       commit ${KIT_SHA:-unknown}
 EOF
+# libavm (AV2) is linked statically beside x264 when the package has AV2: its source too
+if [ -n "$AV2" ]; then
+    cat >> "$DOC/NOTICE.x264" << EOF
+  $SRC_AVM
+      the source of libavm, the AV2 encoder (${VERSION[avm]}, commit ${SHA[avm]},
+      BSD-3-Clause-Clear), linked statically into xrdp too: its git archive
+      without the TensorFlow Lite bundles and analysis scripts its build never reads
+EOF
+fi
 if [ -n "${OVERRIDES:-}" ]; then
     printf '\nThis package is a local build, never published: %s came from local\ndirectories, not from the sources named above.\n' \
         "$OVERRIDES" >> "$DOC/NOTICE.x264"

@@ -12,9 +12,10 @@ carries x264's licence and a notice saying where that source is
 | `gpl-source-x264-<commit>.tar.xz` | x264's source, the pinned commit, exactly as the build fetched it (`git archive`), in xz |
 | `gpl-source-xrdp-<version>.<commit8>.tar.xz` | the other sources in the xrdp packages' binaries, each archive as fetched: xrdp, librfxcodec, libpainter, xorgxrdp, Opus, with `SOURCES.txt` |
 | `gpl-source-kit-build-<kit commit12>.tar.xz` | this kit at the commit that built the packages: the build scripts, the patches, `sources.lock`, all of it |
+| `gpl-source-libavm-<commit>.tar.xz` | libavm, the AV2 encoder linked statically beside x264: the git archive of its commit without the TensorFlow Lite bundles and two analysis kits its build never reads (about 5 MB instead of 174) |
 
 The release check (`build/check-no-ffmpeg.sh` with `build/gpl-allow.txt`) fails a release whose
-xrdp packages have x264 code but lack the licence file or any of the three assets.
+xrdp packages have x264 code but lack the licence file or any of the four assets.
 
 This page is for the releases published **before** that change: where the same source is, for
 each of them. It is a one-time note; nothing here changes after it is written.
@@ -69,9 +70,6 @@ and libpainter https://github.com/neutrinolabs/libpainter/commit/379b8fbf40f3098
 (xrdp's submodules, pinned since kit commit `d145803`). Opus was 1.5.2 until kit commit
 `a851c8f` (2026-10-21) and 1.6.1 after it, the upstream tarballs
 `https://downloads.xiph.org/releases/opus/opus-<version>.tar.gz` (SHA-256s in `sources.lock`).
-libavm, the AV2 encoder (BSD-3-Clause-Clear, static in the packages built with AV2, since kit
-commit `1cec070`, 2026-10-30), changed often: its commit is the `avm` line of `sources.lock` at
-the tag (https://github.com/congzhangzh/avm).
 
 The pre-releases:
 
@@ -88,6 +86,37 @@ The pre-releases:
   xorgxrdp_preview `59d0735c`). The first four tags (`xrdp-preview-<xrdp commit12>[-<kit
   commit12>]`) name the xrdp commit itself.
 
-To build the packages of a past release again: check out its tag and run `./build-xrdp.sh
+## libavm: the AV2 encoder beside x264
+
+libavm (BSD-3-Clause-Clear) is linked statically into xrdp beside x264 in the packages with AV2,
+so it is part of the same work and its source is part of the corresponding source. xrdp has
+AV2 from its fork release 20261030.1 (kit commit `b18b826`, release 20261031.3) on, in every
+package whose release is not marked `no-av2` in `distros.list` (at that tag). The earlier libavm
+pins (20261030.1 to 20261031.1, from kit commit `1cec070`) were in the clients only, which
+contain no x264. Worked out from `git tag --contains` on each commit that moved the `avm` line
+(✅); each commit sits on a branch `release-<version>` of https://github.com/congzhangzh/avm
+(✅ `git ls-remote`, 2026-11-27: branches, not tags):
+
+| Kit releases | libavm | Commit | Branch on the fork |
+|---|---|---|---|
+| 20261031.3 … 20261104.1 (46) | 20261031.2 | [`b132a0a6647d`](https://github.com/congzhangzh/avm/commit/b132a0a6647dc97e2e917fb9bae6f6c4335bfb54) | `release-20261031.2` |
+| 20261104.2 … 20261104.4 (3) | 20261103.1 | [`55df12d6d759`](https://github.com/congzhangzh/avm/commit/55df12d6d759eb595e8f440a1a37039e31ab57dd) | `release-20261103.1` |
+| 20261104.5 … 20261104.7 (3) | 20261103.2 | [`76a2133c270d`](https://github.com/congzhangzh/avm/commit/76a2133c270d150572e1a0ffa9dd8a554a907ece) | `release-20261103.2` |
+| 20261104.8 … 20261104.9 (2) | 20261103.3 | [`5b965cfa4c62`](https://github.com/congzhangzh/avm/commit/5b965cfa4c62a5f149b8c4d217275defc335e0b4) | `release-20261103.3` |
+| 20261104.10 … 20261104.13 (4) | 20261104.1 | [`9798cd4d8c7c`](https://github.com/congzhangzh/avm/commit/9798cd4d8c7c1457d072992209b62c93d6a25593) | `release-20261104.1` |
+| 20261104.14 … 20261106.9 (16) | 20261104.2 | [`e2969605549d`](https://github.com/congzhangzh/avm/commit/e2969605549d11b9609b8f678fbb8de09ec4fc34) | `release-20261104.2` |
+| 20261106.10 … 20261118.3 (57) | 20261106.1 | [`5bebfad2eef8`](https://github.com/congzhangzh/avm/commit/5bebfad2eef8918e8ff4f44d0d3cce87203c690d) | `release-20261106.1` |
+| 20261118.4 (1) | 20261118.1 | [`d4fda5dad5ab`](https://github.com/congzhangzh/avm/commit/d4fda5dad5abc5f554a205c99cb0f3b9c8c69962) | `release-20261118.1` |
+| none (pre-releases only) | 20261118.2 | [`567a8dcff713`](https://github.com/congzhangzh/avm/commit/567a8dcff713e2ec07e887d204bb0f52d0ab3674) | `release-20261118.2` |
+| 20261119.1 … 20261120.2 (3) | 20261119.4 | [`01defdb0eb5a`](https://github.com/congzhangzh/avm/commit/01defdb0eb5a163da178ef79474fd61a8dde0e4b) | `release-20261119.4` |
+| 20261120.3 … 20261127.2 (43) | 20261119.6 | [`060f61204513`](https://github.com/congzhangzh/avm/commit/060f612045132f2b0ba747dc74de6ba09f69386b) | `release-20261119.6` |
+
+libavm 20261118.2 reached no kit release, only the pre-releases of kit commit `65313b1`
+(`xrdp-20261118.6-65313b15361a`, ✅ by its tag name). Branches can move or go, so these commits have no lasting name on
+the fork yet; a tag per commit (`gpl-source/libavm-<commit>`) would give them one.
+
+## Building a past release again
+
+Check out its tag and run `./build-xrdp.sh
 <image>` (its header says how); it fetches the same sources by `sources.lock` and checks each
 one's SHA-256 or commit.
