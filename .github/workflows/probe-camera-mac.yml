@@ -32,9 +32,9 @@ env:
   FREERDP_BRANCH: feature-camera-mac
   # the probed commit, fixed (the branch may move on): set to the pushed feature-camera-mac
   # commit before pushing this branch; the build job refuses the zeros
-  FREERDP_SHA: "f4b06097e7bfd3becffc8a1efbf63a06a3b6a4e1"
-  # the one id prefix: io.github.congzhangzh.freerdp-shadow (+ .agent, .camera) and .freerdp
-  KIT_MAC_ID_PREFIX: io.github.congzhangzh
+  FREERDP_SHA: "7c0119a8925e82169d72de66567729dec3554604"
+  # the ids: build/macos/id-prefix (io.github.congzhangzh) + .freerdp-shadow (.agent, .camera)
+  # and .freerdp, read by build-macos-client.sh
   HOMEBREW_NO_AUTO_UPDATE: 1
   HOMEBREW_NO_INSTALL_CLEANUP: 1
 
@@ -192,6 +192,16 @@ jobs:
           /usr/libexec/PlistBuddy -c "Set :CFBundleVersion 1.0.1" twin-b/FreeRDP-Shadow.app/Contents/Info.plist
           build/macos/sign-mac.sh host twin-a - > out/twin-sign.txt && build/macos/sign-mac.sh host twin-b - >> out/twin-sign.txt
           test/probe-camera-mac/dr-check.sh adhoc twin-a twin-b 2>&1 | tee out/dr-adhoc.txt
+      # FreeRDP's WITH_SHADOW_CAMERA_MAC hooks: the server's own --camera-extension reaches the
+      # camera code (no extension is active on a runner: the device is not found, exit 1)
+      - name: freerdp-shadow-cli --camera-extension status (the hooks are in)
+        if: ${{ !cancelled() }}
+        run: |
+          set +e
+          "$HOSTPKG/FreeRDP-Shadow.app/Contents/MacOS/freerdp-shadow-cli" --camera-extension status > out/cli-camera-status.txt 2>&1
+          echo "exit $?" >> out/cli-camera-status.txt
+          cat out/cli-camera-status.txt
+          grep -q "^device AB9AC9A2-6D08-4DD3-BC75-25A3E66BE765: " out/cli-camera-status.txt
       - name: bin/sdl-freerdp, the shim (old command lines)
         if: ${{ !cancelled() }}
         run: test/probe-camera-mac/check-shim.sh "$CLIENTPKG" out/shim 2>&1 | tee out/shim.txt; exit "${PIPESTATUS[0]}"

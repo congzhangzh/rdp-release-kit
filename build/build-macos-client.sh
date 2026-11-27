@@ -24,7 +24,7 @@
 # Contents/Library/SystemExtensions, built and unit-tested here) and a README
 # (freerdp-host-<version>-macos-<arch>.zip).
 #
-# The bundle ids come from one prefix, KIT_MAC_ID_PREFIX (io.github.congzhangzh): the host
+# The bundle ids come from one prefix, KIT_MAC_ID_PREFIX (build/macos/id-prefix): the host
 # <prefix>.freerdp-shadow (its agent .agent, its camera .camera), the client FreeRDP.app
 # <prefix>.freerdp. Every build is signed ad hoc here (build/macos/sign-mac.sh -); the
 # Developer ID signature and notarization are a separate step on CI (the same sign-mac.sh with
@@ -40,7 +40,8 @@ STAGE=$WORK/stage
 
 # the ids (above); the team that signs is in the camera extension's Mach service and app
 # group: MACOS_TEAM_ID (a CI variable), else a placeholder for an unsigned build
-KIT_MAC_ID_PREFIX=${KIT_MAC_ID_PREFIX:-io.github.congzhangzh}
+# (build/macos/id-prefix holds it: kit.yml's release notes read the same file)
+KIT_MAC_ID_PREFIX=${KIT_MAC_ID_PREFIX:-$(cat "$KIT/build/macos/id-prefix")}
 HOST_ID=$KIT_MAC_ID_PREFIX.freerdp-shadow
 CLIENT_ID=$KIT_MAC_ID_PREFIX.freerdp
 TEAM_ID=${MACOS_TEAM_ID:-UNSIGNED00}
@@ -198,6 +199,13 @@ if [ -n "${HOST:-}" ]; then
     WHAT=(-DWITH_CLIENT=OFF -DWITH_SERVER=ON -DWITH_SHADOW=ON -DWITH_PROXY=OFF
           -DWITH_PLATFORM_SERVER=OFF -DWITH_AOM=ON -DWITH_AOM_INTRABC_DV_FIX=ON -DWITH_WINPR_TOOLS=ON
           -DWITH_GFX_AZURE=ON)  # HEVC: VideoToolbox encodes it (/gfx-hevc:i420), no FFmpeg
+    # the virtual camera in the server and its agent (FreeRDP's WITH_SHADOW_CAMERA_MAC: the
+    # camera callbacks, the frames to the agent, freerdp-shadow-cli --camera-extension);
+    # KIT_MAC_SHADOW_CAMERA=OFF builds the host without it. A FreeRDP without the option
+    # ignores it (CMake warns of an unused variable). The extension bundle itself comes from
+    # the camera build below either way.
+    WHAT+=(-DWITH_SHADOW_CAMERA_MAC="${KIT_MAC_SHADOW_CAMERA:-ON}"
+           -DCAMERA_MAC_BUNDLE_ID="$HOST_ID" -DCAMERA_MAC_TEAM_ID="$TEAM_ID")
 fi
 echo "== $FREERDP ${VERSION[$FREERDP]}"
 src=$(unpack "$FREERDP")

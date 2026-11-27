@@ -31,7 +31,7 @@ macOS：`freerdp-tk.command`，需先清除下载文件的隔离属性，见下�
 | | Windows（优先） | Linux | macOS（Apple Silicon） |
 |---|---|---|---|
 | 文件 | `freerdp-host-<version>-windows-x86_64.zip`、`-windows-aarch64.zip` | `freerdp-host-<version>-linux-x86_64.tar.xz`、`-linux-aarch64.tar.xz` | `freerdp-host-<version>-macos-arm64.zip` |
-| 运行方式 | Windows 服务 `freerdp-shadow-service`，以 SYSTEM 身份在控制台会话中运行服务器：登录界面和锁屏界面、UAC 提示以及 Ctrl+Alt+Del 也能共享 | [会话管理器](README.md#the-session-manager-runs-as-root) `freerdp-shadow-sesman`：以 root 身份运行的系统服务，把每个用户交给其自己 GNOME 会话（Mutter，Wayland 或 X11）里的 shadow server，并为没有 GNOME 会话的用户启动一个无显示器的 GNOME；不用 root 时，也可以用你所在桌面会话里的 systemd [用户单元](README.md#the-user-unit-your-own-desktop-no-root) `freerdp-shadow.service`：GNOME，或任何其他 X11 桌面 | 以 root 运行的 LaunchDaemon `org.freerdp.shadow.daemon`，加上在控制台会话里运行的代理（`freerdp-shadow-agent`）：先是登录窗口，然后是你的桌面，始终是同一个连接；不用 root 时，也可以用在你的登录会话中运行的 LaunchAgent（`FreeRDP-Shadow.app`） |
+| 运行方式 | Windows 服务 `freerdp-shadow-service`，以 SYSTEM 身份在控制台会话中运行服务器：登录界面和锁屏界面、UAC 提示以及 Ctrl+Alt+Del 也能共享 | [会话管理器](README.md#the-session-manager-runs-as-root) `freerdp-shadow-sesman`：以 root 身份运行的系统服务，把每个用户交给其自己 GNOME 会话（Mutter，Wayland 或 X11）里的 shadow server，并为没有 GNOME 会话的用户启动一个无显示器的 GNOME；不用 root 时，也可以用你所在桌面会话里的 systemd [用户单元](README.md#the-user-unit-your-own-desktop-no-root) `freerdp-shadow.service`：GNOME，或任何其他 X11 桌面 | 以 root 运行的 LaunchDaemon `io.github.congzhangzh.freerdp-shadow.daemon`，加上在控制台会话里运行的代理（`freerdp-shadow-agent`）：先是登录窗口，然后是你的桌面，始终是同一个连接；不用 root 时，也可以用在你的登录会话中运行的 LaunchAgent（`FreeRDP-Shadow.app`） |
 | AV1 4:2:0 | 显卡带有 AV1 编码器时，通过 Media Foundation 在显卡上编码（已测试：NVIDIA 笔记本 GPU），否则使用 libaom | 通过 VA-API 在显卡上编码（尚未在真实 GPU 上验证），否则使用 libaom | libaom（没有 Apple 芯片能编码 AV1） |
 | 其他 | AV2（libavm）、Media Foundation 提供的 H.264 AVC420（供不支持 AV1 的客户端使用）、电脑的声音 | AV2、会话的声音（PipeWire）、通过 libei 输入按键 | AV2、VideoToolbox 提供的 H.264 和 HEVC（HEVC：服务器 `/gfx-hevc:i420`；客户端为 FreeRDP Web，在额外选项中填 `/gfx-codec-order:HEVC,AVC420`）、Mac 的声音 |
 | 登录 | Windows 账户（网络级别身份验证） | 你自己的账户（PAM，通过 TLS）：会话管理器把你交给你自己的 GNOME；用户单元只接受桌面的所有者 | 本机的 macOS 账户（PAM，通过 TLS）：通过守护进程时，在登录窗口可以是除 root 以外的任何本机用户（之后像坐在 Mac 前一样在登录窗口登录），或者是控制台上的用户；LaunchAgent 只接受它自己的用户 |
@@ -86,7 +86,7 @@ sudo bash ./install-daemon.sh
 它把应用装到 /Applications，把服务器作为 root 的 LaunchDaemon 运行在 127.0.0.1:3388，
 并把它的代理作为 LaunchAgent 运行在登录窗口和每个会话中。然后在“系统设置 > 隐私与安全性”中，同时在
 “屏幕与系统音频录制”和“辅助功能”下允许 `freerdp-shadow-agent`（在 /Applications/FreeRDP-Shadow.app/Contents/MacOS 中），
-然后以你自己的身份（不用 sudo）重启代理：`launchctl kickstart -k gui/$(id -u)/org.freerdp.shadow.agent`。这个授权在登录窗口也有效。日志：/var/log/freerdp-shadow/。用
+然后以你自己的身份（不用 sudo）重启代理：`launchctl kickstart -k gui/$(id -u)/io.github.congzhangzh.freerdp-shadow.agent`。这个授权在登录窗口也有效。日志：/var/log/freerdp-shadow/。用
 `sudo bash /Applications/FreeRDP-Shadow.app/Contents/Resources/uninstall-daemon.sh`
 卸载
 （`--app` 同时删除应用，`--logs` 删除日志）。
@@ -96,15 +96,15 @@ sudo bash ./install-daemon.sh
 ```sh
 cp -R FreeRDP-Shadow.app /Applications/
 xattr -dr com.apple.quarantine /Applications/FreeRDP-Shadow.app
-cp org.freerdp.shadow.plist ~/Library/LaunchAgents/
-launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/org.freerdp.shadow.plist
+cp io.github.congzhangzh.freerdp-shadow.plist ~/Library/LaunchAgents/
+launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/io.github.congzhangzh.freerdp-shadow.plist
 ```
 
 然后在“系统设置 > 隐私与安全性”中，同时在“屏幕与系统音频录制”和“辅助功能”下允许 FreeRDP Shadow，并重启它：
-`launchctl kickstart -k gui/$(id -u)/org.freerdp.shadow`。
+`launchctl kickstart -k gui/$(id -u)/io.github.congzhangzh.freerdp-shadow`。
 
 两者都监听 3388：二选一安装（应用在监听时 `install-daemon.sh` 会拒绝；
-`launchctl bootout gui/$(id -u)/org.freerdp.shadow` 可以停掉它）。两者都使用临时（ad hoc）签名，
+`launchctl bootout gui/$(id -u)/io.github.congzhangzh.freerdp-shadow` 可以停掉它）。两者都使用临时（ad hoc）签名，
 所以每次更新后 macOS 都会再次询问这两项权限。
 
 每个压缩包里的 `README.txt` 都有该平台的完整说明：日志、选项、卸载。

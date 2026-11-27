@@ -1,7 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <!-- FreeRDP.app (build-macos-client.sh): the SDL3 client as an app, so AVFoundation finds
-     NSCameraUsageDescription (the camera, /dvc:rdpecam) in its main bundle; @CLIENT_ID@ is
+     NSCameraUsageDescription (the camera, /dvc:rdpecam) and NSMicrophoneUsageDescription
+     (/microphone) in its main bundle; @CLIENT_ID@ is
      KIT_MAC_ID_PREFIX.freerdp. The English words here, all four in
      Resources/<lang>.lproj/InfoPlist.strings (test/probe-camera-mac/make-strings.py writes
      both from the product owner's words: never edit them by hand) -->
@@ -24,5 +25,6 @@
     <key>LSMinimumSystemVersion</key>      <string>@MACOS_MIN@</string>
     <key>NSHighResolutionCapable</key>     <true/>
     <key>NSCameraUsageDescription</key> <string>FreeRDP shares your camera with the remote computer while you are connected.</string>
+    <key>NSMicrophoneUsageDescription</key> <string>FreeRDP sends your microphone's sound to the remote computer while you are connected.</string>
 </dict>
 </plist>

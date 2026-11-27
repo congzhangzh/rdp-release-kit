@@ -1101,6 +1101,8 @@ jobs:
         run: |
           freerdp=$(awk '$1 == "freerdp" { print $2 }' sources.lock)
           freerdp_commit=$(awk '$1 == "freerdp" { print $4 }' sources.lock)
+          # the macOS host's bundle id, from the one prefix the build uses (build/macos/id-prefix)
+          mac_host_id=$(cat build/macos/id-prefix).freerdp-shadow
           host=$(cd upload && ls freerdp-host-*-windows-x86_64.zip)
           host_arm=$(cd upload && ls freerdp-host-*-windows-aarch64.zip)
           linux_host=$(cd upload && ls freerdp-host-*-linux-x86_64.tar.xz)
@@ -1119,7 +1121,7 @@ jobs:
           # shellcheck disable=SC2046 # one argument per client archive
           build/xrdp-install-notes.sh --json upload "$base" |
             jq --arg r "$tag" --arg u "https://github.com/$GITHUB_REPOSITORY/releases/tag/$tag" --arg b "$base" --arg h "$host" \
-               --arg ma "$(cd upload && ls freerdp-host-*-macos-arm64.zip)" \
+               --arg ma "$(cd upload && ls freerdp-host-*-macos-arm64.zip)" --arg mid "$mac_host_id" \
                --arg lx "$linux_host" --arg la "$linux_host_arm" '
               def platform: capture("-(?<os>linux|windows|macos)-(?<arch>[a-z0-9_]+)\\.") |
                 ({linux: "Linux", windows: "Windows", macos: "macOS"}[.os]) + " " +
@@ -1134,8 +1136,8 @@ jobs:
               # the macOS host: share a Mac'"'"'s own screen, one entry per architecture (build/macos/host-README.txt)
               {mac: [[$ma, "Apple Silicon"]] | map(.[0] as $f | {platform: .[1], file: $f, url: ($b + "/" + $f),
                 command: ("curl -LO " + $b + "/" + $f + " && ditto -x -k " + $f + " . && cd " + ($f | rtrimstr(".zip")) + " && sudo bash ./install-daemon.sh"),
-                then: "Then allow freerdp-shadow-agent (in /Applications/FreeRDP-Shadow.app/Contents/MacOS) in System Settings > Privacy & Security, under Screen & System Audio Recording and Accessibility, and run as yourself: launchctl kickstart -k gui/$(id -u)/org.freerdp.shadow.agent. It listens on 127.0.0.1:3388 and shows the login window too: reach it over SSH (ssh -L 13388:127.0.0.1:3388 user@mac).",
-                kickstart: "launchctl kickstart -k gui/$(id -u)/org.freerdp.shadow.agent",
+                then: ("Then allow freerdp-shadow-agent (in /Applications/FreeRDP-Shadow.app/Contents/MacOS) in System Settings > Privacy & Security, under Screen & System Audio Recording and Accessibility, and run as yourself: launchctl kickstart -k gui/$(id -u)/" + $mid + ".agent. It listens on 127.0.0.1:3388 and shows the login window too: reach it over SSH (ssh -L 13388:127.0.0.1:3388 user@mac)."),
+                kickstart: ("launchctl kickstart -k gui/$(id -u)/" + $mid + ".agent"),
                 remove: "sudo bash /Applications/FreeRDP-Shadow.app/Contents/Resources/uninstall-daemon.sh --app"})} +
               # the Linux host: share a Linux desktop'"'"'s own screen (GNOME on Wayland or X11, other X11
               # desktops), a systemd user unit on 127.0.0.1; one entry per architecture, as "mac"
@@ -1173,7 +1175,7 @@ jobs:
           | Windows ARM64 | \`sdl3-freerdp-$freerdp-windows-aarch64.zip\` | the same |
           | macOS Apple Silicon | \`sdl3-freerdp-$freerdp-macos-arm64.tar.xz\` | unpack, then double-click \`freerdp-tk.command\` (or \`bin/sdl-freerdp /v:server /u:user\`); downloaded with a browser, clear macOS's quarantine first: \`xattr -dr com.apple.quarantine sdl3-freerdp-*\` (not notarized) |
           | xrdp server | see Install xrdp below | |
-          | macOS host Apple Silicon | \`$(cd upload && ls freerdp-host-*-macos-arm64.zip)\` | share a Mac's own screen, the login window included (AV2, AV1 and H.264, its sound): unzip, then \`sudo bash ./install-daemon.sh\` (a root LaunchDaemon on 127.0.0.1:3388, its agent at the login window and in each session), then allow Screen & System Audio Recording and Accessibility for \`freerdp-shadow-agent\`; HEVC from VideoToolbox in hardware with \`/gfx-hevc:i420\` (client: FreeRDP Web, Extra options \`/gfx-codec-order:HEVC,AVC420\`); without root, the LaunchAgent app (\`org.freerdp.shadow.plist\`) as before (README.txt; signed ad hoc, so each update asks again; CI installs the daemon mode, the grants and the login window are not testable there) |
+          | macOS host Apple Silicon | \`$(cd upload && ls freerdp-host-*-macos-arm64.zip)\` | share a Mac's own screen, the login window included (AV2, AV1 and H.264, its sound): unzip, then \`sudo bash ./install-daemon.sh\` (a root LaunchDaemon on 127.0.0.1:3388, its agent at the login window and in each session), then allow Screen & System Audio Recording and Accessibility for \`freerdp-shadow-agent\`; HEVC from VideoToolbox in hardware with \`/gfx-hevc:i420\` (client: FreeRDP Web, Extra options \`/gfx-codec-order:HEVC,AVC420\`); without root, the LaunchAgent app (\`$mac_host_id.plist\`) as before (README.txt; signed ad hoc, so each update asks again; CI installs the daemon mode, the grants and the login window are not testable there) |
           | Windows host x86_64 | \`$host\` | share a Windows PC's own screen (logon and lock screens included, AV2 and AV1, its sound): unzip, then in an administrator's PowerShell \`.\\freerdp-shadow-service.exe install --allow-sas -- /bind-address:127.0.0.1 /port:3388 /gfx-av1 /gfx-av2 -gfx-avc444\` (AV1 only: leave out \`/gfx-av2\`; README.txt) |
           | Windows host ARM64 | \`$host_arm\` | the same, on Windows 11 on ARM (Snapdragon PCs) |
           | Linux host x86_64 | \`$linux_host\` | share a Linux desktop's own screen (AV2 and AV1, its sound). First way, the session manager (GNOME 45 or newer, on Wayland or X11): as root, unpack it in \`/opt\` as \`/opt/freerdp-host\` (owned by root), copy its \`freerdp-shadow-sesman.service\` to \`/etc/systemd/system/\`, then \`sudo systemctl daemon-reload && sudo systemctl enable --now freerdp-shadow-sesman.service\`: one port, 127.0.0.1:3388, each connection to the GNOME session of the user it names (a headless one for the group \`freerdp-headless\`). Without root, and for other X11 desktops: the user unit, the folder in \`~/.local/opt/freerdp-host\` and its \`freerdp-shadow.service\` in \`~/.config/systemd/user/\`, then \`systemctl --user daemon-reload && systemctl --user enable --now freerdp-shadow.service\`. Install one or the other: both take 3388. Keep it on 127.0.0.1 and reach it over SSH (\`ssh -L 13388:127.0.0.1:3388 user@server\`); the login is the account whose session it is (README.txt) |

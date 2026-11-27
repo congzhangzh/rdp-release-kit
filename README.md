@@ -35,7 +35,7 @@ sessions of its own; for that, see [xrdp](#xrdp-packages).
 | | Windows (first) | Linux | macOS (Apple Silicon) |
 |---|---|---|---|
 | File | `freerdp-host-<version>-windows-x86_64.zip`, `-windows-aarch64.zip` | `freerdp-host-<version>-linux-x86_64.tar.xz`, `-linux-aarch64.tar.xz` | `freerdp-host-<version>-macos-arm64.zip` |
-| Runs as | a Windows service, `freerdp-shadow-service`, which runs the server as SYSTEM on the console session: the logon and lock screens, UAC prompts and Ctrl+Alt+Del too | the [session manager](#the-session-manager-runs-as-root), `freerdp-shadow-sesman`: a root system service that hands each user to a shadow server in their own GNOME session (Mutter, Wayland or X11), and starts a headless GNOME for a user who has none; or, without root, a systemd [user unit](#the-user-unit-your-own-desktop-no-root), `freerdp-shadow.service`, in the desktop session you're in: GNOME, or any other X11 desktop | a root LaunchDaemon, `org.freerdp.shadow.daemon`, with an agent (`freerdp-shadow-agent`) in the session on the console: the login window, then your desktop, on one connection; or, without root, a LaunchAgent in your login session (`FreeRDP-Shadow.app`) |
+| Runs as | a Windows service, `freerdp-shadow-service`, which runs the server as SYSTEM on the console session: the logon and lock screens, UAC prompts and Ctrl+Alt+Del too | the [session manager](#the-session-manager-runs-as-root), `freerdp-shadow-sesman`: a root system service that hands each user to a shadow server in their own GNOME session (Mutter, Wayland or X11), and starts a headless GNOME for a user who has none; or, without root, a systemd [user unit](#the-user-unit-your-own-desktop-no-root), `freerdp-shadow.service`, in the desktop session you're in: GNOME, or any other X11 desktop | a root LaunchDaemon, `io.github.congzhangzh.freerdp-shadow.daemon`, with an agent (`freerdp-shadow-agent`) in the session on the console: the login window, then your desktop, on one connection; or, without root, a LaunchAgent in your login session (`FreeRDP-Shadow.app`) |
 | AV1 4:2:0 | on the graphics card through Media Foundation when it has an AV1 encoder (tested: an NVIDIA laptop GPU), else libaom | on the graphics card through VA-API (not yet proven on a real GPU), else libaom | libaom (no Apple chip encodes AV1) |
 | Also | AV2 (libavm), H.264 AVC420 from Media Foundation for clients without AV1, the PC's sound | AV2, the session's sound (PipeWire), keys through libei | AV2, H.264 and HEVC from VideoToolbox (HEVC: server `/gfx-hevc:i420`; client FreeRDP Web, Extra options `/gfx-codec-order:HEVC,AVC420`), the Mac's sound |
 | Login | a Windows account (Network Level Authentication) | your own account (PAM, over TLS): the session manager hands you to your own GNOME; the user unit lets in the desktop's owner only | a local macOS account (PAM, over TLS): through the daemon, any local user but root at the login window (then you log in on the login window, as at the Mac), or the user on the console; the LaunchAgent lets in its own user only |
@@ -92,7 +92,7 @@ It installs the app in /Applications, the server as a root LaunchDaemon on 127.0
 agent as a LaunchAgent at the login window and in each session. Then allow `freerdp-shadow-agent`
 (in /Applications/FreeRDP-Shadow.app/Contents/MacOS) in System Settings > Privacy & Security, under
 both Screen & System Audio Recording and Accessibility, then restart the agent, as yourself (not sudo):
-`launchctl kickstart -k gui/$(id -u)/org.freerdp.shadow.agent`. The grant holds at the login window too.
+`launchctl kickstart -k gui/$(id -u)/io.github.congzhangzh.freerdp-shadow.agent`. The grant holds at the login window too.
 Logs: /var/log/freerdp-shadow/. Remove it with
 `sudo bash /Applications/FreeRDP-Shadow.app/Contents/Resources/uninstall-daemon.sh`
 (`--app` removes the
@@ -103,16 +103,16 @@ Without root, for your own session only: the LaunchAgent app.
 ```sh
 cp -R FreeRDP-Shadow.app /Applications/
 xattr -dr com.apple.quarantine /Applications/FreeRDP-Shadow.app
-cp org.freerdp.shadow.plist ~/Library/LaunchAgents/
-launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/org.freerdp.shadow.plist
+cp io.github.congzhangzh.freerdp-shadow.plist ~/Library/LaunchAgents/
+launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/io.github.congzhangzh.freerdp-shadow.plist
 ```
 
 Then allow FreeRDP Shadow in System Settings > Privacy & Security, under both Screen & System
 Audio Recording and Accessibility, and restart it:
-`launchctl kickstart -k gui/$(id -u)/org.freerdp.shadow`.
+`launchctl kickstart -k gui/$(id -u)/io.github.congzhangzh.freerdp-shadow`.
 
 Both listen on 3388: install one or the other (`install-daemon.sh` refuses while the app listens;
-`launchctl bootout gui/$(id -u)/org.freerdp.shadow` stops it). Both are signed ad hoc, so macOS
+`launchctl bootout gui/$(id -u)/io.github.congzhangzh.freerdp-shadow` stops it). Both are signed ad hoc, so macOS
 asks for the two permissions again after each update.
 
 Each archive's `README.txt` has the whole story for its platform: logs, options, removal.

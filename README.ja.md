@@ -35,7 +35,7 @@ Windows標準のリモートデスクトップ接続が使えます。VNCやリ�
 | | Windows(最初) | Linux | macOS(Apple Silicon) |
 |---|---|---|---|
 | ファイル | `freerdp-host-<version>-windows-x86_64.zip`、`-windows-aarch64.zip` | `freerdp-host-<version>-linux-x86_64.tar.xz`、`-linux-aarch64.tar.xz` | `freerdp-host-<version>-macos-arm64.zip` |
-| 実行形態 | Windowsサービス `freerdp-shadow-service`。コンソールセッション上でSYSTEMとしてサーバーを実行し、ログオン画面やロック画面、UACプロンプト、Ctrl+Alt+Delにも対応します | [セッションマネージャー](README.md#the-session-manager-runs-as-root) `freerdp-shadow-sesman`。rootのシステムサービスで、各ユーザーを本人のGNOMEセッション(Mutter、WaylandまたはX11)のシャドウサーバーに引き渡し、GNOMEセッションのないユーザーにはヘッドレスのGNOMEを起動します。rootなしの場合は、今いるデスクトップセッション内のsystemd[ユーザーユニット](README.md#the-user-unit-your-own-desktop-no-root) `freerdp-shadow.service`(GNOME、または任意のX11デスクトップ) | rootのLaunchDaemon `org.freerdp.shadow.daemon` と、コンソールのセッションで動くエージェント(`freerdp-shadow-agent`)。ログインウィンドウからデスクトップまで、1つの接続のまま使えます。rootなしの場合は、ログインセッション内のLaunchAgent(`FreeRDP-Shadow.app`) |
+| 実行形態 | Windowsサービス `freerdp-shadow-service`。コンソールセッション上でSYSTEMとしてサーバーを実行し、ログオン画面やロック画面、UACプロンプト、Ctrl+Alt+Delにも対応します | [セッションマネージャー](README.md#the-session-manager-runs-as-root) `freerdp-shadow-sesman`。rootのシステムサービスで、各ユーザーを本人のGNOMEセッション(Mutter、WaylandまたはX11)のシャドウサーバーに引き渡し、GNOMEセッションのないユーザーにはヘッドレスのGNOMEを起動します。rootなしの場合は、今いるデスクトップセッション内のsystemd[ユーザーユニット](README.md#the-user-unit-your-own-desktop-no-root) `freerdp-shadow.service`(GNOME、または任意のX11デスクトップ) | rootのLaunchDaemon `io.github.congzhangzh.freerdp-shadow.daemon` と、コンソールのセッションで動くエージェント(`freerdp-shadow-agent`)。ログインウィンドウからデスクトップまで、1つの接続のまま使えます。rootなしの場合は、ログインセッション内のLaunchAgent(`FreeRDP-Shadow.app`) |
 | AV1 4:2:0 | AV1エンコーダーがあればMedia Foundation経由でグラフィックスカード上、なければlibaom(テスト済み: NVIDIAのノートPC用GPU) | VA-API経由でグラフィックスカード上(実際のGPUでは未検証)、なければlibaom | libaom(AV1をエンコードするAppleチップはありません) |
 | その他 | AV2(libavm)、AV1非対応クライアント向けにMedia FoundationのH.264 AVC420、PCの音声 | AV2、セッションの音声(PipeWire)、libei経由のキー入力 | AV2、VideoToolboxのH.264とHEVC(HEVC: サーバー `/gfx-hevc:i420`、クライアントはFreeRDP Webの追加オプション `/gfx-codec-order:HEVC,AVC420`)、Macの音声 |
 | ログイン | Windowsアカウント(ネットワークレベル認証) | 自分のアカウント(PAM、TLS経由)。セッションマネージャーは本人のGNOMEに引き渡し、ユーザーユニットはデスクトップの所有者だけを受け入れます | ローカルのmacOSアカウント(PAM、TLS経由)。デーモンでは、ログインウィンドウではroot以外の任意のローカルユーザー(その後、Macの前と同じようにログインウィンドウでログインします)、またはコンソールのユーザー。LaunchAgentは本人のユーザーだけを受け入れます |
@@ -91,7 +91,7 @@ sudo bash ./install-daemon.sh
 ログインウィンドウと各セッションのLaunchAgentとしてインストールします。次に、システム設定 > プライバシーとセキュリティで、
 「画面とシステムオーディオの録画」と「アクセシビリティ」の両方で `freerdp-shadow-agent`
 (/Applications/FreeRDP-Shadow.app/Contents/MacOS 内)を許可し、sudoなしの自分のユーザーでエージェントを再起動してください:
-`launchctl kickstart -k gui/$(id -u)/org.freerdp.shadow.agent`。この許可はログインウィンドウでも有効です。
+`launchctl kickstart -k gui/$(id -u)/io.github.congzhangzh.freerdp-shadow.agent`。この許可はログインウィンドウでも有効です。
 ログ: /var/log/freerdp-shadow/。削除は
 `sudo bash /Applications/FreeRDP-Shadow.app/Contents/Resources/uninstall-daemon.sh`
 で行います(`--app` でアプリも、`--logs` でログも削除)。
@@ -101,15 +101,15 @@ rootなしで、自分のセッションだけを共有する場合: LaunchAgent
 ```sh
 cp -R FreeRDP-Shadow.app /Applications/
 xattr -dr com.apple.quarantine /Applications/FreeRDP-Shadow.app
-cp org.freerdp.shadow.plist ~/Library/LaunchAgents/
-launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/org.freerdp.shadow.plist
+cp io.github.congzhangzh.freerdp-shadow.plist ~/Library/LaunchAgents/
+launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/io.github.congzhangzh.freerdp-shadow.plist
 ```
 
 次に、システム設定 > プライバシーとセキュリティで、「画面とシステムオーディオの録画」と「アクセシビリティ」の両方で
-FreeRDP Shadowを許可し、再起動してください: `launchctl kickstart -k gui/$(id -u)/org.freerdp.shadow`。
+FreeRDP Shadowを許可し、再起動してください: `launchctl kickstart -k gui/$(id -u)/io.github.congzhangzh.freerdp-shadow`。
 
 どちらも3388で待ち受けるので、どちらか一方だけをインストールしてください(アプリが待ち受けている間は `install-daemon.sh` が
-拒否します。`launchctl bootout gui/$(id -u)/org.freerdp.shadow` で止められます)。どちらもアドホック署名のため、
+拒否します。`launchctl bootout gui/$(id -u)/io.github.congzhangzh.freerdp-shadow` で止められます)。どちらもアドホック署名のため、
 更新のたびにmacOSが2つの許可を再度求めます。
 
 各アーカイブの `README.txt` に、そのプラットフォームについてのすべてが書かれています。ログ、オプション、削除方法などです。

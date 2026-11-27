@@ -1,2 +1,3 @@
 /* FreeRDP.app, zh-Hans (made by test/probe-camera-mac/make-strings.py) */
 "NSCameraUsageDescription" = "连接期间，FreeRDP 会把你的摄像头共享给远程电脑。";
+"NSMicrophoneUsageDescription" = "连接期间，FreeRDP 会把你麦克风的声音发送到远程电脑。";
