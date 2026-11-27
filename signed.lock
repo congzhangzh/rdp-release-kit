@@ -1,7 +1,10 @@
 # Tarballs that must carry a valid upstream signature (<url>.asc), and the
 # fingerprint of the signing key (keys/ holds the public keys), one per
 # line: <name in sources.lock>  <fingerprint>.
-# None now: xrdp's and xorgxrdp's release tarballs (signed by Koichiro
-# IWAO, xrdp's release maintainer) were the only ones, and the kit builds
-# xrdp from our release on the fork and xorgxrdp from a development
-# commit, both pinned by commit id. Their key stays in git's history.
+# xrdp's and xorgxrdp's release tarballs (signed by Koichiro IWAO, xrdp's
+# release maintainer) were the first; the kit now builds xrdp from our
+# release on the fork and xorgxrdp from a development commit, both pinned by
+# commit id, and their key stays in git's history.
+# FFmpeg's release tarballs: "FFmpeg release signing key
+# <ffmpeg-devel@ffmpeg.org>", keys/ffmpeg-release.asc (https://ffmpeg.org/ffmpeg-devel.asc)
+ffmpeg  FCF986EA15E6E293A5644F10B4322F04D67658D8

@@ -28,6 +28,7 @@ WATCH=(
 	"zlib        https://github.com/madler/zlib.git               ^v[0-9]+\.[0-9]+(\.[0-9]+)*$          v"
 	"jansson     https://github.com/akheron/jansson.git           ^v[0-9]+\.[0-9]+(\.[0-9]+)?$          v"
 	"libfuse     https://github.com/libfuse/libfuse.git            ^fuse-3\.[0-9]+\.[0-9]+$             fuse-"
+	"ffmpeg      https://github.com/FFmpeg/FFmpeg.git             ^n[0-9]+\.[0-9]+(\.[0-9]+)?$          n"
 	"libei       https://gitlab.freedesktop.org/libinput/libei.git ^[0-9]+\.[0-9]+\.[0-9]+$             ''"
 	"libpng      https://github.com/pnggroup/libpng.git           ^v1\.6\.[0-9]+$                      v"
 	"libressl    https://github.com/libressl/portable.git         ^v[0-9]+\.[0-9]+\.[0-9]+$             v"
