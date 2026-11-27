@@ -20,8 +20,9 @@ esac
 
 case $KIND in
     windows)
+        # make: FFmpeg's own build (the client's LGPL decoders, build-windows-client.sh)
         PACKAGES=(cmake ninja-build meson nasm pkg-config python3 zip file curl git gnupg
-                  xz-utils ca-certificates ccache rsync) ;;
+                  xz-utils ca-certificates ccache rsync make) ;;
     wasm)
         PACKAGES=(ninja-build meson pkg-config zip ccache rsync) ;;
     xrdp)

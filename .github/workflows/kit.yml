@@ -130,6 +130,66 @@ jobs:
           if-no-files-found: error
           retention-days: 3
 
+      # windows-hevc's inputs, never released (the release takes sdl3-freerdp-*): the HEVC decode
+      # test from this build tree, and its two pictures, made with the CI's GPL FFmpeg (libx265)
+      # outside the build container and outside dist/
+      - uses: actions/upload-artifact@v7
+        with:
+          name: hevc-decode-test-windows-${{ matrix.arch }}
+          path: dist/hevc-decode-test-windows-${{ matrix.arch }}.exe
+          if-no-files-found: error
+          retention-days: 3
+      - name: The HEVC test pictures (test data, CI only)
+        if: matrix.arch == 'x86_64'
+        run: |
+          build/ci-ffmpeg.sh "$RUNNER_TEMP/ci-ffmpeg"
+          test/windows-hevc/make-streams.sh "$RUNNER_TEMP/ci-ffmpeg/bin/ffmpeg" "$RUNNER_TEMP/hevc-streams"
+      - if: matrix.arch == 'x86_64'
+        uses: actions/upload-artifact@v7
+        with:
+          name: hevc-test-streams
+          path: ${{ runner.temp }}/hevc-streams
+          if-no-files-found: error
+          retention-days: 3
+
+  # The Windows client's HEVC on Windows without the HEVC Video Extensions (every runner): the
+  # decode test, linked in the client's own build tree, decodes HEVC 4:2:0 and 4:4:4 with FFmpeg
+  # after Media Foundation declined, and names the decoder (test/windows-hevc/windows-hevc.ps1).
+  # Microsoft's extension path (Media Foundation, hardware) is not tested here.
+  windows-hevc:
+    needs: [windows]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x86_64
+            runner: windows-2025
+          - arch: aarch64
+            runner: windows-11-arm
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        with:
+          name: hevc-decode-test-windows-${{ matrix.arch }}
+          path: dl/exe
+      - uses: actions/download-artifact@v8
+        with:
+          name: hevc-test-streams
+          path: dl/streams
+      - name: HEVC decode with the client's libraries
+        shell: pwsh
+        run: >
+          ./test/windows-hevc/windows-hevc.ps1 -Exe dl/exe/hevc-decode-test-windows-${{ matrix.arch }}.exe
+          -Streams dl/streams -Out out
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: windows-hevc-test-${{ matrix.arch }}
+          path: out
+          retention-days: 7
+
   # The macOS client, natively on Apple Silicon (arm64 on macos-15). Intel Macs
   # (x86_64) are no longer built since 2026-11-23 (no new Intel hardware);
   # kit 20261122.6 has the last of them
@@ -930,7 +990,7 @@ jobs:
   # download (docs/RELEASE.md, "Products and channels")
   release:
     if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
-    needs: [build, windows, macos, mac-host, mac-host-test, linux-host, linux-host-test, xrdp, mutter, wasm, demo, windows-host]
+    needs: [build, windows, windows-hevc, macos, mac-host, mac-host-test, linux-host, linux-host-test, xrdp, mutter, wasm, demo, windows-host]
     runs-on: ubuntu-24.04
     # one at a time across commits: each counts N from the releases before it,
     # so two pushes close together get .1 and .2, not both .1 (the second

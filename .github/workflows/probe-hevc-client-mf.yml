@@ -1,0 +1,170 @@
+# Probe (branch probe-hevc-client-mf only; publishes nothing, uploads logs): the Windows client
+# with HEVC 4:2:0 through Media Foundation, else an LGPL FFmpeg (freerdp-comp-hevc-g1's Windows lane).
+#  - build: the shipped Windows zip twice on Linux, before (main as it is) and after (this branch,
+#    FreeRDP from the fork branch feature-hevc-client-mf, pinned in the job's copy of sources.lock:
+#    overrides are refused on CI, sources.lock is CI's only input), and prints both sizes; runs the
+#    release's GPL check (the RM's new check-no-ffmpeg.sh, a probe-only copy until it lands on main)
+#    on the after zip; makes the two HEVC test pictures with the CI's GPL FFmpeg (libx265).
+#  - test: on Windows (x86_64 and ARM64, no HEVC Video Extensions there) the after build's
+#    kit-hevc-decode.exe, linked in the client's own build tree, decodes both pictures:
+#    test/windows-hevc/windows-hevc.ps1 checks PASS, the decoder named and why Media Foundation
+#    declined.
+# Artifacts: logs, plus what the Windows job runs (the test exe and the two pictures, 1 day).
+# No zip is uploaded, and nothing the CI's GPL FFmpeg made goes near a zip.
+name: probe-hevc-client-mf
+
+on:
+  push:
+    branches: [probe-hevc-client-mf]
+
+permissions:
+  contents: read
+
+env:
+  FREERDP_REPO: https://github.com/congzhangzh/FreeRDP.git
+  FREERDP_BRANCH: feature-hevc-client-mf
+  # the probed commit, fixed: the branch may move on
+  FREERDP_SHA: f7e2425af948b0c4fcbfc57719e30e1e8d7072b8
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [x86_64, aarch64]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 150
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          path: after
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+          path: before
+
+      - name: Cache sources
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/rdp-release-kit/sources
+          key: sources-probe-hevc-${{ hashFiles('after/sources.lock') }}
+          restore-keys: sources-
+
+      - name: Cache compiled objects
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/rdp-release-kit/ccache
+          key: ccache-probe-hevc-windows-${{ matrix.arch }}-${{ github.sha }}
+          restore-keys: |
+            ccache-probe-hevc-windows-${{ matrix.arch }}-
+            ccache-windows-${{ matrix.arch }}-
+
+      # its own work tree, the same sources and compiler cache
+      - name: Before (main)
+        env:
+          CCACHE_MAXSIZE: 1G
+          KIT_CACHE: ${{ github.workspace }}/work-before
+        run: cd before && CCACHE=$HOME/.cache/rdp-release-kit/ccache/windows ./build-windows.sh ${{ matrix.arch }}
+
+      - name: Sizes before, then free the before work tree (the runner's disk holds one)
+        run: |
+          mkdir -p logs/before
+          cp work-before/win-${{ matrix.arch }}/log/*.log logs/before/ || true
+          z=$(ls before/dist/sdl3-freerdp-*-windows-${{ matrix.arch }}.zip)
+          echo "before $(basename "$z") $(stat -c %s "$z")" | tee logs/sizes.txt
+          unzip -l "$z" | grep -E '\.exe$' | tee -a logs/sizes.txt
+          rm -rf work-before
+
+      - name: After - FreeRDP from the fork, the probed commit
+        run: |
+          sha=$FREERDP_SHA
+          git ls-remote "$FREERDP_REPO" "refs/heads/$FREERDP_BRANCH" | tee logs/freerdp-branch-head.txt
+          sed -i -E "s|^freerdp +[^ ]+ +git\+[^ ]+ +[0-9a-f]{40}\$|freerdp     probe-${sha:0:9} git+$FREERDP_REPO $sha|" after/sources.lock
+          grep -E '^freerdp ' after/sources.lock | tee logs/freerdp-after.txt
+          grep -q " $sha\$" logs/freerdp-after.txt
+
+      - name: After (this branch)
+        env:
+          CCACHE_MAXSIZE: 1G
+        run: cd after && ./build-windows.sh ${{ matrix.arch }}
+
+      - name: Sizes after
+        run: |
+          mkdir -p logs/after
+          cp ~/.cache/rdp-release-kit/win-${{ matrix.arch }}/log/*.log logs/after/
+          z=$(ls after/dist/sdl3-freerdp-*-windows-${{ matrix.arch }}.zip)
+          echo "after $(basename "$z") $(stat -c %s "$z")" | tee -a logs/sizes.txt
+          unzip -l "$z" | grep -E '\.exe$' | tee -a logs/sizes.txt
+          b=$(awk '$1 == "before" {print $3}' logs/sizes.txt); a=$(awk '$1 == "after" {print $3}' logs/sizes.txt)
+          echo "zip ${{ matrix.arch }}: before $b, after $a, change $((a - b)) bytes" | tee -a logs/sizes.txt
+          tail -1 logs/sizes.txt >> "$GITHUB_STEP_SUMMARY"
+          # the SIMD FFmpeg picked (its configure summary, kept in ffmpeg.log)
+          grep -E '^(ARCH|x86 assembler|[A-Z0-9 -]+ enabled|threading support|License:) ' logs/after/ffmpeg.log
+
+      # only the after zip in the folder it scans, as the release's upload folder holds it
+      - name: GPL check on the after zip (the RM's check-no-ffmpeg.sh, probe copy)
+        run: |
+          mkdir scan
+          cp after/dist/sdl3-freerdp-*-windows-${{ matrix.arch }}.zip scan/
+          after/test/probe-hevc-client-mf/check-no-ffmpeg.sh scan 2>&1 | tee logs/check-no-ffmpeg.txt
+
+      # the pictures: the same on both, made once
+      - name: The HEVC test pictures (CI's GPL FFmpeg, libx265; test data only)
+        if: matrix.arch == 'x86_64'
+        run: |
+          after/build/ci-ffmpeg.sh "$RUNNER_TEMP/ci-ffmpeg"
+          after/test/windows-hevc/make-streams.sh "$RUNNER_TEMP/ci-ffmpeg/bin/ffmpeg" hevc-test/streams
+
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: probe-hevc-build-logs-${{ matrix.arch }}
+          path: logs
+          retention-days: 7
+      - uses: actions/upload-artifact@v7
+        with:
+          name: probe-hevc-decode-test-${{ matrix.arch }}
+          path: after/dist/hevc-decode-test-windows-${{ matrix.arch }}.exe
+          if-no-files-found: error
+          retention-days: 1
+      - if: matrix.arch == 'x86_64'
+        uses: actions/upload-artifact@v7
+        with:
+          name: probe-hevc-streams
+          path: hevc-test/streams
+          if-no-files-found: error
+          retention-days: 1
+
+  test:
+    needs: build
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x86_64
+            runner: windows-2025
+          - arch: aarch64
+            runner: windows-11-arm
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        with:
+          name: probe-hevc-decode-test-${{ matrix.arch }}
+          path: dl/exe
+      - uses: actions/download-artifact@v8
+        with:
+          name: probe-hevc-streams
+          path: dl/streams
+      - name: HEVC decode through the client's libraries (FFmpeg; Media Foundation declines)
+        shell: pwsh
+        run: >
+          ./test/windows-hevc/windows-hevc.ps1 -Exe dl/exe/hevc-decode-test-windows-${{ matrix.arch }}.exe
+          -Streams dl/streams -Out out
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: probe-hevc-test-logs-${{ matrix.arch }}
+          path: out
+          retention-days: 7
