@@ -7,6 +7,7 @@
 # static library into /work/deps, and FreeRDP's SDL3 client is linked against
 # them. The result is <output dir>/sdl3-freerdp-<version>-linux-<arch>.tar.xz
 # with the client, the licences of everything inside it and a manifest.
+# It redirects the local camera (MS-RDPECAM, the rdpecam channel with its V4L2 backend).
 #
 # HOST=1 builds the Linux host instead: FreeRDP's shadow server
 # (freerdp-shadow-cli) from freerdp_linux_host, with two subsystems, Mutter
@@ -307,6 +308,13 @@ fi
 # the end of every link line (CMAKE_<LANG>_STANDARD_LIBRARIES; without it the link misses
 # av_csp_* in libswscale's format.o)
 FFLIBS="$DEPS/lib/libavutil.a -lm -pthread"
+# Camera redirection (MS-RDPECAM): the rdpecam client channel with its V4L2 backend (only the
+# kernel's videodev2.h), without libusb (WITH_RDPECAM_UVC_H264=OFF: no libusb-1.0.so to need;
+# the formats V4L2 lists, MJPG and H.264 included, are passed through as they are). The movie
+# and GStreamer backends are off by name: neither would be found (no avformat, no GStreamer
+# under /deps), but their options would stay ON in the cache and in /buildconfig
+CAMERA_CLIENT_OPTS=(-DCHANNEL_RDPECAM=ON -DCHANNEL_RDPECAM_CLIENT=ON -DWITH_RDPECAM_UVC_H264=OFF
+    -DWITH_RDPECAM_MOVIE=OFF -DWITH_RDPECAM_GSTREAMER=OFF)
 configure "$WORK/build/freerdp" env PKG_CONFIG_LIBDIR="$DEPS/lib/pkgconfig" \
     cmake -G Ninja -S "$src" -B "$WORK/build/freerdp" -DCMAKE_BUILD_TYPE=Release "${LAUNCHER[@]}" \
     -DCMAKE_INSTALL_PREFIX=/opt/freerdp -DCMAKE_PREFIX_PATH=$DEPS \
@@ -326,8 +334,15 @@ configure "$WORK/build/freerdp" env PKG_CONFIG_LIBDIR="$DEPS/lib/pkgconfig" \
     -DWITH_GFX_AV2=ON -DWITH_AVM=ON \
     -DWITH_SYSTEMD=OFF -DWITH_UNICODE_BUILTIN=ON -DWITH_INTERNAL_MD4=ON \
     -DWITH_INTERNAL_RC4=ON -DWITH_SSO_MIB=OFF -DCHANNEL_URBDRC=OFF \
-    -DWITH_MANPAGES=OFF "${DEV[@]}" > "$WORK/log/freerdp.log" 2>&1
+    -DWITH_MANPAGES=OFF "${CAMERA_CLIENT_OPTS[@]}" "${DEV[@]}" > "$WORK/log/freerdp.log" 2>&1
 grep -q -e "AV1 decoder: dav1d" -e "configuration kept" "$WORK/log/freerdp.log"
+# the camera channel and its V4L2 backend; no libusb, movie or GStreamer backend (a FreeRDP
+# without these options would build no camera: CMake only warns about an option it does not know)
+for found in "CHANNEL_RDPECAM_CLIENT:BOOL=ON" "WITH_RDPECAM_UVC_H264:BOOL=OFF" \
+    "WITH_RDPECAM_MOVIE:BOOL=OFF" "WITH_RDPECAM_GSTREAMER:BOOL=OFF"; do
+    grep -q -x -F "$found" "$WORK/build/freerdp/CMakeCache.txt" ||
+        { echo "freerdp: no $found in its CMake cache, no camera (log/freerdp.log)" >&2; exit 1; }
+done
 # AV1 4:2:0 on the GPU through VA-API (libva loaded at run time: only its headers here, from
 # the image's libva-devel), dav1d as the fallback per stream
 grep -q -e "AV1 decoder: VA-API first" -e "configuration kept" "$WORK/log/freerdp.log"
@@ -352,6 +367,9 @@ rm -rf "$WORK/pkg"
 mkdir -p "$PKG/bin" "$PKG/licenses"
 cp "$STAGE/opt/freerdp/bin/sdl-freerdp" "$PKG/bin/"
 strip --strip-debug "$PKG/bin/sdl-freerdp"
+# the camera's V4L2 backend is in the client
+grep -a -q -F "rdpecam-v4l.client" "$PKG/bin/sdl-freerdp" ||
+    { echo "freerdp: no rdpecam V4L2 backend in sdl-freerdp" >&2; exit 1; }
 # the libavcodec it links (ours, by the CMake cache check above) is LGPL: what avcodec_license()
 # returns. Looked for in the library, not the client: a static link takes only what is called,
 # and FreeRDP calls neither avcodec_license() nor avcodec_configuration(), so their strings are
