@@ -15,7 +15,8 @@
 # ARM64 (GCC's mingw-w64 has no aarch64 target). Every library is built
 # from sources.lock and linked statically, together with libc++ and
 # libunwind, so the client is one .exe that needs only Windows' own DLLs.
-# The result is <output dir>/sdl3-freerdp-<version>-windows-<arch>.zip.
+# The result is <output dir>/sdl3-freerdp-<version>-windows-<arch>.zip. It
+# redirects the local camera (MS-RDPECAM, Media Foundation).
 set -Eeuo pipefail
 
 KIT=$1
@@ -201,12 +202,19 @@ fi
 # would get AVC444 from Windows' own Remote Desktop (WITH_GFX_H264_DEFAULT=OFF). The host
 # keeps its options. test/windows-hevc/inject.cmake adds the CI's HEVC decode test to the
 # same build tree, outside "all": the client and its zip do not change with it.
+# Camera redirection (MS-RDPECAM): the rdpecam client channel and its Media Foundation backend
+# (sys:mf, WITH_RDPECAM_MF, FreeRDP's default on Windows; mfplat.dll, mf.dll and mfreadwrite.dll
+# are loaded at run time, so check-windows.sh still passes and the client starts without Media
+# Foundation). Its movie and GStreamer backends are off by name: neither would be found (no
+# avformat, no GStreamer under /deps), but their options would stay ON in the cache.
 EXE_LDFLAGS=-static
 CODECS=(-DWITH_FFMPEG=OFF -DWITH_SWSCALE=OFF)
 if [ -z "${HOST:-}" ]; then
     EXE_LDFLAGS="-static${FFMPEG_SYSLIBS:+ ${FFMPEG_SYSLIBS% }}"
     CODECS=(-DWITH_GFX_AZURE=ON -DWITH_MEDIA_FOUNDATION=ON -DWITH_FFMPEG=ON -DWITH_VIDEO_FFMPEG=ON
             -DWITH_DSP_FFMPEG=OFF -DWITH_SWSCALE=OFF -DWITH_GFX_H264_DEFAULT=OFF
+            -DCHANNEL_RDPECAM=ON -DCHANNEL_RDPECAM_CLIENT=ON -DWITH_RDPECAM_MOVIE=OFF
+            -DWITH_RDPECAM_GSTREAMER=OFF
             -DCMAKE_PROJECT_FreeRDP_INCLUDE="$KIT/test/windows-hevc/inject.cmake")
 fi
 configure "$WORK/build/$FREERDP" \
@@ -222,6 +230,15 @@ configure "$WORK/build/$FREERDP" \
     -DWITH_MANPAGES=OFF "${LAUNCHER[@]}" "${DEV[@]}" > "$WORK/log/freerdp.log" 2>&1
 grep -q -e "AV1 decoder: dav1d" -e "configuration kept" "$WORK/log/freerdp.log"
 [ -n "${HOST:-}" ] || grep -q -e "Found FFmpeg" -e "configuration kept" "$WORK/log/freerdp.log"
+# the client's camera: the channel and its Media Foundation backend (a FreeRDP without them
+# would build no camera: CMake only warns about an option it does not know)
+if [ -z "${HOST:-}" ]; then
+    for found in "CHANNEL_RDPECAM_CLIENT:BOOL=ON" "WITH_RDPECAM_MF:BOOL=ON" \
+        "WITH_RDPECAM_MOVIE:BOOL=OFF" "WITH_RDPECAM_GSTREAMER:BOOL=OFF"; do
+        grep -q -x -F "$found" "$WORK/build/$FREERDP/CMakeCache.txt" ||
+            { echo "freerdp: no $found in its CMake cache, no camera (log/freerdp.log)" >&2; exit 1; }
+    done
+fi
 cmake --build "$WORK/build/$FREERDP" >> "$WORK/log/freerdp.log" 2>&1
 DESTDIR=$STAGE cmake --install "$WORK/build/$FREERDP" >> "$WORK/log/freerdp.log" 2>&1
 ccache_stats
@@ -274,6 +291,9 @@ mkdir -p "$PKG/licenses"
 EXE=$(find "$STAGE" -name 'sdl*-freerdp.exe' | head -1)
 cp "$EXE" "$PKG/"
 /llvm-mingw/bin/llvm-strip --strip-debug "$PKG/$(basename "$EXE")"
+# the camera's Media Foundation backend is in the client
+grep -a -q -F "rdpecam-mf.client" "$PKG/$(basename "$EXE")" ||
+    { echo "freerdp: no rdpecam Media Foundation backend in $(basename "$EXE")" >&2; exit 1; }
 licenses "$PKG/licenses" freerdp sdl3 sdl3_ttf freetype libressl opus dav1d avm zlib jansson \
     llvm_mingw
 # FFmpeg's LGPL texts only: its tarball also carries the GPL ones, for code not built here
