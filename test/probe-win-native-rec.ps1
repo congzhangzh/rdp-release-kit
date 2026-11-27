@@ -108,19 +108,25 @@ if ($env:GITHUB_ACTIONS -eq "true") {
     # on a CI runner only: StorSvc off (it burned the CPU in slow rounds, windows-host.ps1), and
     # Windows' toasts and notification center off, so no prompt sits over the recording
     try { Set-Service StorSvc -StartupType Disabled; Stop-Service StorSvc -Force -ErrorAction Stop } catch { }
-    New-Item -Force -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\PushNotifications" | Out-Null
-    Set-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\PushNotifications" -Name ToastEnabled -Value 0 -Type DWord
-    New-Item -Force -Path "HKCU:\Software\Policies\Microsoft\Windows\Explorer" | Out-Null
-    Set-ItemProperty -Path "HKCU:\Software\Policies\Microsoft\Windows\Explorer" -Name DisableNotificationCenter -Value 1 -Type DWord
-    # Edge's own first-run screens, sign-in and sync prompts, and its "recommendations"
-    $edgePol = "HKLM:\SOFTWARE\Policies\Microsoft\Edge"
-    New-Item -Force -Path $edgePol | Out-Null
-    foreach ($kv in @(@("HideFirstRunExperience", 1), @("BrowserSignin", 0), @("SyncDisabled", 1),
-                      @("ShowRecommendationsEnabled", 0), @("DefaultBrowserSettingEnabled", 0),
-                      @("PromotionalTabsEnabled", 0), @("AutoplayAllowed", 1), @("TranslateEnabled", 0),
-                      @("StartupBoostEnabled", 0), @("HubsSidebarEnabled", 0))) {
-        Set-ItemProperty -Path $edgePol -Name $kv[0] -Value $kv[1] -Type DWord
+    # (New-Item -Force on a key that exists replaces it, which Windows refuses: run 45928748986)
+    function RegSet([string]$key, [string]$name, [int]$value) {
+        try {
+            if (-not (Test-Path $key)) { New-Item -Path $key -Force | Out-Null }
+            Set-ItemProperty -Path $key -Name $name -Value $value -Type DWord
+            "reg: $key $name = $value"
+        } catch { "reg: $key $name not set: $($_.Exception.Message)" }
     }
+    $(
+        RegSet "HKCU:\Software\Microsoft\Windows\CurrentVersion\PushNotifications" ToastEnabled 0
+        RegSet "HKCU:\Software\Policies\Microsoft\Windows\Explorer" DisableNotificationCenter 1
+        # Edge's own first-run screens, sign-in and sync prompts, and its "recommendations"
+        foreach ($kv in @(@("HideFirstRunExperience", 1), @("BrowserSignin", 0), @("SyncDisabled", 1),
+                          @("ShowRecommendationsEnabled", 0), @("DefaultBrowserSettingEnabled", 0),
+                          @("PromotionalTabsEnabled", 0), @("AutoplayAllowed", 1), @("TranslateEnabled", 0),
+                          @("StartupBoostEnabled", 0), @("HubsSidebarEnabled", 0))) {
+            RegSet "HKLM:\SOFTWARE\Policies\Microsoft\Edge" $kv[0] $kv[1]
+        }
+    ) | Tee-Object -FilePath "$Out\where.txt" -Append
 }
 New-LocalUser -Name $user -Password (ConvertTo-SecureString $pass -AsPlainText -Force) -PasswordNeverExpires | Out-Null
 
