@@ -19,8 +19,16 @@
 # ad hoc signature's identity is the build's hash), a LaunchAgent that starts it
 # in the user's session at login, the daemon mode (FreeRDP's freerdp-shadow-agent
 # in the same app, a root LaunchDaemon and a LaunchAgent for the login window and
-# each session, install-daemon.sh and uninstall-daemon.sh) and a README
+# each session, install-daemon.sh and uninstall-daemon.sh), the camera extension when the
+# FreeRDP source has it (server/shadow/camera/mac: a CoreMediaIO Camera Extension in
+# Contents/Library/SystemExtensions, built and unit-tested here) and a README
 # (freerdp-host-<version>-macos-<arch>.zip).
+#
+# The bundle ids come from one prefix, KIT_MAC_ID_PREFIX (io.github.congzhangzh): the host
+# <prefix>.freerdp-shadow (its agent .agent, its camera .camera), the client FreeRDP.app
+# <prefix>.freerdp. Every build is signed ad hoc here (build/macos/sign-mac.sh -); the
+# Developer ID signature and notarization are a separate step on CI (the same sign-mac.sh with
+# an identity), so a local build never needs the certificate.
 set -Eeuo pipefail
 
 KIT=$1
@@ -29,6 +37,14 @@ OUT=$3
 ARCH=$4
 WORK=${WORK:-$HOME/.cache/rdp-release-kit/macos-$ARCH}
 STAGE=$WORK/stage
+
+# the ids (above); the team that signs is in the camera extension's Mach service and app
+# group: MACOS_TEAM_ID (a CI variable), else a placeholder for an unsigned build
+KIT_MAC_ID_PREFIX=${KIT_MAC_ID_PREFIX:-io.github.congzhangzh}
+HOST_ID=$KIT_MAC_ID_PREFIX.freerdp-shadow
+CLIENT_ID=$KIT_MAC_ID_PREFIX.freerdp
+TEAM_ID=${MACOS_TEAM_ID:-UNSIGNED00}
+EXPECTED_STRINGS=$KIT/test/probe-camera-mac/expected-strings.txt
 
 if ((BASH_VERSINFO[0] * 100 + BASH_VERSINFO[1] < 404)); then
     echo "build-macos-client.sh needs bash 4.4 or newer (brew install bash)" >&2
@@ -167,8 +183,13 @@ cmake_dep sdl3_ttf "${MAC[@]}" -DSDLTTF_VENDORED=OFF -DSDLTTF_HARFBUZZ=OFF \
 # (its decoder stays: FreeRDP's av1.c includes aom_decoder.h with libaom; dav1d
 # still decodes), as the Windows host is built
 FREERDP=freerdp
+# The camera (MS-RDPECAM, /dvc:rdpecam): AVFoundation's frames, H.264 from VideoToolbox, no
+# FFmpeg; the movie and GStreamer backends off by name, so a Homebrew FFmpeg or GStreamer on
+# the machine is never linked (freerdp-comp-camera-g1's lane A-unix, its Mac part)
 WHAT=(-DWITH_CLIENT=ON -DWITH_CLIENT_SDL=ON -DWITH_CLIENT_SDL3=ON -DWITH_CLIENT_SDL2=OFF
-      -DWITH_CLIENT_MAC=OFF -DWITH_SERVER=OFF)
+      -DWITH_CLIENT_MAC=OFF -DWITH_SERVER=OFF
+      -DCHANNEL_RDPECAM=ON -DCHANNEL_RDPECAM_CLIENT=ON -DWITH_APPLE_VIDEOTOOLBOX=ON
+      -DWITH_RDPECAM_MOVIE=OFF -DWITH_RDPECAM_GSTREAMER=OFF)
 if [ -n "${HOST:-}" ]; then
     FREERDP=freerdp_mac_host
     host_source "$FREERDP"
@@ -208,6 +229,27 @@ if grep -i "built for newer" "$WORK/log/freerdp.log" >&2; then
     exit 1
 fi
 DESTDIR=$STAGE cmake --install "$WORK/build/freerdp" >> "$WORK/log/freerdp.log" 2>&1
+
+# HOST=1: the camera extension, on its own (its CMake builds standalone until FreeRDP's shadow
+# build adds it), with its unit tests (ctest: the placeholder, the frame conversion, the sink
+# helper's buffers, VideoToolbox's MJPG and H.264 decoding); none in a FreeRDP without it
+CAMERA_SRC=$src/server/shadow/camera/mac
+CAMERA_BUILD=$WORK/build/camera
+if [ -n "${HOST:-}" ] && [ -d "$CAMERA_SRC" ]; then
+    echo "== camera extension ($HOST_ID.camera, team $TEAM_ID)"
+    rm -rf "$CAMERA_BUILD"
+    OBJC_LAUNCHER=()
+    [ ${#LAUNCHER[@]} = 0 ] || OBJC_LAUNCHER=(-DCMAKE_OBJC_COMPILER_LAUNCHER=ccache)
+    cmake -G Ninja -S "$CAMERA_SRC" -B "$CAMERA_BUILD" -DCMAKE_BUILD_TYPE=Release \
+        "${LAUNCHER[@]}" "${OBJC_LAUNCHER[@]}" -DCMAKE_OSX_ARCHITECTURES="$ARCH" \
+        -DCMAKE_OSX_DEPLOYMENT_TARGET="$MACOS_MIN" -DBUILD_TESTING=ON \
+        -DCAMERA_MAC_BUNDLE_ID="$HOST_ID" -DCAMERA_MAC_TEAM_ID="$TEAM_ID" \
+        -DCAMERA_MAC_VERSION="${VERSION[$FREERDP]}" > "$WORK/log/camera.log" 2>&1
+    cmake --build "$CAMERA_BUILD" >> "$WORK/log/camera.log" 2>&1
+    ctest --test-dir "$CAMERA_BUILD" --output-on-failure > "$WORK/log/camera-ctest.log" 2>&1 ||
+        { cat "$WORK/log/camera-ctest.log" >&2; exit 1; }
+    grep -E "tests passed|SKIP" "$WORK/log/camera-ctest.log" || true
+fi
 ccache_stats
 
 # --- HOST=1: the host's app, LaunchAgent, README, licences, manifest; then done
@@ -227,26 +269,41 @@ if [ -n "${HOST:-}" ]; then
         cp "$f" "$dest/"
         strip -S "$dest/$tool"
     done
-    sed "s/@VERSION@/${VERSION[$FREERDP]}/; s/@MACOS_MIN@/$MACOS_MIN/" \
-        "$KIT/build/macos/host-Info.plist" > "$APP/Contents/Info.plist"
-    cp "$KIT/build/macos/org.freerdp.shadow.plist" "$KIT/build/macos/org.freerdp.shadow.daemon.plist" \
-        "$KIT/build/macos/org.freerdp.shadow.agent.plist" "$KIT/build/macos/install-daemon.sh" \
-        "$KIT/build/macos/uninstall-daemon.sh" "$KIT/build/macos/host-README.txt" "$PKG/"
+    # every file that names the ids gets them from HOST_ID: the app's Info.plist, the three
+    # launchd jobs (<id>.plist, <id>.daemon.plist, <id>.agent.plist), the scripts, the README
+    ids() { sed "s/@BUNDLE_ID@/$HOST_ID/g; s/@VERSION@/${VERSION[$FREERDP]}/g; s/@MACOS_MIN@/$MACOS_MIN/g" "$@"; }
+    ids "$KIT/build/macos/host-Info.plist" > "$APP/Contents/Info.plist"
+    ids "$KIT/build/macos/shadow-user.plist.in" > "$PKG/$HOST_ID.plist"
+    ids "$KIT/build/macos/shadow-daemon.plist.in" > "$PKG/$HOST_ID.daemon.plist"
+    ids "$KIT/build/macos/shadow-agent.plist.in" > "$PKG/$HOST_ID.agent.plist"
+    ids "$KIT/build/macos/install-daemon.sh" > "$PKG/install-daemon.sh"
+    ids "$KIT/build/macos/uninstall-daemon.sh" > "$PKG/uninstall-daemon.sh"
+    ids "$KIT/build/macos/host-README.txt" > "$PKG/README.txt"
     chmod 755 "$PKG/install-daemon.sh" "$PKG/uninstall-daemon.sh"
-    mv "$PKG/host-README.txt" "$PKG/README.txt"
-    for f in "$PKG"/*.plist; do plutil -lint "$f"; done
-    # ad hoc: TCC knows this build by its hash, so an update asks again (a stable
-    # identity needs a signing certificate). Inside out: the agent, a second program in
-    # Contents/MacOS, is signed first with its own identifier (the one Screen Recording
-    # and Accessibility list), then the app, whose seal then covers it
-    codesign --force --sign - "$PKG/winpr-hash"
+    for f in "$PKG"/*.plist "$APP/Contents/Info.plist"; do plutil -lint "$f"; done
+    # the usage words of the camera extension's approval, in four languages (the English one
+    # is in Info.plist)
+    mkdir -p "$APP/Contents/Resources"
+    cp -R "$KIT/build/macos/host-lproj/"*.lproj "$APP/Contents/Resources/"
+    for f in "$APP"/Contents/Resources/*.lproj/InfoPlist.strings; do plutil -lint "$f"; done
+    python3 -I "$KIT/build/macos/check-bundle-strings.py" "$EXPECTED_STRINGS" host "$APP"
     # the remover inside the app, so it is installed (and sealed) with it and outlives the
     # unzipped download: sudo bash /Applications/FreeRDP-Shadow.app/Contents/Resources/uninstall-daemon.sh
-    mkdir -p "$APP/Contents/Resources"
-    install -m 755 "$KIT/build/macos/uninstall-daemon.sh" "$APP/Contents/Resources/uninstall-daemon.sh"
-    codesign --force --sign - --identifier org.freerdp.shadow.agent "$APP/Contents/MacOS/freerdp-shadow-agent"
-    codesign --force --sign - --identifier org.freerdp.shadow "$APP"
-    codesign --verify --strict --deep "$APP"
+    install -m 755 "$PKG/uninstall-daemon.sh" "$APP/Contents/Resources/uninstall-daemon.sh"
+    # the camera extension, and the camera commands (status, pattern) beside the server
+    if [ -d "$CAMERA_BUILD/$HOST_ID.camera.systemextension" ]; then
+        mkdir -p "$APP/Contents/Library/SystemExtensions"
+        ditto "$CAMERA_BUILD/$HOST_ID.camera.systemextension" \
+            "$APP/Contents/Library/SystemExtensions/$HOST_ID.camera.systemextension"
+        strip -S "$APP/Contents/Library/SystemExtensions/$HOST_ID.camera.systemextension/Contents/MacOS/$HOST_ID.camera"
+        cp "$CAMERA_BUILD/freerdp-shadow-camera" "$APP/Contents/MacOS/"
+        strip -S "$APP/Contents/MacOS/freerdp-shadow-camera"
+    fi
+    # ad hoc: TCC knows this build by its hash, so an update asks again (a stable identity
+    # needs the Developer ID, CI's sign step). Inside out (sign-mac.sh): the camera extension,
+    # the agent and the camera commands, each with its own identifier (the agent's is the one
+    # Screen Recording and Accessibility list), then the app, whose seal covers them
+    "$KIT/build/macos/sign-mac.sh" host "$PKG" -
     codesign --verify --strict "$APP/Contents/MacOS/freerdp-shadow-agent"
     licenses "$PKG/licenses" freerdp_mac_host openssl opus dav1d aom avm zlib jansson
     {
@@ -264,6 +321,11 @@ if [ -n "${HOST:-}" ]; then
     } > "$PKG/MANIFEST"
     "$KIT/build/check-macos.sh" "$APP/Contents/MacOS/freerdp-shadow-cli" "$MACOS_MIN"
     "$KIT/build/check-macos.sh" "$APP/Contents/MacOS/freerdp-shadow-agent" "$MACOS_MIN"
+    if [ -e "$APP/Contents/MacOS/freerdp-shadow-camera" ]; then
+        "$KIT/build/check-macos.sh" "$APP/Contents/MacOS/freerdp-shadow-camera" "$MACOS_MIN"
+        "$KIT/build/check-macos.sh" \
+            "$APP/Contents/Library/SystemExtensions/$HOST_ID.camera.systemextension/Contents/MacOS/$HOST_ID.camera" "$MACOS_MIN"
+    fi
     # ditto keeps the app's signature and attributes as macOS's own zips do
     (cd "$WORK/pkg" && ditto -c -k --keepParent "$NAME" "$OUT/$NAME.zip")
     (cd "$OUT" && sha256sum "$NAME.zip" > "$NAME.zip.sha256")
@@ -276,17 +338,38 @@ NAME=sdl3-freerdp-${VERSION[freerdp]}-macos-$ARCH
 PKG=$WORK/pkg/$NAME
 rm -rf "$WORK/pkg"
 mkdir -p "$PKG/bin" "$PKG/licenses"
-cp "$STAGE/opt/freerdp/bin/sdl-freerdp" "$PKG/bin/"
+# The client lives in FreeRDP.app (CLIENT_ID): the camera needs an Info.plist with
+# NSCameraUsageDescription (AVFoundation refuses to ask without it) and its words in four
+# languages (Resources/<lang>.lproj/InfoPlist.strings, UTF-8), which only a bundle carries.
+# bin/sdl-freerdp stays the command: a shell script that execs the app's binary (same pid,
+# output, exit code), so every command line that ran it before still works. Started from
+# Terminal or freerdp-tk, macOS asks for Terminal's camera permission; from Finder or with
+# open FreeRDP.app, for FreeRDP's own (the README says so)
+APP=$PKG/FreeRDP.app
+mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
+cp "$STAGE/opt/freerdp/bin/sdl-freerdp" "$APP/Contents/MacOS/"
+sed "s/@CLIENT_ID@/$CLIENT_ID/; s/@VERSION@/${VERSION[freerdp]}/g; s/@MACOS_MIN@/$MACOS_MIN/" \
+    "$KIT/build/macos/client-Info.plist" > "$APP/Contents/Info.plist"
+cp -R "$KIT/build/macos/client-lproj/"*.lproj "$APP/Contents/Resources/"
+for f in "$APP/Contents/Info.plist" "$APP"/Contents/Resources/*.lproj/InfoPlist.strings; do plutil -lint "$f"; done
+python3 -I "$KIT/build/macos/check-bundle-strings.py" "$EXPECTED_STRINGS" client "$APP"
+install -m 755 "$KIT/build/macos/client-shim.sh" "$PKG/bin/sdl-freerdp"
 # strip invalidates the linker's ad-hoc signature, without which Apple
-# Silicon does not start the binary: sign it again (ad hoc, no identity)
-strip -S "$PKG/bin/sdl-freerdp"
-codesign --force --sign - "$PKG/bin/sdl-freerdp"
+# Silicon does not start the binary: sign it again (ad hoc, no identity), as
+# the app, whose seal covers its Info.plist and strings, with the camera's
+# and the microphone's entitlements (enforced once the hardened runtime is on)
+strip -S "$APP/Contents/MacOS/sdl-freerdp"
+"$KIT/build/macos/sign-mac.sh" client "$PKG" -
 licenses "$PKG/licenses" freerdp sdl3 sdl3_ttf freetype openssl opus dav1d avm zlib jansson
 # the connection window: freerdp-tk and its Python (build/launcher.sh)
 # shellcheck source=build/launcher.sh
 . "$KIT/build/launcher.sh"
 add_launcher "$PKG" macos "$ARCH"
 check_launcher "$PKG"
+# the camera paragraph of the README, in four languages (the product owner's words,
+# build/macos/client-README-camera.txt, made by test/probe-camera-mac/make-strings.py)
+{ echo; cat "$KIT/build/macos/client-README-camera.txt"; } >> "$PKG/README.txt"
+python3 -I "$KIT/build/macos/check-bundle-strings.py" "$EXPECTED_STRINGS" readme "$PKG/README.txt"
 # the manifest runs the client: x86_64 on Apple Silicon needs Rosetta 2
 if ! "$PKG/bin/sdl-freerdp" --version > /dev/null 2>&1; then
     echo "the $ARCH client does not run here (for x86_64 on Apple Silicon:" \
@@ -312,7 +395,7 @@ fi
     "$PKG/bin/sdl-freerdp" /buildconfig 2> /dev/null | tr ' ' '\n' | grep -E '^WITH_' |
         LC_ALL=C sort
 } > "$PKG/MANIFEST"
-"$KIT/build/check-macos.sh" "$PKG/bin/sdl-freerdp" "$MACOS_MIN"
+"$KIT/build/check-macos.sh" "$APP/Contents/MacOS/sdl-freerdp" "$MACOS_MIN"
 # macOS's tar (bsdtar): no AppleDouble ._ files or extended attributes in
 # the archive, and the files belong to root as in the Linux one
 COPYFILE_DISABLE=1 /usr/bin/tar -cJf "$OUT/$NAME.tar.xz" --no-mac-metadata --uid 0 --gid 0 \

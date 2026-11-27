@@ -6,8 +6,8 @@ mstsc. What the user sees is what the client sees; the sound the Mac plays comes
 
   FreeRDP-Shadow.app         the shadow server (FreeRDP's freerdp-shadow-cli, as an app),
                              with freerdp-shadow-agent for the daemon mode
-  org.freerdp.shadow.plist   a LaunchAgent: starts it at login, in your session (no root)
-  org.freerdp.shadow.daemon.plist, org.freerdp.shadow.agent.plist,
+  @BUNDLE_ID@.plist   a LaunchAgent: starts it at login, in your session (no root)
+  @BUNDLE_ID@.daemon.plist, @BUNDLE_ID@.agent.plist,
   install-daemon.sh, uninstall-daemon.sh
                              the daemon mode (root): from the login window on, see
                              "The daemon mode" below
@@ -21,14 +21,14 @@ Install
 
   cp -R FreeRDP-Shadow.app /Applications/
   xattr -dr com.apple.quarantine /Applications/FreeRDP-Shadow.app
-  cp org.freerdp.shadow.plist ~/Library/LaunchAgents/
-  launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/org.freerdp.shadow.plist
+  cp @BUNDLE_ID@.plist ~/Library/LaunchAgents/
+  launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/@BUNDLE_ID@.plist
 
 The first start asks for two permissions, in System Settings > Privacy & Security:
 Screen & System Audio Recording (the picture and the sound) and Accessibility (the
 keyboard and mouse). Allow FreeRDP Shadow in both, then restart it:
 
-  launchctl kickstart -k gui/$(id -u)/org.freerdp.shadow
+  launchctl kickstart -k gui/$(id -u)/@BUNDLE_ID@
 
 After an update, macOS asks for both permissions again: the app is signed without a
 developer certificate (ad hoc), so macOS knows it only by its exact build. Remove
@@ -47,8 +47,8 @@ libavm).
 
 Remove it with
 
-  launchctl bootout gui/$(id -u)/org.freerdp.shadow
-  rm ~/Library/LaunchAgents/org.freerdp.shadow.plist
+  launchctl bootout gui/$(id -u)/@BUNDLE_ID@
+  rm ~/Library/LaunchAgents/@BUNDLE_ID@.plist
   rm -R /Applications/FreeRDP-Shadow.app
 
 The size of the picture
@@ -90,15 +90,15 @@ user's session once they log in. One connection lasts from the login window thro
 login to the desktop. The login is any local account but root at the login window, the
 user on the console after that (PAM, /sec:tls).
 
-  org.freerdp.shadow.daemon  /Library/LaunchDaemons/org.freerdp.shadow.daemon.plist
+  @BUNDLE_ID@.daemon  /Library/LaunchDaemons/@BUNDLE_ID@.daemon.plist
                              the server, as root, on 127.0.0.1:3388; Mach service
-                             org.freerdp.shadow (FREERDP_SHADOW_MAC_AGENT_SERVICE)
-  org.freerdp.shadow.agent   /Library/LaunchAgents/org.freerdp.shadow.agent.plist
+                             @BUNDLE_ID@ (FREERDP_SHADOW_MAC_AGENT_SERVICE)
+  @BUNDLE_ID@.agent   /Library/LaunchAgents/@BUNDLE_ID@.agent.plist
                              freerdp-shadow-agent, at the login window (as root) and in
                              each user's session (as that user)
   the app                    /Applications/FreeRDP-Shadow.app (owned by root)
 
-First remove the LaunchAgent org.freerdp.shadow above if you installed it (both use
+First remove the LaunchAgent @BUNDLE_ID@ above if you installed it (both use
 3388; install-daemon.sh refuses while it runs on the same port). Then, in the unpacked
 folder:
 
@@ -108,7 +108,7 @@ Then allow freerdp-shadow-agent, once, in your session (System Settings > Privac
 Security): Screen & System Audio Recording and Accessibility; with +, the program is
 /Applications/FreeRDP-Shadow.app/Contents/MacOS/freerdp-shadow-agent. Restart it:
 
-  launchctl kickstart -k gui/$(id -u)/org.freerdp.shadow.agent
+  launchctl kickstart -k gui/$(id -u)/@BUNDLE_ID@.agent
 
 The grants hold at the login window too. As with the app, an update asks for both again
 (signed ad hoc). Run install-daemon.sh again to update or to change the port.

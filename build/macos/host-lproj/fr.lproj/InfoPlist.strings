@@ -1,0 +1,2 @@
+/* FreeRDP-Shadow.app, fr (made by test/probe-camera-mac/make-strings.py) */
+"NSSystemExtensionUsageDescription" = "FreeRDP ajoute une caméra virtuelle pour que les apps de ce Mac puissent utiliser la caméra de l’ordinateur qui s’y connecte.";

@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- freerdp-tk's Python (python/bin/python3*) under the hardened runtime: it loads the
+     extension modules it carries (signed by the same team: library validation passes them)
+     and libffi may need writable executable memory for ctypes callbacks, as python.org's own
+     notarized builds allow. Checked by the signed job: freerdp-tk's modules import. -->
+<plist version="1.0">
+<dict>
+    <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
+    <true/>
+</dict>
+</plist>

@@ -1,7 +1,7 @@
 #!/bin/bash
 # The macOS host's daemon mode on a GitHub macOS runner, installed as a user installs it
 # (install-daemon.sh with sudo: a root LaunchDaemon, the server, and the LaunchAgent
-# org.freerdp.shadow.agent, the capture and input), with the kit's own macOS client on
+# $ID.agent, the capture and input), with the kit's own macOS client on
 # 127.0.0.1:3388 in AV1; then uninstall-daemon.sh, and nothing of ours may be left loaded,
 # listening or running.
 #   test/mac-daemon.sh <host dir (the unpacked archive)> <client dir (holds bin/sdl-freerdp)> <out dir>
@@ -23,6 +23,8 @@ HOSTDIR=$(cd "$HOSTDIR" && pwd)
 CLIENT="$CLIENTDIR/bin/sdl-freerdp"
 APP=/Applications/FreeRDP-Shadow.app
 AGENT_BIN=$APP/Contents/MacOS/freerdp-shadow-agent
+# the ids, from the archive (build-macos-client.sh: KIT_MAC_ID_PREFIX.freerdp-shadow)
+ID=$(/usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "$HOSTDIR/FreeRDP-Shadow.app/Contents/Info.plist")
 LOGS=/var/log/freerdp-shadow
 ME=$(id -u)
 fails=0
@@ -70,31 +72,31 @@ check "the app's signature covers both programs (codesign --verify --strict --de
 # 1. the no-root LaunchAgent on 3388 first: install-daemon.sh must refuse (only loaded here,
 # for a moment: its program is not in /Applications yet)
 mkdir -p "$HOME/Library/LaunchAgents"
-cp "$HOSTDIR/org.freerdp.shadow.plist" "$HOME/Library/LaunchAgents/"
-launchctl bootstrap "gui/$ME" "$HOME/Library/LaunchAgents/org.freerdp.shadow.plist" 2> /dev/null
+cp "$HOSTDIR/$ID.plist" "$HOME/Library/LaunchAgents/"
+launchctl bootstrap "gui/$ME" "$HOME/Library/LaunchAgents/$ID.plist" 2> /dev/null
 if sudo "$HOSTDIR/install-daemon.sh" > "$OUT/install-refused.log" 2>&1; then ok=0; else ok=1; fi
-grep -q "org.freerdp.shadow" "$OUT/install-refused.log" || ok=0
+grep -q "$ID" "$OUT/install-refused.log" || ok=0
 check "install-daemon.sh refuses while the app's LaunchAgent is on 3388" "$ok" "$(tail -1 "$OUT/install-refused.log")"
-launchctl bootout "gui/$ME/org.freerdp.shadow" 2> /dev/null
-rm -f "$HOME/Library/LaunchAgents/org.freerdp.shadow.plist"
+launchctl bootout "gui/$ME/$ID" 2> /dev/null
+rm -f "$HOME/Library/LaunchAgents/$ID.plist"
 
 # 2. install, and again (an update): both must succeed
 sudo "$HOSTDIR/install-daemon.sh" -- -auth /log-level:INFO > "$OUT/install.log" 2>&1 && ok=1 || ok=0
 check "install-daemon.sh" "$ok" "$(grep -m1 '^Installed' "$OUT/install.log")"
 sudo "$HOSTDIR/install-daemon.sh" -- -auth /log-level:INFO > "$OUT/install-again.log" 2>&1 && ok=1 || ok=0
 check "install-daemon.sh again (idempotent)" "$ok"
-loaded system/org.freerdp.shadow.daemon && ok=1 || ok=0
-check "the daemon org.freerdp.shadow.daemon is loaded (system)" "$ok"
-loaded "gui/$ME/org.freerdp.shadow.agent" && ok=1 || ok=0
-check "the agent org.freerdp.shadow.agent is loaded (gui/$ME)" "$ok"
+loaded system/$ID.daemon && ok=1 || ok=0
+check "the daemon $ID.daemon is loaded (system)" "$ok"
+loaded "gui/$ME/$ID.agent" && ok=1 || ok=0
+check "the agent $ID.agent is loaded (gui/$ME)" "$ok"
 for _ in $(seq 1 20); do listening 3388 && break; sleep 1; done
 listening 3388 && ok=1 || ok=0
 check "the daemon listens on 127.0.0.1:3388" "$ok"
-perm=$(stat -f '%Su:%Sg %Lp' /Library/LaunchDaemons/org.freerdp.shadow.daemon.plist \
-    /Library/LaunchAgents/org.freerdp.shadow.agent.plist 2> /dev/null | sort -u | tr '\n' ' ')
+perm=$(stat -f '%Su:%Sg %Lp' /Library/LaunchDaemons/$ID.daemon.plist \
+    /Library/LaunchAgents/$ID.agent.plist 2> /dev/null | sort -u | tr '\n' ' ')
 [ "$perm" = "root:wheel 644 " ] && ok=1 || ok=0
 check "both plists are root:wheel 644" "$ok" "$perm"
-sudo plutil -p /Library/LaunchDaemons/org.freerdp.shadow.daemon.plist > "$OUT/daemon-plist.txt" 2>&1
+sudo plutil -p /Library/LaunchDaemons/$ID.daemon.plist > "$OUT/daemon-plist.txt" 2>&1
 for _ in $(seq 1 20); do [ "$(hellos)" -ge 1 ] && break; sleep 1; done
 [ "$(hellos)" -ge 1 ] && ok=1 || ok=0
 check "launchd's agent said hello to the daemon (its log: agent: uid $ME)" "$ok" \
@@ -113,8 +115,8 @@ fi
 # 4. AV1 through the daemon with the agent under the runner's grant: launchd's agent stopped,
 # the same program started here, on the same Mach service
 before=$(hellos)
-sudo launchctl bootout "gui/$ME/org.freerdp.shadow.agent" 2> /dev/null
-WLOG_LEVEL=INFO "$AGENT_BIN" org.freerdp.shadow > "$OUT/agent-from-script.log" 2>&1 &
+sudo launchctl bootout "gui/$ME/$ID.agent" 2> /dev/null
+WLOG_LEVEL=INFO "$AGENT_BIN" $ID > "$OUT/agent-from-script.log" 2>&1 &
 AG=$!
 for _ in $(seq 1 20); do [ "$(hellos)" -gt "$before" ] && break; sleep 1; done
 [ "$(hellos)" -gt "$before" ] && ok=1 || ok=0
@@ -125,7 +127,7 @@ n=$(frames daemon-av1)
 [ "$n" -ge 30 ] && ok=1 || ok=0
 all=$(grep -ohE "Got GFX RDPGFX_CODECID_[A-Z0-9_]+" "$OUT/daemon-av1.wlog" 2> /dev/null | sort | uniq -c | tr '\n' ' ')
 check "daemon-av1: at least 30 frames in AV1 through the daemon" "$ok" "${all:-none}"
-loaded system/org.freerdp.shadow.daemon && listening 3388 && ok=1 || ok=0
+loaded system/$ID.daemon && listening 3388 && ok=1 || ok=0
 check "the daemon still runs after the session" "$ok"
 kill $AG 2> /dev/null; sleep 1
 save_logs
@@ -140,12 +142,12 @@ sudo bash "$REMOVER" --app --logs > "$OUT/uninstall.log" 2>&1 && ok=1 || ok=0
 check "uninstall-daemon.sh --app --logs, from the installed app" "$ok" "$(tail -1 "$OUT/uninstall.log")"
 gone() {
     left=""
-    loaded system/org.freerdp.shadow.daemon && left="$left daemon-loaded"
-    loaded "gui/$ME/org.freerdp.shadow.agent" && left="$left agent-loaded"
+    loaded system/$ID.daemon && left="$left daemon-loaded"
+    loaded "gui/$ME/$ID.agent" && left="$left agent-loaded"
     listening 3388 && left="$left port-3388"
     ours_running && left="$left process"
-    [ -e /Library/LaunchDaemons/org.freerdp.shadow.daemon.plist ] && left="$left daemon-plist"
-    [ -e /Library/LaunchAgents/org.freerdp.shadow.agent.plist ] && left="$left agent-plist"
+    [ -e /Library/LaunchDaemons/$ID.daemon.plist ] && left="$left daemon-plist"
+    [ -e /Library/LaunchAgents/$ID.agent.plist ] && left="$left agent-plist"
     [ -e "$APP" ] && left="$left app"
     [ -e "$LOGS" ] && left="$left logs"
     [ -z "$left" ]

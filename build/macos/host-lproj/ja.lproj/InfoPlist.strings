@@ -1,0 +1,2 @@
+/* FreeRDP-Shadow.app, ja (made by test/probe-camera-mac/make-strings.py) */
+"NSSystemExtensionUsageDescription" = "FreeRDP は仮想カメラを追加し、この Mac のアプリが、接続しているコンピューターのカメラを使えるようにします。";

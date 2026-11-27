@@ -2,13 +2,13 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <!-- The daemon mode's server: FreeRDP's shadow server as a root LaunchDaemon. It keeps the
      clients, TLS, the login (PAM) and the encoder; an agent in the session on the console
-     (org.freerdp.shadow.agent.plist) captures and posts the input for it, over the Mach
+     (@BUNDLE_ID@.agent.plist) captures and posts the input for it, over the Mach
      service below (FREERDP_SHADOW_MAC_AGENT_SERVICE names it). install-daemon.sh copies it to
      /Library/LaunchDaemons/ (root:wheel, 644); on 127.0.0.1 only (README.txt: reach it over
      SSH). -->
 <plist version="1.0">
 <dict>
-    <key>Label</key>              <string>org.freerdp.shadow.daemon</string>
+    <key>Label</key>              <string>@BUNDLE_ID@.daemon</string>
     <key>ProgramArguments</key>
     <array>
         <string>/Applications/FreeRDP-Shadow.app/Contents/MacOS/freerdp-shadow-cli</string>
@@ -20,20 +20,20 @@
         <string>/gfx-av1</string>
         <string>/gfx-av2</string>
         <!-- H.264 as AVC420: AVC444 sent 15-18 times the bytes for the same screen
-             (as in org.freerdp.shadow.plist) -->
+             (as in @BUNDLE_ID@.plist) -->
         <string>-gfx-avc444</string>
     </array>
     <key>EnvironmentVariables</key>
     <dict>
         <!-- the daemon mode: the agents connect to this Mach service -->
-        <key>FREERDP_SHADOW_MAC_AGENT_SERVICE</key> <string>org.freerdp.shadow</string>
+        <key>FREERDP_SHADOW_MAC_AGENT_SERVICE</key> <string>@BUNDLE_ID@</string>
         <!-- launchd gives a daemon no HOME; without one the server cannot make a client's
              context (ContextNew fails) and an assert ends it -->
         <key>HOME</key>           <string>/var/root</string>
     </dict>
     <key>MachServices</key>
     <dict>
-        <key>org.freerdp.shadow</key> <true/>
+        <key>@BUNDLE_ID@</key> <true/>
     </dict>
     <key>RunAtLoad</key>          <true/>
     <key>KeepAlive</key>          <true/>

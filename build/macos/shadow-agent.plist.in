@@ -2,13 +2,13 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <!-- The daemon mode's agent: launchd runs one at the login window (as root: the input goes
      to the HID system) and one in each user's session (as that user); the daemon
-     (org.freerdp.shadow.daemon.plist) uses the one on the console, so a connection lasts from
+     (@BUNDLE_ID@.daemon.plist) uses the one on the console, so a connection lasts from
      the login window through the login to the desktop. Its argument is the daemon's Mach
      service. Screen Recording and Accessibility are granted to this program, not to the
      server. install-daemon.sh copies it to /Library/LaunchAgents/ (root:wheel, 644). -->
 <plist version="1.0">
 <dict>
-    <key>Label</key>              <string>org.freerdp.shadow.agent</string>
+    <key>Label</key>              <string>@BUNDLE_ID@.agent</string>
     <key>LimitLoadToSessionType</key>
     <array>
         <string>LoginWindow</string>
@@ -17,7 +17,7 @@
     <key>ProgramArguments</key>
     <array>
         <string>/Applications/FreeRDP-Shadow.app/Contents/MacOS/freerdp-shadow-agent</string>
-        <string>org.freerdp.shadow</string>
+        <string>@BUNDLE_ID@</string>
     </array>
     <key>RunAtLoad</key>          <true/>
     <!-- it ends when the daemon is gone; launchd starts it again, at most every 10 s -->

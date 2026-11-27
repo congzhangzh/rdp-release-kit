@@ -4,18 +4,20 @@
 #   sudo ./install-daemon.sh [--port <port>] [-- <more server options>]
 #
 # run from the unpacked archive. It installs FreeRDP-Shadow.app to /Applications, the root
-# LaunchDaemon org.freerdp.shadow.daemon (the server: clients, TLS, PAM login, encoder; on
-# 127.0.0.1:3388 by default) and the LaunchAgent org.freerdp.shadow.agent (the capture and the
+# LaunchDaemon $ID.daemon (the server: clients, TLS, PAM login, encoder; on
+# 127.0.0.1:3388 by default) and the LaunchAgent $ID.agent (the capture and the
 # input, at the login window and in each user's session), and starts both. Run it again to
 # update or to change the port: it stops what it installed before. It refuses to run while the
-# no-root LaunchAgent org.freerdp.shadow (the same server in a user's session) listens on the
+# no-root LaunchAgent $ID (the same server in a user's session) listens on the
 # same port: remove that one first, or pass --port.
 # Bash 3.2 (macOS's own) is enough.
 set -eu
 
 APP=/Applications/FreeRDP-Shadow.app
-DAEMON=org.freerdp.shadow.daemon
-AGENT=org.freerdp.shadow.agent
+ID=@BUNDLE_ID@  # KIT_MAC_ID_PREFIX.freerdp-shadow (build-macos-client.sh writes it in)
+DAEMON=$ID.daemon
+AGENT=$ID.agent
+case $ID in @*) echo "${0##*/}: run the packaged copy (build-macos-client.sh writes the id in)" >&2; exit 1 ;; esac
 DAEMON_PLIST=/Library/LaunchDaemons/$DAEMON.plist
 AGENT_PLIST=/Library/LaunchAgents/$AGENT.plist
 LOGS=/var/log/freerdp-shadow
@@ -52,18 +54,44 @@ gui_uids() {
         done
 }
 
-# 1. the no-root LaunchAgent org.freerdp.shadow on the same port: refuse
+# the layout before the move to $ID (kit releases until 2026-11: org.freerdp.shadow): its
+# daemon, its agents and each user's no-root LaunchAgent are stopped and their plists removed,
+# so two servers never fight over the port and launchd starts none of them again
+LEGACY=org.freerdp.shadow
+remove_legacy() {
+    local uid home f found=""
+    for uid in $(gui_uids); do
+        if launchctl bootout "gui/$uid/$LEGACY.agent" > /dev/null 2>&1; then found="$found $LEGACY.agent(uid $uid)"; fi
+        if launchctl bootout "gui/$uid/$LEGACY" > /dev/null 2>&1; then found="$found $LEGACY(uid $uid)"; fi
+    done
+    if launchctl bootout "loginwindow/$LEGACY.agent" > /dev/null 2>&1; then found="$found $LEGACY.agent(login window)"; fi
+    if launchctl bootout "system/$LEGACY.daemon" > /dev/null 2>&1; then found="$found $LEGACY.daemon"; fi
+    for f in "/Library/LaunchDaemons/$LEGACY.daemon.plist" "/Library/LaunchAgents/$LEGACY.agent.plist"; do
+        if [ -e "$f" ]; then rm -f "$f"; found="$found $f"; fi
+    done
+    # every account's own LaunchAgent (the no-root mode), not only those logged in now
+    for home in $(dscl . -list /Users NFSHomeDirectory 2> /dev/null | awk '{ print $2 }' | sort -u); do
+        f=$home/Library/LaunchAgents/$LEGACY.plist
+        if [ -e "$f" ]; then rm -f "$f"; found="$found $f"; fi
+    done
+    if [ -n "$found" ]; then echo "== removed the old layout ($LEGACY):$found"; fi
+}
+
+# 0. the old layout first
+remove_legacy
+
+# 1. the no-root LaunchAgent $ID on the same port: refuse
 for uid in $(gui_uids); do
-    info=$(launchctl print "gui/$uid/org.freerdp.shadow" 2> /dev/null) || continue
+    info=$(launchctl print "gui/$uid/$ID" 2> /dev/null) || continue
     # its /port: argument, or the server's own default (3389)
     app_port=$(printf '%s\n' "$info" | grep -oE '/port:[0-9]+' | head -1 | cut -d: -f2)
     app_port=${app_port:-3389}
     if [ "$app_port" = "$PORT" ]; then
         user=$(id -un "$uid" 2> /dev/null || echo "uid $uid")
-        die "the LaunchAgent org.freerdp.shadow (the server in $user's session) listens on" \
+        die "the LaunchAgent $ID (the server in $user's session) listens on" \
             "port $PORT. Remove it first, as $user (README.txt):" \
-            "launchctl bootout gui/$uid/org.freerdp.shadow;" \
-            "rm ~/Library/LaunchAgents/org.freerdp.shadow.plist; or pass --port <another port>"
+            "launchctl bootout gui/$uid/$ID;" \
+            "rm ~/Library/LaunchAgents/$ID.plist; or pass --port <another port>"
     fi
 done
 

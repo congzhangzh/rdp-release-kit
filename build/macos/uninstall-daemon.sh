@@ -5,14 +5,16 @@
 #
 # It stops the agent in every session and the daemon, and removes their two plists, so
 # launchd starts neither again. --app removes /Applications/FreeRDP-Shadow.app too (kept while
-# a user's no-root LaunchAgent org.freerdp.shadow still runs it); --logs removes
+# a user's no-root LaunchAgent $ID still runs it); --logs removes
 # /var/log/freerdp-shadow. Safe to run again, and when nothing is installed.
 # Bash 3.2 (macOS's own) is enough.
 set -eu
 
 APP=/Applications/FreeRDP-Shadow.app
-DAEMON=org.freerdp.shadow.daemon
-AGENT=org.freerdp.shadow.agent
+ID=@BUNDLE_ID@  # KIT_MAC_ID_PREFIX.freerdp-shadow (build-macos-client.sh writes it in)
+DAEMON=$ID.daemon
+AGENT=$ID.agent
+case $ID in @*) echo "${0##*/}: run the packaged copy (build-macos-client.sh writes the id in)" >&2; exit 1 ;; esac
 DAEMON_PLIST=/Library/LaunchDaemons/$DAEMON.plist
 AGENT_PLIST=/Library/LaunchAgents/$AGENT.plist
 LOGS=/var/log/freerdp-shadow
@@ -39,6 +41,31 @@ gui_uids() {
         done
 }
 
+# the layout before the move to $ID (kit releases until 2026-11: org.freerdp.shadow): its
+# daemon, its agents and each user's no-root LaunchAgent are stopped and their plists removed,
+# so two servers never fight over the port and launchd starts none of them again
+LEGACY=org.freerdp.shadow
+remove_legacy() {
+    local uid home f found=""
+    for uid in $(gui_uids); do
+        if launchctl bootout "gui/$uid/$LEGACY.agent" > /dev/null 2>&1; then found="$found $LEGACY.agent(uid $uid)"; fi
+        if launchctl bootout "gui/$uid/$LEGACY" > /dev/null 2>&1; then found="$found $LEGACY(uid $uid)"; fi
+    done
+    if launchctl bootout "loginwindow/$LEGACY.agent" > /dev/null 2>&1; then found="$found $LEGACY.agent(login window)"; fi
+    if launchctl bootout "system/$LEGACY.daemon" > /dev/null 2>&1; then found="$found $LEGACY.daemon"; fi
+    for f in "/Library/LaunchDaemons/$LEGACY.daemon.plist" "/Library/LaunchAgents/$LEGACY.agent.plist"; do
+        if [ -e "$f" ]; then rm -f "$f"; found="$found $f"; fi
+    done
+    # every account's own LaunchAgent (the no-root mode), not only those logged in now
+    for home in $(dscl . -list /Users NFSHomeDirectory 2> /dev/null | awk '{ print $2 }' | sort -u); do
+        f=$home/Library/LaunchAgents/$LEGACY.plist
+        if [ -e "$f" ]; then rm -f "$f"; found="$found $f"; fi
+    done
+    if [ -n "$found" ]; then echo "== removed the old layout ($LEGACY):$found"; fi
+}
+
+remove_legacy
+
 # the plists first: a session that starts now no longer loads the agent
 rm -f "$AGENT_PLIST" "$DAEMON_PLIST"
 # then the agents (each would end and be started again once the daemon is gone), the daemon
@@ -55,12 +82,12 @@ if pkill -U 0 -f "^$APP/Contents/MacOS/freerdp-shadow-cli" 2> /dev/null; then ec
 if [ $RM_APP = 1 ]; then
     users=""
     for uid in $(gui_uids); do
-        if launchctl print "gui/$uid/org.freerdp.shadow" > /dev/null 2>&1; then
+        if launchctl print "gui/$uid/$ID" > /dev/null 2>&1; then
             users="$users $(id -un "$uid" 2> /dev/null || echo "uid $uid")"
         fi
     done
     if [ -n "$users" ]; then
-        echo "== kept $APP: the LaunchAgent org.freerdp.shadow still runs it for:$users"
+        echo "== kept $APP: the LaunchAgent $ID still runs it for:$users"
     else
         rm -rf "$APP"
         echo "== removed $APP"

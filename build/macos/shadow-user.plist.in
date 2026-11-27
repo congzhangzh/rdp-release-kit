@@ -5,7 +5,7 @@
      ~/Library/LaunchAgents/ with the app in /Applications. -->
 <plist version="1.0">
 <dict>
-    <key>Label</key>              <string>org.freerdp.shadow</string>
+    <key>Label</key>              <string>@BUNDLE_ID@</string>
     <key>ProgramArguments</key>
     <array>
         <string>/Applications/FreeRDP-Shadow.app/Contents/MacOS/freerdp-shadow-cli</string>

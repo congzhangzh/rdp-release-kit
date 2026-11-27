@@ -1,0 +1,2 @@
+/* FreeRDP-Shadow.app, zh-Hans (made by test/probe-camera-mac/make-strings.py) */
+"NSSystemExtensionUsageDescription" = "FreeRDP 会添加一个虚拟摄像头，让这台 Mac 上的应用能使用连接到它的那台电脑的摄像头。";

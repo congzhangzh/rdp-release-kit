@@ -2,16 +2,30 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <!-- FreeRDP-Shadow.app (build-macos-client.sh, HOST=1): FreeRDP's shadow server as an app,
      so its bundle id is the code identity macOS's privacy settings (TCC) remember for
-     Screen Recording and Accessibility; no Dock icon (LSUIElement) -->
+     Screen Recording and Accessibility; no Dock icon (LSUIElement). @BUNDLE_ID@ is
+     KIT_MAC_ID_PREFIX.freerdp-shadow. It carries the camera extension
+     (Contents/Library/SystemExtensions/@BUNDLE_ID@.camera.systemextension); the English
+     NSSystemExtensionUsageDescription is here, the others in
+     Resources/<lang>.lproj/InfoPlist.strings (test/probe-camera-mac/make-strings.py writes
+     both from the product owner's words: never edit them by hand) -->
 <plist version="1.0">
 <dict>
-    <key>CFBundleIdentifier</key>          <string>org.freerdp.shadow</string>
+    <key>CFBundleIdentifier</key>          <string>@BUNDLE_ID@</string>
     <key>CFBundleName</key>                <string>FreeRDP Shadow</string>
     <key>CFBundleExecutable</key>          <string>freerdp-shadow-cli</string>
     <key>CFBundlePackageType</key>         <string>APPL</string>
     <key>CFBundleShortVersionString</key>  <string>@VERSION@</string>
     <key>CFBundleVersion</key>             <string>@VERSION@</string>
+    <key>CFBundleDevelopmentRegion</key>   <string>en</string>
+    <key>CFBundleLocalizations</key>
+    <array>
+        <string>en</string>
+        <string>zh-Hans</string>
+        <string>ja</string>
+        <string>fr</string>
+    </array>
     <key>LSMinimumSystemVersion</key>      <string>@MACOS_MIN@</string>
     <key>LSUIElement</key>                 <true/>
+    <key>NSSystemExtensionUsageDescription</key> <string>FreeRDP adds a virtual camera so that apps on this Mac can use the camera of the computer connected to it.</string>
 </dict>
 </plist>

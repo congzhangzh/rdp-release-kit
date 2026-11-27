@@ -1,0 +1,12 @@
+host	NSSystemExtensionUsageDescription	en	FreeRDP adds a virtual camera so that apps on this Mac can use the camera of the computer connected to it.
+host	NSSystemExtensionUsageDescription	zh-Hans	FreeRDP 会添加一个虚拟摄像头，让这台 Mac 上的应用能使用连接到它的那台电脑的摄像头。
+host	NSSystemExtensionUsageDescription	ja	FreeRDP は仮想カメラを追加し、この Mac のアプリが、接続しているコンピューターのカメラを使えるようにします。
+host	NSSystemExtensionUsageDescription	fr	FreeRDP ajoute une caméra virtuelle pour que les apps de ce Mac puissent utiliser la caméra de l’ordinateur qui s’y connecte.
+client	NSCameraUsageDescription	en	FreeRDP shares your camera with the remote computer while you are connected.
+client	NSCameraUsageDescription	zh-Hans	连接期间，FreeRDP 会把你的摄像头共享给远程电脑。
+client	NSCameraUsageDescription	ja	接続中、FreeRDP はカメラをリモート コンピューターと共有します。
+client	NSCameraUsageDescription	fr	FreeRDP partage votre caméra avec l'ordinateur distant pendant la connexion.
+readme	camera	en	Camera (macOS): started from Terminal or freerdp-tk, macOS asks for Terminal's camera permission; started from Finder or with `open FreeRDP.app`, it asks for FreeRDP's own. Allowing Terminal lets any program you run in Terminal use the camera.
+readme	camera	zh-Hans	摄像头（macOS）：从“终端”或 freerdp-tk 启动时，macOS 请求的是“终端”的摄像头权限；从“访达”或用 `open FreeRDP.app` 启动时，请求的是 FreeRDP 自己的权限。允许“终端”后，在终端里运行的任何程序都能使用摄像头。
+readme	camera	ja	カメラ（macOS）：ターミナルまたは freerdp-tk から起動すると、macOS は「ターミナル」のカメラ許可を求めます。Finder または `open FreeRDP.app` で起動すると、FreeRDP 自身の許可を求めます。「ターミナル」に許可すると、ターミナルで実行するすべてのプログラムがカメラを使えるようになります。
+readme	camera	fr	Caméra (macOS) : lancé depuis le Terminal ou freerdp-tk, macOS demande l’autorisation caméra du Terminal ; lancé depuis le Finder ou avec `open FreeRDP.app`, il demande celle de FreeRDP. Autoriser le Terminal permet à tout programme lancé dans le Terminal d’utiliser la caméra.
