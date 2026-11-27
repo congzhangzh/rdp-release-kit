@@ -21,7 +21,13 @@
 #    (the client's camera offers MJPG, the host decodes it), h264 (the CI-only client), owncamera
 #    (a client camera named "FreeRDP Camera" is refused by the host: no loop).
 #    The client's camera device is written by test/probe-camera-linux/v4l2-writer.c (CI only).
-#  - test-v4l2loopback-0.12.7: the fallback, proven with the version Ubuntu 24.04 packages:
+#  - test-v4l2loopback-dkms: the stock case, the most common LTS as a user has it: Ubuntu 24.04's
+#    own v4l2loopback-dkms (0.12.7) from the archive, built by DKMS, no patch; the kernel, Secure
+#    Boot, the DKMS build log and dkms status logged first (a build or load failure is recorded
+#    and stops the job). Then the fallback case (the exact line, always on, frames to a reader,
+#    with the diagnostics of both sides of /dev/video41: DIAG=1, read() and mmap readers,
+#    dmesg), and the README's modprobe line with that module.
+#  - test-v4l2loopback-0.12.7 (informational, to compare): the fallback with the same version:
 #    v4l2loopback 0.12.7 from its source tag (CI only, a GPL module never in an archive), with
 #    compat-0.12.7.sh renaming the kernel APIs it predates (it does not build on 7.0 otherwise):
 #    exactly one line that it can't tell its readers ("before 0.13": it declares no version),
@@ -317,6 +323,44 @@ jobs:
           path: out
           retention-days: 7
 
+  test-v4l2loopback-dkms:
+    needs: [host, client]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        with:
+          name: probe-camera-linux-host-camera
+          path: dl/host
+      - uses: actions/download-artifact@v8
+        with:
+          name: probe-camera-linux-client
+          path: dl/client
+      - name: Tools and the packages
+        run: test/probe-camera-linux/runner-setup.sh out
+      - name: "Ubuntu's v4l2loopback-dkms from the archive (kernel, Secure Boot, DKMS build, dkms status)"
+        id: dkms
+        run: test/probe-camera-linux/module.sh dkms out/module
+      - name: "fallback: the stock module that can't tell its readers"
+        env:
+          DIAG: "1"
+        run: test/probe-camera-linux/camera-e2e.sh fallback dl/host/pkg dl/client/pkg/bin/sdl-freerdp out/fallback
+      - name: "The README's modprobe line, as typed in bash, with the DKMS module"
+        if: always() && steps.dkms.outcome == 'success'
+        run: test/probe-camera-linux/module.sh readme out/readme
+      - name: Results and the kernel's log
+        if: always()
+        run: |
+          sudo dmesg 2>&1 | tee out/dmesg.txt > /dev/null || true
+          cat out/module/dkms.txt out/*/result.txt 2> /dev/null | tee -a "$GITHUB_STEP_SUMMARY" || true
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: probe-camera-linux-test-v4l2loopback-dkms
+          path: out
+          retention-days: 7
+
   test-v4l2loopback-0-12-7:
     needs: [host, client]
     runs-on: ubuntu-24.04
@@ -341,11 +385,15 @@ jobs:
         env:
           V4L2LOOPBACK_COMPAT: test/probe-camera-linux/compat-0.12.7.sh
         run: test/probe-camera-linux/module.sh source out/module
-      - name: "fallback: a module that can't tell its readers"
+      - name: "fallback: a module that can't tell its readers (informational: our compat build)"
+        env:
+          DIAG: "1"
         run: test/probe-camera-linux/camera-e2e.sh fallback dl/host/pkg dl/client/pkg/bin/sdl-freerdp out/fallback
-      - name: Results
+      - name: Results and the kernel's log
         if: always()
-        run: cat out/*/result.txt | tee -a "$GITHUB_STEP_SUMMARY" || true
+        run: |
+          sudo dmesg 2>&1 | tee out/dmesg.txt > /dev/null || true
+          cat out/*/result.txt | tee -a "$GITHUB_STEP_SUMMARY" || true
       - uses: actions/upload-artifact@v7
         if: always()
         with:

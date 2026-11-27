@@ -9,6 +9,10 @@
 #           after the clone), CI only: a GPL module, never in an archive of ours. With
 #           V4L2LOOPBACK_COMPAT=<script>, that script is run on the tree first (0.12.7 predates
 #           the runners' kernels: compat-0.12.7.sh)
+#   dkms    Ubuntu's own v4l2loopback-dkms from the archive (0.12.7 on 24.04), as a user installs
+#           it, no patch: the kernel, Secure Boot state, the DKMS build and its log, dkms status
+#           are logged first; if it does not build or load, the exact error is recorded and the
+#           step stops (DKMS's module goes to updates/dkms, before the kernel's own 0.15.3)
 #   readme  the command host-README.txt gives, typed as a user would in bash:
 #             sudo modprobe v4l2loopback exclusive_caps=1 card_label="FreeRDP Camera"
 #           then the device's name must be exactly "FreeRDP Camera"; unloaded again. Then its
@@ -27,8 +31,8 @@
 # also offers capture once the host writes to it, comes second and is refused (no loop).
 # shellcheck disable=SC2024  # the logs are the runner user's: only apt runs as root
 set -euo pipefail
-MODE=${1:?usage: module.sh kernel|source|readme <out dir>}
-OUT=${2:?usage: module.sh kernel|source|readme <out dir>}
+MODE=${1:?usage: module.sh kernel|source|dkms|readme <out dir>}
+OUT=${2:?usage: module.sh kernel|source|dkms|readme <out dir>}
 mkdir -p "$OUT"
 KREL=$(uname -r)
 
@@ -80,6 +84,41 @@ case $MODE in
         sudo install -D -m 644 "$src/v4l2loopback.ko" "/lib/modules/$KREL/updates/v4l2loopback.ko"
         sudo depmod -a "$KREL"
         ;;
+    dkms)
+        {
+            echo "kernel: $KREL"
+            echo "Secure Boot: $(mokutil --sb-state 2>&1 || true)"
+        } | tee "$OUT/dkms.txt"
+        # as a user would; a failed DKMS build fails the package's configuration, which is a
+        # result here, not an error of this script
+        set +e
+        sudo apt-get install -y -q "linux-headers-$KREL" v4l2loopback-dkms > "$OUT/apt-dkms.log" 2>&1
+        rc=$?
+        set -e
+        {
+            echo "apt-get install linux-headers-$KREL v4l2loopback-dkms: rc $rc"
+            echo "v4l2loopback-dkms: $(dpkg-query -W -f '${Version} ${db:Status-Abbrev}' v4l2loopback-dkms 2>&1)"
+            echo "dkms status: $(dkms status 2>&1 | tr '\n' ';')"
+        } | tee -a "$OUT/dkms.txt"
+        for log in /var/lib/dkms/v4l2loopback/*/build/make.log; do
+            [ -f "$log" ] && { echo "== $log"; cat "$log"; }
+        done > "$OUT/dkms-make.log" 2>&1
+        if ! modinfo -n v4l2loopback 2> /dev/null | grep -q '/updates/dkms/'; then
+            err=$(grep -m1 -E 'error:|Error [0-9]|Bad return status' "$OUT/dkms-make.log" "$OUT/apt-dkms.log" 2> /dev/null || true)
+            echo "::error::v4l2loopback-dkms did not give a module for $KREL (apt rc $rc): ${err:-see apt-dkms.log}" |
+                tee -a "$OUT/dkms.txt"
+            grep -E 'error:' "$OUT/dkms-make.log" | head -20 | tee -a "$OUT/dkms.txt" || true
+            exit 1
+        fi
+        from="v4l2loopback-dkms $(dpkg-query -W -f '${Version}' v4l2loopback-dkms) (Ubuntu's archive, built by DKMS)"
+        if ! sudo modprobe v4l2loopback devices=2 video_nr=40,41 "card_label=Test Source,FreeRDP Camera" exclusive_caps=1,1 \
+            > "$OUT/modprobe.log" 2>&1; then
+            echo "::error::modprobe of the DKMS module failed: $(cat "$OUT/modprobe.log")" | tee -a "$OUT/dkms.txt"
+            sudo dmesg | tail -20 | tee -a "$OUT/dkms.txt"
+            exit 1
+        fi
+        sudo modprobe -r v4l2loopback
+        ;;
     readme)
         # exactly as host-README.txt has it, through bash's own quoting
         sudo bash -c 'modprobe v4l2loopback exclusive_caps=1 card_label="FreeRDP Camera"'
@@ -112,10 +151,14 @@ case $MODE in
         sudo modprobe -r v4l2loopback
         exit 0
         ;;
-    *) echo "usage: module.sh kernel|source|readme <out dir>" >&2; exit 2 ;;
+    *) echo "usage: module.sh kernel|source|dkms|readme <out dir>" >&2; exit 2 ;;
 esac
 
 sudo modprobe v4l2loopback devices=2 video_nr=40,41 "card_label=Test Source,FreeRDP Camera" exclusive_caps=1,1
+if [ "$MODE" = dkms ]; then
+    loaded=$(modinfo -n v4l2loopback)
+    case $loaded in */updates/dkms/*) ;; *) echo "::error::loaded $loaded, not DKMS's module" | tee -a "$OUT/dkms.txt"; exit 1 ;; esac
+fi
 version=$(cat /sys/module/v4l2loopback/version 2> /dev/null || true)
 echo "${version:-none}" > "$OUT/version.txt"
 {

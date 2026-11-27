@@ -136,6 +136,17 @@ client() {  # client [extra /dvc options]: the kit's client with its V4L2 camera
     mark "client started"
 }
 
+# diag_device <when>: both sides of the host's camera device, for DIAG=1 (the 0.12.7 job)
+diag_device() {
+    [ -n "${DIAG:-}" ] || return 0
+    {
+        echo "=== $(date +%H:%M:%S.%3N) $CAM_DEV, $1"
+        v4l2-ctl -d $CAM_DEV --all 2>&1
+        echo "--- $SRC_DEV"
+        v4l2-ctl -d $SRC_DEV --info 2>&1 | sed -n '/Device Caps/,$p'
+    } >> "$OUT/diag-devices.txt"
+}
+
 read_camera() {  # read_camera <frames> <file>: an app reads the host's camera
     mark "reader opens $CAM_DEV"
     v4l2-ctl -d $CAM_DEV --all > "$OUT/camera-device.txt" 2>&1 || true
@@ -197,7 +208,10 @@ case $CASE in
         xserver 91
         xserver 92
         source_camera "$([ "$CASE" = mjpg ] && echo mjpg || echo yuyv)"
+        diag_device "before the host starts"
         host
+        sleep 2
+        diag_device "after the host started (it set YUYV 1280x720 and writes the still)"
         check "the host found the FreeRDP Camera" "grep -q 'camera: v4l2loopback /dev/video41' '$OUT/host.log'"
         client
         # a hard precondition: the client's camera is the Test Source, else nothing below means
@@ -224,7 +238,30 @@ case $CASE in
                 "$(grep -o -E 'v4l2loopback .* can.t tell' "$OUT/host.log" | head -1)"
             wait_for 20 "grep -q 'first frame from' '$OUT/host.log'"
             check "the camera runs while connected, no app reading" "grep -q 'Start Streams #1 (the sink can.t tell its readers)' '$OUT/host.log'"
+            if [ -n "${DIAG:-}" ]; then
+                # the client's side: did its V4L2 capture of the source start ("Camera format:"),
+                # did the host get a frame from it
+                echo "INFO  client capture started: $(grep -c -F 'Camera format:' "$OUT/client.log"), host first frame: $(grep -c -F 'first frame from' "$OUT/host.log")" |
+                    tee -a "$OUT/result.txt"
+                # read() first (V4L2 read I/O), then mmap streaming (v4l2-ctl), each on its own
+                gcc -O2 -Wall -Wextra -Werror -o "$OUT/v4l2-reader" "$HERE/v4l2-reader.c" > "$OUT/reader-build.log" 2>&1 ||
+                    cat "$OUT/reader-build.log"
+                mark "read() reader opens $CAM_DEV"
+                timeout 60 "$OUT/v4l2-reader" $CAM_DEV 60 "$OUT/read-io.yuyv" 5 > "$OUT/read-io.log" 2>&1
+                rc=$?
+                mark "read() reader closed $CAM_DEV (rc $rc$([ $rc -gt 128 ] && echo ", signal $((rc - 128))"))"
+                echo "INFO  read(): rc $rc, $(tail -1 "$OUT/read-io.log")" | tee -a "$OUT/result.txt"
+                python3 "$HERE/frames.py" "$OUT/read-io.yuyv" $WIDTH $HEIGHT 1 > "$OUT/frames-read-io.txt" 2>&1
+                sed 's/^/INFO  read(): /' "$OUT/frames-read-io.txt" | tee -a "$OUT/result.txt"
+                diag_device "after the read() reader"
+            fi
             read_camera 150 "$OUT/read-1.yuyv"
+            [ -z "${DIAG:-}" ] || {
+                rc=$(sed -n 's/.*reader closed .* (rc \([0-9]*\)).*/\1/p' "$OUT/events.txt" | tail -1)
+                echo "INFO  mmap (v4l2-ctl --stream-mmap): rc ${rc:-?}$([ "${rc:-0}" -gt 128 ] && echo ", signal $((rc - 128))")" |
+                    tee -a "$OUT/result.txt"
+                diag_device "after the mmap reader"
+            }
             check "an app reads >= 60 changing frames" "python3 '$HERE/frames.py' '$OUT/read-1.yuyv' $WIDTH $HEIGHT 60 | tee '$OUT/frames-1.txt'"
         else
             check "no fallback line (the module tells its readers)" "! grep -q -F \"$FALLBACK\" '$OUT/host.log'"
