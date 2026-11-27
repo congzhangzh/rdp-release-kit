@@ -5,12 +5,14 @@
 #   check-bundle-strings.py <expected-strings.txt> host   <FreeRDP-Shadow.app>
 #   check-bundle-strings.py <expected-strings.txt> client <FreeRDP.app>
 #   check-bundle-strings.py <expected-strings.txt> readme <README.txt>
+#   check-bundle-strings.py <expected-strings.txt> kit-readme <kit dir>
 #
 # The expected file (test/probe-camera-mac/expected-strings.txt, made by make-strings.py from
 # the product owner's words) has one line per string: <what>\t<key>\t<lang>\t<text>. For a
 # bundle, en is Contents/Info.plist's value, every other language
 # Contents/Resources/<lang>.lproj/InfoPlist.strings (UTF-8); CFBundleLocalizations must list
-# them all. For the README, each text must be one whole line of it. Runs anywhere (python3,
+# them all. For the README, each text must be one whole line of it; for the kit's READMEs
+# (kit-readme: <key> is the file), each text must be in that file. Runs anywhere (python3,
 # no macOS tool); exit 1 on the first difference's report, after checking everything.
 import plistlib
 import re
@@ -40,8 +42,9 @@ def hexdump(s):
 
 
 def main():
-    if len(sys.argv) != 4 or sys.argv[2] not in ("host", "client", "readme"):
-        sys.exit("usage: check-bundle-strings.py <expected-strings.txt> host|client|readme <bundle or README>")
+    if len(sys.argv) != 4 or sys.argv[2] not in ("host", "client", "readme", "kit-readme"):
+        sys.exit("usage: check-bundle-strings.py <expected-strings.txt> host|client|readme|kit-readme "
+                 "<bundle, README or kit dir>")
     expected, what, target = Path(sys.argv[1]), sys.argv[2], Path(sys.argv[3])
     rows = []
     for raw in expected.read_bytes().decode("utf-8").splitlines():
@@ -62,6 +65,12 @@ def main():
             bad = 1
             print(f"FAIL  {label}:\n        got  {got!r}\n             [{hexdump(got) if got else ''}]\n"
                   f"        want {want!r}\n             [{hexdump(want)}]")
+
+    if what == "kit-readme":
+        for key, lang, text in rows:
+            body = (target / key).read_bytes().decode("utf-8")
+            same(f"{key} ({lang})", text if text in body else "(not in the file)", text)
+        return bad
 
     if what == "readme":
         lines = target.read_bytes().decode("utf-8").splitlines()

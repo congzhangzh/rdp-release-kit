@@ -109,8 +109,7 @@ launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/io.github.congzhangzh.fr
 FreeRDP Shadowを許可し、再起動してください: `launchctl kickstart -k gui/$(id -u)/io.github.congzhangzh.freerdp-shadow`。
 
 どちらも3388で待ち受けるので、どちらか一方だけをインストールしてください(アプリが待ち受けている間は `install-daemon.sh` が
-拒否します。`launchctl bootout gui/$(id -u)/io.github.congzhangzh.freerdp-shadow` で止められます)。どちらもアドホック署名のため、
-更新のたびにmacOSが2つの許可を再度求めます。
+拒否します。`launchctl bootout gui/$(id -u)/io.github.congzhangzh.freerdp-shadow` で止められます)。どちらも私たちのDeveloper IDで署名され、Appleの公証を受けています。この署名に切り替えた最初の更新で2つの許可をもう一度求め、以降の更新では許可が保持されます。
 
 各アーカイブの `README.txt` に、そのプラットフォームについてのすべてが書かれています。ログ、オプション、削除方法などです。
 

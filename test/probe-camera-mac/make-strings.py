@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 # Makes the Mac bundles' usage strings from their sources, byte for byte (never retyped):
 #
-#   make-strings.py [--check] <PO strings draft> <PO usage descriptions> <PO README draft> <kit dir>
+#   make-strings.py [--check] <PO strings draft> <PO usage descriptions> <PO README draft>
+#                   <PO README signing draft> <kit dir>
 #
 #   <PO strings draft>   rdp-product-plan/drafts/mac-signing-strings.v1.md, section 1:
 #                        NSSystemExtensionUsageDescription of FreeRDP-Shadow.app, en/zh/ja/fr
@@ -9,6 +10,14 @@
 #                        NSCameraUsageDescription and NSMicrophoneUsageDescription, en/zh/ja/fr
 #   <PO README draft>    rdp-product-plan/drafts/readme-mac-camera.v1.md: the Mac client
 #                        README's camera paragraph, en/zh/ja/fr
+#   <PO README signing draft>  rdp-product-plan/drafts/readme-mac-signing.v1.md: the kit
+#                        READMEs' signing sentence (en/zh/ja/fr), README.md's Gatekeeper row and
+#                        its check-macos.sh cell
+#
+# The README style rule (the RM, 2026-11-27): a README cell takes its target README's style.
+# README.fr.md writes ASCII apostrophes (and NBSP before ":" and ";"), so a fr README cell gets
+# U+2019 turned into "'" here; only the Info.plist strings keep U+2019. That is the one change
+# made to a source's bytes, and the expected file holds the result.
 #
 # Writes, in the kit:
 #   build/macos/host-lproj/{zh-Hans,ja,fr}.lproj/InfoPlist.strings   (en is in host-Info.plist)
@@ -16,6 +25,9 @@
 #   the en values in build/macos/host-Info.plist and build/macos/client-Info.plist
 #   build/macos/client-README-camera.txt: the four README lines, appended to the client
 #   archive's README.txt by build-macos-client.sh
+#   README.md, README.zh.md, README.ja.md, README.fr.md: the old "signed ad hoc" sentence
+#   replaced by the signing sentence (on one line); README.md's Gatekeeper row and its
+#   check-macos.sh cell
 #   test/probe-camera-mac/expected-strings.txt: what check-bundle-strings.py compares a built
 #   bundle with, one line per string: <bundle>\t<key>\t<lang>\t<text>
 # --check: changes nothing, fails if any of these differs from what it would write.
@@ -73,6 +85,40 @@ def po_readme(path):
     return out
 
 
+README_FILE = {"en": "README.md", "zh-Hans": "README.zh.md", "ja": "README.ja.md", "fr": "README.fr.md"}
+# the sentence each README had while the apps were signed ad hoc (it may wrap over two lines)
+OLD_SIGNING = {
+    "en": r"Both are signed ad hoc, so macOS\s+asks for the two permissions again after each update\.",
+    "zh-Hans": r"两者都使用临时（ad hoc）签名，\s*所以每次更新后 macOS 都会再次询问这两项权限。",
+    "ja": r"どちらもアドホック署名のため、\s*更新のたびにmacOSが2つの許可を再度求めます。",
+    "fr": r"Les deux sont signés ad hoc, si bien que macOS\s+redemande les deux autorisations après chaque mise à jour\.",
+}
+
+
+def readme_style(lang, text):
+    """a README cell in its target README's style: fr READMEs write ASCII apostrophes"""
+    return text.replace("\u2019", "'") if lang == "fr" else text
+
+
+def po_signing(path):
+    text = Path(path).read_text(encoding="utf-8")
+    m = re.search(r"^## The sentence ×4\n(.*?)(?=^## |\Z)", text, re.S | re.M)
+    if not m:
+        sys.exit(f"{path}: no section 'The sentence ×4'")
+    sentence = {}
+    for line in m.group(1).splitlines():
+        lm = re.match(r"^- (en|zh|ja|fr): (.+)$", line)
+        if lm:
+            sentence[LANG[lm.group(1)]] = lm.group(2)
+    if sorted(sentence) != sorted(LANG.values()):
+        sys.exit(f"{path}: the sentence for {sorted(sentence)}, want en, zh, ja, fr")
+    row = re.search(r"^## README\.md:175.*?\n(\| macOS, a browser download \|.*\|)$", text, re.S | re.M)
+    cell = re.search(r'"an ad-hoc signature" → "([^"]+)"', text)
+    if not row or not cell:
+        sys.exit(f"{path}: no README.md:175 row or check-macos.sh cell")
+    return sentence, row.group(1), cell.group(1)
+
+
 def strings_file(bundle, lang, pairs):
     """pairs: (key, value) in order"""
     out = f"/* {bundle}, {lang} (made by test/probe-camera-mac/make-strings.py) */\n"
@@ -97,12 +143,15 @@ def set_plist_line(text, key, value):
 def main():
     args = [a for a in sys.argv[1:] if a != "--check"]
     check = "--check" in sys.argv
-    if len(args) != 4:
-        sys.exit("usage: make-strings.py [--check] <PO strings draft> <PO usage descriptions> <PO README draft> <kit dir>")
+    if len(args) != 5:
+        sys.exit("usage: make-strings.py [--check] <PO strings draft> <PO usage descriptions> "
+                 "<PO README draft> <PO README signing draft> <kit dir>")
     host = po_section1(args[0])
     client = po_usage(args[1])
-    readme = po_readme(args[2])
-    kit = Path(args[3])
+    readme = {lang: readme_style(lang, text) for lang, text in po_readme(args[2]).items()}
+    sentence, row, cell = po_signing(args[3])
+    sentence = {lang: readme_style(lang, text) for lang, text in sentence.items()}
+    kit = Path(args[4])
     files = {}
     for lang in ("zh-Hans", "ja", "fr"):
         files[kit / f"build/macos/host-lproj/{lang}.lproj/InfoPlist.strings"] = strings_file(
@@ -120,6 +169,26 @@ def main():
     lines = [f"host\tNSSystemExtensionUsageDescription\t{lang}\t{host[lang]}" for lang in ("en", "zh-Hans", "ja", "fr")]
     lines += [f"client\t{key}\t{lang}\t{client[key][lang]}" for key in CLIENT_KEYS for lang in ("en", "zh-Hans", "ja", "fr")]
     lines += [f"readme\tcamera\t{lang}\t{readme[lang]}" for lang in order]
+    # the kit's own READMEs: each text must be in that file (check-bundle-strings.py kit-readme)
+    for lang in order:
+        p = kit / README_FILE[lang]
+        text = files.get(p) or p.read_text(encoding="utf-8")
+        if sentence[lang] not in text:
+            text, n = re.subn(OLD_SIGNING[lang], lambda _: sentence[lang], text)
+            if n != 1:
+                sys.exit(f"{p}: the old signing sentence found {n} times, want 1")
+        if lang == "en":
+            text, n = re.subn(r"^\| macOS, a browser download \|.*\|$", lambda _: row, text, flags=re.M)
+            if n != 1:
+                sys.exit(f"{p}: the Gatekeeper row found {n} times, want 1")
+            if cell not in text:
+                text, n = re.subn(r"an ad-hoc signature", lambda _: cell, text)
+                if n != 1:
+                    sys.exit(f"{p}: 'an ad-hoc signature' found {n} times, want 1")
+        files[p] = text
+        lines.append(f"kit-readme\t{README_FILE[lang]}\t{lang}\t{sentence[lang]}")
+    lines.append(f"kit-readme\tREADME.md\ten\t{row}")
+    lines.append(f"kit-readme\tREADME.md\ten\t{cell}")
     files[kit / "test/probe-camera-mac/expected-strings.txt"] = "\n".join(lines) + "\n"
     bad = 0
     for path, content in files.items():

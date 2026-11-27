@@ -87,10 +87,13 @@ says who owns it, what it waits on, and where it lives.
 
 ## Decisions waiting for the owner
 
-- **Signing the Mac app.** It is ad hoc, so each update asks for Screen Recording and
-  Accessibility again (freerdp-d0 measured it). The choices are a Developer ID (paid, and
-  Gatekeeper stays silent), a fixed self-signed certificate kept as a CI secret (free, and
-  keeps the permissions), or staying ad hoc.
+- **Signing the Mac app: decided** (the owner, 2026-11-27: a Developer ID, which he has and
+  pays for). It was ad hoc, so each update asked for Screen Recording and Accessibility again
+  (freerdp-d0 measured it). Now the host and the client are signed with the Developer ID and
+  notarized on CI (the probe probe-camera-mac, then kit.yml): the first update signed this way
+  asks once more, later ones keep the grants (the probe checks the designated requirement; a
+  real Mac confirms it). The other choices were a fixed self-signed certificate kept as a CI
+  secret, or staying ad hoc.
 - **The site:** a page release only when the page code changed. The site is published with
   `site.yml` from a kit release.
 

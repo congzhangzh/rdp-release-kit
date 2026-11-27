@@ -64,7 +64,62 @@ profile() {
     cp "$1" "$3/Contents/embedded.provisionprofile"
 }
 
-is_macho() { file -b "$1" | grep -q '^Mach-O'; }
+# a Mach-O by its content, not its name: the magic of a thin file (32 or 64 bit, either byte
+# order), or of a fat one (cafebabe, also a Java class's: file tells them apart)
+is_macho() {
+    local magic
+    magic=$(head -c 4 "$1" 2> /dev/null | od -An -tx1 | tr -d ' \n')
+    case $magic in
+        cffaedfe | cefaedfe | feedfacf | feedface) return 0 ;;
+        cafebabe | bebafeca) file -b "$1" | grep -q '^Mach-O' ;;
+        *) return 1 ;;
+    esac
+}
+
+# the bundled Python's programs (freerdp-tk's python/bin): build/macos/python.entitlements,
+# none by default (PYTHON_ENTITLEMENTS=<file> instead, for the probe that looks for the
+# minimum); a file with no key is passed as no --entitlements at all
+PYTHON_ENT=()
+python_entitlements=${PYTHON_ENTITLEMENTS:-$HERE/python.entitlements}
+if [ "$(plutil -convert json -o - "$python_entitlements")" != "{}" ]; then
+    PYTHON_ENT=(--entitlements "$python_entitlements")
+fi
+
+# sign_loose: every Mach-O in the package that is not signed with its bundle, inside out (the
+# deepest first): freerdp-tk's Python (python3, libpython, lib-dynload, Tcl/Tk and their
+# packages), winpr-hash, the helpers in an app's Contents/MacOS. Not an app's main executable
+# (signed with its app) and nothing in a .systemextension (signed with it). Ad hoc, only the
+# programs that need their own identifier (as every kit build so far); with a Developer ID,
+# every one, because notarization refuses an archive with one Mach-O that is not hardened.
+sign_loose() {
+    local f app main ident n=0
+    while IFS= read -r f; do
+        is_macho "$f" || continue
+        case $f in *.systemextension/*) continue ;; esac
+        case $f in
+            */Contents/MacOS/*)
+                app=${f%%/Contents/MacOS/*}
+                main=$("$PB" -c "Print :CFBundleExecutable" "$app/Contents/Info.plist" 2> /dev/null || true)
+                [ "$f" != "$app/Contents/MacOS/$main" ] || continue
+                ;;
+        esac
+        ident=()
+        case $f in
+            */Contents/MacOS/freerdp-shadow-agent) ident=(--identifier "$ID.agent") ;;
+            */Contents/MacOS/freerdp-shadow-camera) ident=(--identifier "$ID.camera-tool") ;;
+            "$PKG/winpr-hash") ident=(--identifier "$ID.winpr-hash") ;;
+        esac
+        [ "$IDENTITY" != - ] || [ ${#ident[@]} -gt 0 ] || continue
+        case $f in
+            "$PKG"/python/bin/*)
+                codesign "${FLAGS[@]}" ${PYTHON_ENT[@]+"${PYTHON_ENT[@]}"} "$f" ;;
+            *)
+                codesign "${FLAGS[@]}" ${ident[@]+"${ident[@]}"} "$f" ;;
+        esac
+        n=$((n + 1))
+    done < <(find "$PKG" -type f | awk '{ d = gsub("/", "/"); print d, $0 }' | sort -rn | cut -d' ' -f2-)
+    echo "== $n Mach-O file(s) outside the bundles' own signatures signed"
+}
 
 case $WHAT in
 host)
@@ -84,15 +139,9 @@ host)
         echo "== $CAMERA_ID"
         codesign "${FLAGS[@]}" --identifier "$CAMERA_ID" --entitlements "$TMP/camera.entitlements" "$EXT"
     fi
-    # the helpers in Contents/MacOS, each its own identity (Screen Recording and Accessibility
-    # list the agent by it)
-    for tool in freerdp-shadow-agent freerdp-shadow-camera; do
-        [ -e "$APP/Contents/MacOS/$tool" ] || continue
-        sub=agent
-        [ "$tool" = freerdp-shadow-agent ] || sub=camera-tool
-        echo "== $ID.$sub ($tool)"
-        codesign "${FLAGS[@]}" --identifier "$ID.$sub" "$APP/Contents/MacOS/$tool"
-    done
+    # the helpers (the agent: Screen Recording and Accessibility list it by its identifier, the
+    # camera commands) and winpr-hash beside the app
+    sign_loose
     # the app last: its main executable freerdp-shadow-cli, its seal over all of the above
     host_entitlements=()
     if [ "$IDENTITY" != - ]; then
@@ -102,28 +151,13 @@ host)
     fi
     echo "== $ID (FreeRDP-Shadow.app)"
     codesign "${FLAGS[@]}" --identifier "$ID" ${host_entitlements[@]+"${host_entitlements[@]}"} "$APP"
-    # beside the app in the archive
-    if [ -e "$PKG/winpr-hash" ]; then
-        codesign "${FLAGS[@]}" --identifier "$ID.winpr-hash" "$PKG/winpr-hash"
-    fi
     codesign --verify --strict --deep "$APP"
     ;;
 client)
     APP=$PKG/FreeRDP.app
     ID=$("$PB" -c "Print :CFBundleIdentifier" "$APP/Contents/Info.plist")
-    if [ "$IDENTITY" != - ]; then
-        # notarization wants every Mach-O signed, hardened and timestamped: freerdp-tk's
-        # Python and its modules too, deepest first; its programs get python.entitlements
-        n=0
-        while IFS= read -r f; do
-            is_macho "$f" || continue
-            ent=()
-            case $f in "$PKG"/python/bin/*) ent=(--entitlements "$HERE/python.entitlements") ;; esac
-            codesign "${FLAGS[@]}" ${ent[@]+"${ent[@]}"} "$f"
-            n=$((n + 1))
-        done < <(find "$PKG/python" "$PKG/lib" -type f 2> /dev/null | awk '{ print length, $0 }' | sort -rn | cut -d' ' -f2-)
-        echo "== $n Mach-O file(s) of freerdp-tk's Python signed"
-    fi
+    # freerdp-tk's Python and its modules (Developer ID only)
+    sign_loose
     echo "== $ID (FreeRDP.app)"
     codesign "${FLAGS[@]}" --identifier "$ID" --entitlements "$HERE/client.entitlements" "$APP"
     codesign --verify --strict --deep "$APP"

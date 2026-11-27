@@ -1,12 +1,19 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<!-- freerdp-tk's Python (python/bin/python3*) under the hardened runtime: it loads the
-     extension modules it carries (signed by the same team: library validation passes them)
-     and libffi may need writable executable memory for ctypes callbacks, as python.org's own
-     notarized builds allow. Checked by the signed job: freerdp-tk's modules import. -->
+<!-- freerdp-tk's Python (python/bin/python3.13) under the hardened runtime: no entitlement.
+     sign-mac.sh passes none while this dict is empty.
+     - library validation: every Mach-O of the Python (libpython, _tkinter and _dbm, Tcl/Tk and
+       their thread and itcl packages) is signed by our team, and library validation loads code
+       "signed by Apple or signed with the same Team ID as the main executable" (Apple,
+       com.apple.security.cs.disable-library-validation): no disable-library-validation;
+     - ctypes: python-build-standalone links libffi into libpython in its trampoline-table mode
+       (ffi_closure_trampoline_table_page: callbacks use ready-made trampoline pages, never
+       writable and executable memory): no allow-unsigned-executable-memory, no allow-jit;
+     - no DYLD_* variable is used (the start script sets PYTHONPATH only): no
+       allow-dyld-environment-variables.
+     The probe's signed job proves it: tkinter, Tcl's Thread and itcl packages, a ctypes
+     callback, freerdp-tk and keyring under the runtime; it also tries the larger sets, to say
+     which is the least that works if this one ever fails. -->
 <plist version="1.0">
-<dict>
-    <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
-    <true/>
-</dict>
+<dict/>
 </plist>

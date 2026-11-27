@@ -104,8 +104,7 @@ launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/io.github.congzhangzh.fr
 `launchctl kickstart -k gui/$(id -u)/io.github.congzhangzh.freerdp-shadow`。
 
 两者都监听 3388：二选一安装（应用在监听时 `install-daemon.sh` 会拒绝；
-`launchctl bootout gui/$(id -u)/io.github.congzhangzh.freerdp-shadow` 可以停掉它）。两者都使用临时（ad hoc）签名，
-所以每次更新后 macOS 都会再次询问这两项权限。
+`launchctl bootout gui/$(id -u)/io.github.congzhangzh.freerdp-shadow` 可以停掉它）。两者都用我们的 Developer ID 签名，并经过 Apple 公证：改用这种签名后的第一次更新会再询问一次这两项权限，之后的更新会保留它们。
 
 每个压缩包里的 `README.txt` 都有该平台的完整说明：日志、选项、卸载。
 

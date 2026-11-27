@@ -32,7 +32,7 @@ env:
   FREERDP_BRANCH: feature-camera-mac
   # the probed commit, fixed (the branch may move on): set to the pushed feature-camera-mac
   # commit before pushing this branch; the build job refuses the zeros
-  FREERDP_SHA: "7c0119a8925e82169d72de66567729dec3554604"
+  FREERDP_SHA: "21accb140b0c23ea167f8f226e7dc0c1dbb1bdef"
   # the ids: build/macos/id-prefix (io.github.congzhangzh) + .freerdp-shadow (.agent, .camera)
   # and .freerdp, read by build-macos-client.sh
   HOMEBREW_NO_AUTO_UPDATE: 1
@@ -165,13 +165,13 @@ jobs:
           echo "HOSTPKG=$PWD/$(ls -d freerdp-host-*/)" >> "$GITHUB_ENV"
           echo "CLIENTPKG=$PWD/$(ls -d sdl3-freerdp-*/)" >> "$GITHUB_ENV"
           find . -maxdepth 6 -name '*.app' -o -maxdepth 6 -name '*.systemextension' | tee ../out/bundles.txt
-      - name: The usage strings and the README camera lines, byte for byte
+      - name: The usage strings, the README camera lines and the kit READMEs' signing text, byte for byte
         run: |
           set -o pipefail
           # every one checked, the step fails if any failed
           {
             rc=0
-            for w in "host $HOSTPKG/FreeRDP-Shadow.app" "client $CLIENTPKG/FreeRDP.app" "readme $CLIENTPKG/README.txt"; do
+            for w in "host $HOSTPKG/FreeRDP-Shadow.app" "client $CLIENTPKG/FreeRDP.app" "readme $CLIENTPKG/README.txt" "kit-readme ."; do
                 python3 -I build/macos/check-bundle-strings.py test/probe-camera-mac/expected-strings.txt $w || rc=1
             done
             exit $rc
@@ -332,6 +332,38 @@ jobs:
           [ -n "$line" ] || { echo "::error::no valid 'Developer ID Application: ... ($TEAM)' identity in the .p12"; exit 1; }
           echo "IDENTITY=$(awk '{print $2}' <<< "$line")" >> "$GITHUB_ENV"
 
+      # The least the bundled Python needs under the hardened runtime: the client package copied
+      # and signed with each set, the smallest first; the first set with which
+      # python-runtime-check.py passes is the minimum. The real signing below uses the committed
+      # build/macos/python.entitlements (none): this step says what to commit if that fails.
+      - name: The bundled Python's least entitlements under the hardened runtime (trial)
+        run: |
+          set -uo pipefail
+          plist() {  # plist <file> <key>...
+              { echo '<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd"><plist version="1.0"><dict>'
+                for k in "${@:2}"; do echo "<key>$k</key><true/>"; done
+                echo '</dict></plist>'; } > "$1"
+          }
+          plist "$RUNNER_TEMP/py-none.plist"
+          plist "$RUNNER_TEMP/py-mem.plist" com.apple.security.cs.allow-unsigned-executable-memory
+          plist "$RUNNER_TEMP/py-mem-lv.plist" com.apple.security.cs.allow-unsigned-executable-memory \
+              com.apple.security.cs.disable-library-validation
+          least=""
+          for set in none mem mem-lv; do
+              t=$RUNNER_TEMP/py-trial-$set
+              rm -rf "$t" && ditto "$CLIENTPKG" "$t"
+              PYTHON_ENTITLEMENTS=$RUNNER_TEMP/py-$set.plist build/macos/sign-mac.sh client "$t" "$IDENTITY" "$TEAM" > "out/py-trial-$set-sign.txt" 2>&1
+              if PYTHONPATH="$t/lib/freerdp-tk" "$t/python/bin/python3" -s test/probe-camera-mac/python-runtime-check.py \
+                  > "out/py-trial-$set.txt" 2>&1; then
+                  echo "PASS  entitlements '$set'"; least=${least:-$set}
+              else
+                  echo "FAIL  entitlements '$set':"; sed 's/^/        /' "out/py-trial-$set.txt"
+              fi
+          done | tee out/py-trials.txt
+          least=$(awk '/^PASS/ { gsub("\047", "", $3); print $3; exit }' out/py-trials.txt)
+          echo "the bundled Python's least entitlements: ${least:-none of the sets works}" | tee -a out/py-trials.txt >> "$GITHUB_STEP_SUMMARY"
+          [ -n "$least" ]
+
       - name: Sign inside out (hardened runtime, timestamp, profiles)
         run: |
           set -o pipefail
@@ -354,6 +386,9 @@ jobs:
           } 2>&1 | tee out/strings-signed.txt
           codesign --verify --strict --deep --verbose=2 "$HOSTPKG/FreeRDP-Shadow.app"
           codesign --verify --strict --deep --verbose=2 "$CLIENTPKG/FreeRDP.app"
+          # every Mach-O, found by content: Developer ID of the team, hardened runtime, timestamp
+          python3 -I test/probe-camera-mac/check-macho-signed.py "$HOSTPKG" "$TEAM" 2>&1 | tee out/macho-host.txt
+          python3 -I test/probe-camera-mac/check-macho-signed.py "$CLIENTPKG" "$TEAM" 2>&1 | tee out/macho-client.txt
 
       - name: Programs still run under the hardened runtime
         run: |
@@ -363,8 +398,9 @@ jobs:
           # launch unless the embedded profile allows it, so this is the profile's real test
           "$HOSTPKG/FreeRDP-Shadow.app/Contents/MacOS/freerdp-shadow-cli" /version 2>&1 | tee out/host-version.txt
           "$HOSTPKG/FreeRDP-Shadow.app/Contents/MacOS/freerdp-shadow-camera" status 2>&1 | tee out/camera-status.txt || true
-          PYTHONPATH="$CLIENTPKG/lib/freerdp-tk" "$CLIENTPKG/python/bin/python3" -s -c \
-              'import tkinter, ctypes, keyring, freerdp_tk; print("freerdp-tk modules import under the hardened runtime")' | tee out/python.txt
+          # freerdp-tk's Python with the committed entitlements (build/macos/python.entitlements)
+          PYTHONPATH="$CLIENTPKG/lib/freerdp-tk" "$CLIENTPKG/python/bin/python3" -s \
+              test/probe-camera-mac/python-runtime-check.py 2>&1 | tee out/python.txt
           test/probe-camera-mac/check-shim.sh "$CLIENTPKG" out/shim-signed 2>&1 | tee out/shim-signed.txt
 
       # TCC keys a grant to the designated requirement: two different builds signed the same way
@@ -391,6 +427,11 @@ jobs:
           notarize() {  # notarize <name> <package dir> <app>
               local name=$1 dir=$2 app=$3 id status
               ditto -c -k --keepParent "$dir" "$RUNNER_TEMP/$name.zip"
+              # what is submitted: every Mach-O in the zip signed, hardened, timestamped
+              rm -rf "$RUNNER_TEMP/submitted-$name" && mkdir "$RUNNER_TEMP/submitted-$name"
+              ditto -x -k "$RUNNER_TEMP/$name.zip" "$RUNNER_TEMP/submitted-$name"
+              python3 -I test/probe-camera-mac/check-macho-signed.py "$RUNNER_TEMP/submitted-$name" "$TEAM" \
+                  2>&1 | tee "out/macho-submitted-$name.txt" || return 1
               xcrun notarytool submit "$RUNNER_TEMP/$name.zip" --key "$RUNNER_TEMP/notary.p8" \
                   --key-id "$MACOS_NOTARY_KEY_ID" --issuer "$MACOS_NOTARY_ISSUER_ID" \
                   --wait --timeout 30m --output-format json > "out/notary-$name.json" 2> "out/notary-$name.err"
@@ -418,6 +459,77 @@ jobs:
           notarize host "$HOSTPKG" "$HOSTPKG/FreeRDP-Shadow.app" || rc=1
           notarize client "$CLIENTPKG" "$CLIENTPKG/FreeRDP.app" || rc=1
           exit $rc
+
+      # Is the README's `xattr -dr com.apple.quarantine` step still needed? A browser download as
+      # Safari leaves it: the stapled zip with com.apple.quarantine, unpacked; Gatekeeper must
+      # accept each app and each program must start from it. Until this passes in a real signed
+      # run the READMEs keep the step (its removal waits as a separate patch).
+      - name: A quarantined download opens (Gatekeeper, no xattr step)
+        run: |
+          set -uo pipefail
+          q="0081;$(printf %x "$(date +%s)");Safari;$(uuidgen)"
+          rc=0
+          ok() { echo "PASS  $*"; }
+          bad() { echo "FAIL  $*"; rc=1; }
+          for name in host client; do
+              d=$RUNNER_TEMP/download-$name
+              rm -rf "$d" && mkdir -p "$d/x"
+              cp "$RUNNER_TEMP/$name-stapled.zip" "$d/$name.zip"
+              xattr -w com.apple.quarantine "$q" "$d/$name.zip"
+              ditto -x -k "$d/$name.zip" "$d/x"
+              pkg=$(find "$d/x" -mindepth 1 -maxdepth 1 -type d | head -1)
+              app=$(find "$pkg" -maxdepth 1 -name '*.app' | head -1)
+              # Archive Utility (what Safari opens a zip with) puts the zip's quarantine on every
+              # file it unpacks; ditto may not: then do what Archive Utility does
+              if xattr -p com.apple.quarantine "$app" > /dev/null 2>&1; then
+                  echo "INFO  ditto carried the quarantine onto the unpacked files"
+              else
+                  echo "INFO  ditto did not carry the quarantine: set on every unpacked file, as Archive Utility does"
+                  xattr -w -r com.apple.quarantine "$q" "$pkg"
+              fi
+              exe=$app/Contents/MacOS/$(/usr/libexec/PlistBuddy -c "Print :CFBundleExecutable" "$app/Contents/Info.plist")
+              for target in "$app" "$exe"; do
+                  out=$(spctl --assess --type execute -vv "$target" 2>&1)
+                  echo "$out" | sed 's/^/      /'
+                  if grep -q "accepted" <<< "$out" && grep -q "Notarized Developer ID" <<< "$out"; then
+                      ok "$name: Gatekeeper accepts ${target#"$pkg"/} (Notarized Developer ID)"
+                  else
+                      bad "$name: Gatekeeper on ${target#"$pkg"/}"
+                  fi
+              done
+              # the programs, quarantined, from a shell (a quarantined Mach-O is assessed at exec)
+              if [ "$name" = client ]; then
+                  # Finder's double-click on freerdp-tk.command goes through Gatekeeper as a document
+                  # to open; the script is not signed (a script's signature is an extended attribute,
+                  # which the release's tar drops): INFO, the README step for the client hangs on it
+                  echo "INFO  client: Gatekeeper on freerdp-tk.command (Finder's double-click):"
+                  spctl --assess --type open --context context:primary-signature -vv "$pkg/freerdp-tk.command" 2>&1 | sed 's/^/      /'
+                  spctl --assess --type execute -vv "$pkg/freerdp-tk.command" 2>&1 | sed 's/^/      /'
+
+                  "$pkg/bin/sdl-freerdp" --version > "out/quarantined-client-version.txt" 2>&1 &&
+                      ok "client: bin/sdl-freerdp --version runs (the shim, then FreeRDP.app's binary)" ||
+                      bad "client: bin/sdl-freerdp --version: $(tail -1 out/quarantined-client-version.txt)"
+                  PYTHONPATH="$pkg/lib/freerdp-tk" "$pkg/python/bin/python3" -s test/probe-camera-mac/python-runtime-check.py \
+                      > out/quarantined-python.txt 2>&1 && ok "client: freerdp-tk's Python runs (python-runtime-check.py)" ||
+                      bad "client: freerdp-tk's Python: $(grep -m1 FAIL out/quarantined-python.txt)"
+              else
+                  "$exe" /version > out/quarantined-host-version.txt 2>&1 &&
+                      ok "host: freerdp-shadow-cli /version runs" ||
+                      bad "host: freerdp-shadow-cli /version: $(tail -1 out/quarantined-host-version.txt)"
+              fi
+              # through Launch Services (Finder's way): may wait on the first-launch question
+              # ("downloaded from the Internet") on a machine without anyone to answer: INFO only
+              open -W -n "$app" --args --version > "out/open-$name.txt" 2>&1 &
+              p=$!
+              for _ in $(seq 1 45); do kill -0 "$p" 2> /dev/null || break; sleep 1; done
+              if kill -0 "$p" 2> /dev/null; then
+                  kill "$p" 2> /dev/null
+                  echo "INFO  $name: open -W still waiting after 45 s (Launch Services' first-launch question, no one to answer)"
+              else
+                  wait "$p"; echo "INFO  $name: open -W returned $?"
+              fi
+          done 2>&1 | tee out/quarantined-download.txt
+          ! grep -q '^FAIL' out/quarantined-download.txt
 
       - name: Delete the keychain and the secrets' files
         if: always()

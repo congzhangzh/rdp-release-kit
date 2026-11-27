@@ -111,8 +111,7 @@ l'écran et de l'audio système et sous Accessibilité, puis redémarrez-le :
 `launchctl kickstart -k gui/$(id -u)/io.github.congzhangzh.freerdp-shadow`.
 
 Les deux écoutent sur 3388 : installez l'un ou l'autre (`install-daemon.sh` refuse tant que l'app écoute ;
-`launchctl bootout gui/$(id -u)/io.github.congzhangzh.freerdp-shadow` l'arrête). Les deux sont signés ad hoc, si bien que macOS
-redemande les deux autorisations après chaque mise à jour.
+`launchctl bootout gui/$(id -u)/io.github.congzhangzh.freerdp-shadow` l'arrête). Les deux sont signés avec notre Developer ID et notariés par Apple : la première mise à jour signée ainsi redemande une fois les deux autorisations, les suivantes les conservent.
 
 Le `README.txt` de chaque archive donne tous les détails pour sa plateforme : journaux, options, désinstallation.
 
