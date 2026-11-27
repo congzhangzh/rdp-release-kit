@@ -413,6 +413,34 @@ jobs:
           path: out
           retention-days: 7
 
+  # The Linux client's HEVC (FFmpeg, LGPL, software decode) against a CI-only HEVC sender:
+  # FreeRDP's shadow server from the same pin, built in its own image against Debian's GPL
+  # FFmpeg with libx265 (test/hevc-sender/), never shipped, nothing of it outside that image.
+  # A client given no codec negotiates as before (no H.264, no HEVC), HEVC 4:2:0 on request
+  # with H.264 off and no failed frame, decoded by libavcodec in software; H.264 on request
+  hevc-session:
+    needs: [build]
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-24.04, ubuntu-24.04-arm]
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        with:
+          name: sdl3-freerdp-${{ matrix.runner }}
+          path: dl/client
+      - name: HEVC against the CI-only sender
+        run: test/hevc-session.sh "$(ls dl/client/sdl3-freerdp-*-linux-*.tar.xz)" - out
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: hevc-session${{ runner.arch == 'ARM64' && '-aarch64' || '' }}
+          path: out
+          retention-days: 7
+
   # The distribution lists, and which builds this push needs (build/changes.sh):
   # "web" when it only moves the freerdp_web pin, else "all" (a pull request
   # and a run by hand: always all)
@@ -942,7 +970,7 @@ jobs:
   # download (docs/RELEASE.md, "Products and channels")
   release:
     if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
-    needs: [build, windows, macos, mac-host, mac-host-test, linux-host, linux-host-test, xrdp, mutter, wasm, demo, windows-host]
+    needs: [build, windows, macos, mac-host, mac-host-test, linux-host, linux-host-test, hevc-session, xrdp, mutter, wasm, demo, windows-host]
     runs-on: ubuntu-24.04
     # one at a time across commits: each counts N from the releases before it,
     # so two pushes close together get .1 and .2, not both .1 (the second
