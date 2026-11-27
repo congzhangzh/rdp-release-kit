@@ -24,7 +24,7 @@ env:
   FREERDP_REPO: https://github.com/congzhangzh/FreeRDP.git
   FREERDP_BRANCH: feature-hevc-client-mf
   # the probed commit, fixed: the branch may move on
-  FREERDP_SHA: fe8068586fa19280484c4d607f5ef0f18a1ccbd1
+  FREERDP_SHA: d374e9b1508b3a6da063da3939fcbf0535ab4f30
 
 jobs:
   build:
