@@ -167,8 +167,10 @@ cmake_dep sdl3_ttf "${MAC[@]}" -DSDLTTF_VENDORED=OFF -DSDLTTF_HARFBUZZ=OFF \
 # (its decoder stays: FreeRDP's av1.c includes aom_decoder.h with libaom; dav1d
 # still decodes), as the Windows host is built
 FREERDP=freerdp
+# HEVC: VideoToolbox decodes it (H.265 4:2:0; asked for with /gfx-codec-order:HEVC,AVC420 or
+# /gfx:HEVC:i420, AV1 stays the default), no FFmpeg
 WHAT=(-DWITH_CLIENT=ON -DWITH_CLIENT_SDL=ON -DWITH_CLIENT_SDL3=ON -DWITH_CLIENT_SDL2=OFF
-      -DWITH_CLIENT_MAC=OFF -DWITH_SERVER=OFF)
+      -DWITH_CLIENT_MAC=OFF -DWITH_SERVER=OFF -DWITH_GFX_AZURE=ON)
 if [ -n "${HOST:-}" ]; then
     FREERDP=freerdp_mac_host
     host_source "$FREERDP"
