@@ -34,5 +34,8 @@
   ],
   "linux-shadow-two-screens": [
     "shadow-multimon"
+  ],
+  "windows-shadow-native-client": [
+    "windows-native"
   ]
 }
