@@ -4,7 +4,7 @@
  *
  * Copyright 2026 Cong Zhang <congzhangzh@gmail.com>
  *
- *   mf-camera-reader camera [--match <text>] [--frames N] [--wait S] [--timeout S]
+ *   mf-camera-reader camera [--match <text>] [--frames N] [--wait S] [--timeout S] [--log <file>]
  *       waits up to S seconds for a video capture device whose friendly name contains <text>
  *       (case-insensitive; default "Remote Desktop Camera", then any camera when --match ""),
  *       logs every camera, opens the one found, logs its native media types, reads N frames
@@ -17,7 +17,9 @@
  *       its output types are logged, NV12 is set and one frame decoded; exit 0 when an NV12
  *       frame of width x height came out.
  *
- * Every line is flushed: the scheduled task redirects stdout to a file. Build (llvm-mingw):
+ * Every line is flushed. --log <file> (any position, both commands) writes them to that file
+ * instead of stdout: a scheduled task runs the program itself, with no cmd.exe to redirect (and
+ * to strip quotes). Build (llvm-mingw):
  *   x86_64-w64-mingw32-clang -O2 -Wall -o mf-camera-reader.exe mf-camera-reader.c \
  *       -lmfplat -lmf -lmfreadwrite -lmfuuid -lole32 -luuid
  */
@@ -576,8 +578,14 @@ int wmain(int argc, WCHAR** argv)
 	if (argc < 2)
 	{
 		fprintf(stderr, "usage: mf-camera-reader camera [--match <text>] [--frames N] [--wait S] "
-		                "[--timeout S] | mjpeg <file.jpg> <width> <height>\n");
+		                "[--timeout S] [--log <file>] | mjpeg <file.jpg> <width> <height> [--log <file>]\n");
 		return 1;
+	}
+
+	for (int i = 2; i + 1 < argc; i++)
+	{
+		if (!wcscmp(argv[i], L"--log") && !_wfreopen(argv[i + 1], L"w", stdout))
+			return 1;
 	}
 
 	const WCHAR* match = L"Remote Desktop Camera";
@@ -593,6 +601,8 @@ int wmain(int argc, WCHAR** argv)
 			waitS = (unsigned)_wtoi(argv[++i]);
 		else if (!wcscmp(argv[i], L"--timeout"))
 			g_timeoutMs = 1000u * (unsigned)_wtoi(argv[++i]);
+		else if (!wcscmp(argv[i], L"--log"))
+			++i;
 	}
 	HANDLE dog = CreateThread(NULL, 0, watchdog, NULL, 0, NULL);
 	(void)dog;
