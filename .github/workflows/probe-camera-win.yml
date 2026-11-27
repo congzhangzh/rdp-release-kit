@@ -1,0 +1,160 @@
+# Probe (branch probe-camera-win only; publishes nothing, uploads logs): camera redirection of the
+# kit's Windows client, the rdpecam client channel with its Media Foundation backend (sys:mf,
+# FreeRDP's channels/rdpecam/client/mf, freerdp-comp-camera-g1's Windows lane), to Windows' own
+# Remote Desktop on a hosted runner, read by an app inside the RDP session.
+#  - build: the Windows client x86_64 as the kit builds it, with -DCHANNEL_RDPECAM=ON
+#    -DCHANNEL_RDPECAM_CLIENT=ON (a probe-only line in build/build-windows-client.sh), FreeRDP from
+#    the fork branch feature-camera-win, pinned in the job's copy of sources.lock (overrides are
+#    refused on CI, sources.lock is CI's only input); the release's checks on its zip
+#    (check-no-ffmpeg.sh, check-windows.sh); the in-session camera app (mf-camera-reader.exe,
+#    the same llvm-mingw); the test media, made with the CI's GPL FFmpeg (test data only).
+#  - test: on Windows Server 2025 and 2022, test/probe-camera-win/probe-camera-win.ps1 records
+#    first what the host needs for camera redirection (settings, features, Server-Media-Foundation
+#    installed when missing and whether that needs a restart, the camera devices), then decodes
+#    one MJPG frame with Windows' MJPEG decoder MFT, then runs the session: the client's camera is
+#    the test video, the app in the session reads the redirected camera.
+# Artifacts: logs (7 days), and what the Windows job runs (the client exe, the app, the media;
+# 1 day). No zip is uploaded, and nothing the CI's GPL FFmpeg made goes near a zip.
+name: probe-camera-win
+
+on:
+  push:
+    branches: [probe-camera-win]
+
+permissions:
+  contents: read
+
+env:
+  FREERDP_REPO: https://github.com/congzhangzh/FreeRDP.git
+  FREERDP_BRANCH: feature-camera-win
+  # the probed commit, fixed: the branch may move on
+  FREERDP_SHA: 7e2cf4814995f99a8a8edd836bc20b323f625c0d
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Cache sources
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/rdp-release-kit/sources
+          key: sources-probe-camera-win-${{ hashFiles('sources.lock') }}
+          restore-keys: sources-
+
+      - name: Cache compiled objects
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/rdp-release-kit/ccache
+          key: ccache-probe-camera-win-x86_64-${{ github.sha }}
+          restore-keys: |
+            ccache-probe-camera-win-x86_64-
+            ccache-windows-x86_64-
+
+      - name: FreeRDP from the fork, the probed commit
+        run: |
+          mkdir -p logs
+          sha=$FREERDP_SHA
+          git ls-remote "$FREERDP_REPO" "refs/heads/$FREERDP_BRANCH" | tee logs/freerdp-branch-head.txt
+          sed -i -E "s|^freerdp +[^ ]+ +git\+[^ ]+ +[0-9a-f]{40}\$|freerdp     probe-${sha:0:9} git+$FREERDP_REPO $sha|" sources.lock
+          grep -E '^freerdp ' sources.lock | tee logs/freerdp-probed.txt
+          grep -q " $sha\$" logs/freerdp-probed.txt
+
+      - name: The Windows client x86_64, camera redirection on
+        env:
+          CCACHE_MAXSIZE: 1G
+        run: ./build-windows.sh x86_64
+
+      - name: The build's logs, and the camera options it took
+        if: always()
+        run: |
+          mkdir -p logs/build
+          cp ~/.cache/rdp-release-kit/win-x86_64/log/*.log logs/build/ || true
+          grep -n -E 'rdpecam|RDPECAM' logs/build/freerdp.log | head -20 | tee logs/rdpecam-configure.txt
+          grep -E 'CHANNEL_RDPECAM(_CLIENT)?:BOOL|WITH_RDPECAM_MF:BOOL' ~/.cache/rdp-release-kit/win-x86_64/build/freerdp/CMakeCache.txt |
+              tee -a logs/rdpecam-configure.txt
+          grep -q 'CHANNEL_RDPECAM_CLIENT:BOOL=ON' ~/.cache/rdp-release-kit/win-x86_64/build/freerdp/CMakeCache.txt
+          grep -q 'WITH_RDPECAM_MF:BOOL=ON' ~/.cache/rdp-release-kit/win-x86_64/build/freerdp/CMakeCache.txt
+
+      # only the zip in the folder it scans, as the release's upload folder holds it; then the
+      # client's DLLs (Media Foundation must not be one: it is loaded at run time) and the backend
+      - name: The release's checks on the zip
+        run: |
+          mkdir scan client
+          cp dist/sdl3-freerdp-*-windows-x86_64.zip scan/
+          build/check-no-ffmpeg.sh scan 2>&1 | tee logs/check-no-ffmpeg.txt
+          unzip -q scan/*.zip -d client
+          exe=$(find client -name sdl-freerdp.exe | head -1)
+          sudo ln -sfn ~/.cache/rdp-release-kit/win-x86_64/src/llvm_mingw /llvm-mingw
+          build/check-windows.sh "$exe" 2>&1 | tee logs/check-windows.txt
+          n=$(strings -a "$exe" | grep -c 'rdpecam-mf.client' || true)
+          echo "the mf backend's log tag in sdl-freerdp.exe: $n" | tee -a logs/check-windows.txt
+          [ "$n" -gt 0 ]
+          mkdir -p camera-client
+          cp "$exe" camera-client/
+
+      - name: The camera app (the same llvm-mingw) and the test media (the CI's FFmpeg)
+        run: |
+          mkdir -p camera-test
+          ~/.cache/rdp-release-kit/win-x86_64/src/llvm_mingw/bin/x86_64-w64-mingw32-clang -O2 -Wall -Wextra -municode \
+              -o camera-test/mf-camera-reader.exe test/probe-camera-win/mf-camera-reader.c \
+              -lmfplat -lmf -lmfreadwrite -lmfuuid -lole32 -luuid 2>&1 | tee logs/reader-build.txt
+          test -s camera-test/mf-camera-reader.exe
+          build/ci-ffmpeg.sh "$RUNNER_TEMP/ci-ffmpeg"
+          test/probe-camera-win/make-test-media.sh "$RUNNER_TEMP/ci-ffmpeg/bin/ffmpeg" camera-test | tee logs/media.txt
+
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: probe-camera-win-build-logs
+          path: logs
+          retention-days: 7
+      - uses: actions/upload-artifact@v7
+        with:
+          name: probe-camera-win-client
+          path: camera-client
+          if-no-files-found: error
+          retention-days: 1
+      - uses: actions/upload-artifact@v7
+        with:
+          name: probe-camera-win-test
+          path: camera-test
+          if-no-files-found: error
+          retention-days: 1
+
+  test:
+    needs: build
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [windows-2025, windows-2022]
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        with:
+          name: probe-camera-win-client
+          path: dl/client
+      - uses: actions/download-artifact@v8
+        with:
+          name: probe-camera-win-test
+          path: dl/test
+      - name: Camera redirection to Windows' own Remote Desktop (and the MJPEG decoder MFT)
+        timeout-minutes: 15
+        shell: pwsh
+        run: ./test/probe-camera-win/probe-camera-win.ps1 -ClientDir dl/client -Assets dl/test -Out out
+      - name: The result, in the job summary
+        if: always()
+        shell: pwsh
+        run: |
+          if (Test-Path out/result.txt) { Get-Content out/result.txt | Add-Content $env:GITHUB_STEP_SUMMARY }
+          if (Test-Path out/checks.txt) { Get-Content out/checks.txt | ForEach-Object { "    $_" } | Add-Content $env:GITHUB_STEP_SUMMARY }
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: probe-camera-win-test-logs-${{ matrix.runner }}
+          path: out
+          retention-days: 7

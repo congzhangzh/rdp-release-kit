@@ -115,6 +115,9 @@ if [ -n "${HOST:-}" ]; then
           -DWITH_MEDIA_FOUNDATION=ON)
 fi
 
+# probe-camera-win only (not for main as it is): camera redirection in the client, the rdpecam
+# client channel and its Media Foundation backend (sys:mf; Media Foundation is loaded at run time,
+# so check-windows.sh still passes), for the host as well since it shares this configure line.
 # FreeRDP: the SDL3 client only, static. Its fonts and icons are compiled
 # into the .exe (a resource path would point into this container). zlib's
 # static library is named explicitly: zlib 1.3.2 calls it libzs.a, which
@@ -152,6 +155,7 @@ configure "$WORK/build/$FREERDP" \
     -DWITH_SAMPLE=OFF -DWITH_FFMPEG=OFF -DWITH_SWSCALE=OFF \
     -DWITH_OPENH264=OFF -DWITH_GFX_AV1=ON -DWITH_DAV1D=ON -DWITH_OPUS=ON -DWITH_SIMD=ON \
     -DWITH_INTERNAL_MD4=ON -DWITH_INTERNAL_RC4=ON -DCHANNEL_URBDRC=OFF -DUSE_UNWIND=OFF \
+    -DCHANNEL_RDPECAM=ON -DCHANNEL_RDPECAM_CLIENT=ON \
     -DWITHOUT_WINPR_3x_DEPRECATED=ON -DWITHOUT_FREERDP_3x_DEPRECATED=ON \
     -DWITH_MANPAGES=OFF "${LAUNCHER[@]}" "${DEV[@]}" > "$WORK/log/freerdp.log" 2>&1
 grep -q -e "AV1 decoder: dav1d" -e "configuration kept" "$WORK/log/freerdp.log"
