@@ -33,7 +33,7 @@ jobs:
     timeout-minutes: 300
     env:
       FREERDP_REPO: https://github.com/congzhangzh/FreeRDP.git
-      FREERDP_REF: ${{ inputs.freerdp_ref || 'd7a4bbee96185787c7a1c678534fd8ece33736b6' }}  # fork feature-hevc-client-ffmpeg, the probed commit
+      FREERDP_REF: ${{ inputs.freerdp_ref || 'a680f481034e2969a9fc53117060a60ab912fa71' }}  # fork feature-hevc-client-ffmpeg, the probed commit
     steps:
       - uses: actions/checkout@v7
         with:

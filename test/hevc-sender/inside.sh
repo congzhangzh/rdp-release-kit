@@ -15,7 +15,9 @@
 #  2. HEVC on request (/gfx:AV2:off,AV1:off,HEVC:i420; H.264 left off): the sender confirms an
 #     11.x set with HEVC_ENABLE, the frames come in HEVC 4:2:0, none in AVC, no decode fails,
 #     and the client names its decoder: "HEVC decoder: libavcodec (software)".
-#  3. H.264 still there on request (/gfx:AVC420): frames in AVC420, "H.264 decoder: libavcodec".
+#  3. H.264 still there on request (/gfx:AVC420): frames in H.264, AVC420 or AVC444 (a 10.x set
+#     without AVC_DISABLED lets the server pick AVC444; kit probe run 46025089159), and
+#     "H.264 decoder: libavcodec".
 # check() evaluates its condition itself: single quotes, variables read only there
 # shellcheck disable=SC2016,SC2034
 set -u
@@ -121,8 +123,9 @@ check "hevc: the client shows more than one colour" \
 
 # 3. H.264 asked for: still there
 session after avc /gfx:AVC420
-check "avc: frames in AVC420, decoded by libavcodec" \
-    '[ "$(frames avc AVC420)" -ge 30 ] && grep -q "H.264 decoder: libavcodec (software)" "$OUT/avc.wlog" &&
+check "avc: frames in H.264 (AVC420 or AVC444), decoded by libavcodec" \
+    '[ $(($(frames avc AVC420) + $(frames avc AVC444) + $(frames avc AVC444v2))) -ge 30 ] &&
+     grep -q "H.264 decoder: libavcodec (software)" "$OUT/avc.wlog" &&
      ! grep -qE "decompress failure|rdpgfx_decode failed" "$OUT/avc.wlog"' "$(codecs avc)"
 
 kill "$(pgrep -u tester -f freerdp-shadow-cli | head -1)" 2> /dev/null
