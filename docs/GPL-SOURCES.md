@@ -86,6 +86,14 @@ The pre-releases:
   xorgxrdp_preview `59d0735c`). The first four tags (`xrdp-preview-<xrdp commit12>[-<kit
   commit12>]`) name the xrdp commit itself.
 
+Every commit of our xrdp fork named above (the five releases and the nine previews) also has a
+lasting tag there, `gpl-source/xrdp-<commit>` (e.g.
+https://github.com/congzhangzh/xrdp/tree/gpl-source/xrdp-2e975a4ea8cee93b9563ce4950c98eb0af6e26e5),
+never moved or deleted (✅ thirteen, created 2026-11-27 and listed with the GitHub API). The first
+preview's commit (`bffad034`, 20261018.1) had left the fork when its branch was rebuilt; it was
+pushed back from a kept clone under its tag. xorgxrdp, librfxcodec and libpainter are upstream's
+own commits at https://github.com/neutrinolabs, not branches of ours, so they need no tag.
+
 ## libavm: the AV2 encoder beside x264
 
 libavm (BSD-3-Clause-Clear) is linked statically into xrdp beside x264 in the packages with AV2,
