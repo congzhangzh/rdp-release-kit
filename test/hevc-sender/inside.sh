@@ -33,7 +33,7 @@ check() {  # check <name> <condition> [detail]
     fi
 }
 
-for c in after before; do
+for c in after before avc-before; do
     [ -f "/$c.tar.xz" ] || continue
     mkdir -p "/opt/$c" && tar -xJf "/$c.tar.xz" -C "/opt/$c" --strip-components=1
 done
@@ -127,6 +127,22 @@ check "avc: frames in H.264 (AVC420 or AVC444), decoded by libavcodec" \
     '[ $(($(frames avc AVC420) + $(frames avc AVC444) + $(frames avc AVC444v2))) -ge 30 ] &&
      grep -q "H.264 decoder: libavcodec (software)" "$OUT/avc.wlog" &&
      ! grep -qE "decompress failure|rdpgfx_decode failed" "$OUT/avc.wlog"' "$(codecs avc)"
+
+# 3b. with /avc-before.tar.xz: the same /gfx:AVC420 session with that client (e.g. FreeRDP
+# before WITH_GFX_H264_DEFAULT): the same sets offered, the same confirm, the same codec ids
+if [ -d /opt/avc-before ]; then
+    session avc-before avc-before /gfx:AVC420
+    negotiation avc > "$OUT/avc.caps"
+    negotiation avc-before > "$OUT/avc-before.caps"
+    echo "INFO  avc:        $(codecs avc)"
+    echo "INFO  avc-before: $(codecs avc-before)"
+    ids() { grep -ohE "Got GFX RDPGFX_CODECID_[A-Z0-9_]+" "$OUT/$1.wlog" 2> /dev/null | sort -u | tr '\n' ' '; }
+    check "avc: the same capability sets and confirm as avc-before (avc{-before,}.caps)" \
+        '[ -s "$OUT/avc.caps" ] && diff "$OUT/avc-before.caps" "$OUT/avc.caps" > "$OUT/avc.diff"' \
+        "$(grep -c '^Sending' "$OUT/avc.caps" 2> /dev/null) sets offered"
+    check "avc: the same codec ids as avc-before" '[ -n "$(ids avc)" ] && [ "$(ids avc)" = "$(ids avc-before)" ]' \
+        "$(ids avc)| before: $(ids avc-before)"
+fi
 
 kill "$(pgrep -u tester -f freerdp-shadow-cli | head -1)" 2> /dev/null
 chmod -R a+rX "$OUT"

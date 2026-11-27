@@ -11,6 +11,10 @@
 # and confirm), HEVC 4:2:0 on request with H.264 off, decoded by libavcodec in software with
 # no failed frame, and H.264 still there on request.
 #
+# AVC_BEFORE=<client archive> adds one comparison: its /gfx:AVC420 session against the
+# client's (the same capability sets, confirm and codec ids), e.g. a build of the FreeRDP
+# before WITH_GFX_H264_DEFAULT.
+#
 # Logs and screenshots go to dist/test/hevc-session/ by default. ENGINE=<docker|podman>
 # picks the container engine (as build.sh: docker first), RUN_OPTS=<options> adds options.
 set -uo pipefail
@@ -49,6 +53,11 @@ echo "== the HEVC sender (CI only, GPL FFmpeg + libx265): freerdp $version ${sha
 
 MOUNTS=(-v "$(realpath "$AFTER")":/after.tar.xz:ro -v "$OUT":/out -v "$KIT/test/hevc-sender":/t:ro)
 [ "$BEFORE" = - ] || MOUNTS+=(-v "$(realpath "$BEFORE")":/before.tar.xz:ro)
+if [ -n "${AVC_BEFORE:-}" ]; then
+    [ -f "$AVC_BEFORE" ] || { echo "no archive: '$AVC_BEFORE'" >&2; exit 2; }
+    MOUNTS+=(-v "$(realpath "$AVC_BEFORE")":/avc-before.tar.xz:ro)
+    echo "== /gfx:AVC420 compared with: $(basename "$AVC_BEFORE")"
+fi
 if [ "$BEFORE" = - ]; then
     echo "== client $(basename "$AFTER")"
 else

@@ -87,6 +87,26 @@ jobs:
           cp -r ~/.cache/rdp-release-kit/work-$(uname -m)/log "$GITHUB_WORKSPACE/out/after-log" || true
           exit $rc
 
+      # the RM's question (2026-11-27): does /gfx:AVC420 behave as before WITH_GFX_H264_DEFAULT?
+      # The same kit build with FFmpeg, but FreeRDP 19d87eca3 (b2 absent): the option's flag and
+      # its CMake-cache check are taken out of this copy only
+      - name: Build nob2 (FreeRDP 19d87eca3 with FFmpeg, no WITH_GFX_H264_DEFAULT)
+        env:
+          CCACHE_MAXSIZE: 1G
+          NOB2_SHA: 19d87eca38c9b7c1771e994fbbc38089ee01a3d8
+        run: |
+          cp -a after nob2
+          sed -i -E "s|^freerdp +[^ ]+ +git\+[^ ]+ +[0-9a-f]{40}$|freerdp     probe-${NOB2_SHA:0:9} git+$FREERDP_REPO $NOB2_SHA|" nob2/sources.lock
+          grep -q "^freerdp     probe-${NOB2_SHA:0:9} git+$FREERDP_REPO $NOB2_SHA$" nob2/sources.lock
+          sed -i -e 's/ -DWITH_GFX_H264_DEFAULT=OFF//' -e 's/ "WITH_GFX_H264_DEFAULT:BOOL=OFF"//' nob2/build/build-sdl3-client.sh
+          if grep -n "WITH_GFX_H264_DEFAULT" nob2/build/build-sdl3-client.sh | grep -v "^[0-9]*: *#"; then
+            echo "::error::nob2 still sets or checks WITH_GFX_H264_DEFAULT"; exit 1
+          fi
+          rc=0
+          (cd nob2 && ./build.sh "$GITHUB_WORKSPACE/out/nob2") || rc=$?
+          cp -r ~/.cache/rdp-release-kit/work-$(uname -m)/log "$GITHUB_WORKSPACE/out/nob2-log" || true
+          exit $rc
+
       - name: Sizes
         run: |
           size() {  # size <archive>: archive bytes, unpacked bytes, bin/sdl-freerdp bytes
@@ -119,6 +139,7 @@ jobs:
       - name: HEVC against the CI-only sender (test/hevc-session.sh)
         timeout-minutes: 60
         run: >
+          AVC_BEFORE="$(ls out/nob2/sdl3-freerdp-*.tar.xz)"
           after/test/hevc-session.sh "$(ls out/after/sdl3-freerdp-*.tar.xz)"
           "$(ls out/before/sdl3-freerdp-*.tar.xz)" out/hevc-session
 
@@ -131,5 +152,6 @@ jobs:
             out/*-MANIFEST
             out/before-log
             out/after-log
+            out/nob2-log
             out/hevc-session
           retention-days: 7
