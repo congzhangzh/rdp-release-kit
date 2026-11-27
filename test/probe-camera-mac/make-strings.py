@@ -16,8 +16,9 @@
 #
 # The README style rule (the RM, 2026-11-27): a README cell takes its target README's style.
 # README.fr.md writes ASCII apostrophes (and NBSP before ":" and ";"), so a fr README cell gets
-# U+2019 turned into "'" here; only the Info.plist strings keep U+2019. That is the one change
-# made to a source's bytes, and the expected file holds the result.
+# U+2019 turned into "'" here; only the Info.plist strings keep U+2019. README.ja.md writes no
+# space between Latin words and Japanese (a `code span` keeps its spaces). These are the only
+# changes made to a source's bytes, and the expected file holds the result.
 #
 # Writes, in the kit:
 #   build/macos/host-lproj/{zh-Hans,ja,fr}.lproj/InfoPlist.strings   (en is in host-Info.plist)
@@ -101,9 +102,20 @@ OLD_SIGNING = {
 }
 
 
+# README.ja.md writes Latin words and digits next to Japanese without a space; a `code span`
+# keeps its spaces (the PO's ja cell, 2026-11-27)
+JA_SPACE = re.compile("(?<=[A-Za-z0-9])[ ](?=[\u3000-\u30ff\u4e00-\u9fff\uff00-\uffef])"
+                      "|(?<=[\u3000-\u30ff\u4e00-\u9fff\uff00-\uffef])[ ](?=[A-Za-z0-9])")
+
+
 def readme_style(lang, text):
-    """a README cell in its target README's style: fr READMEs write ASCII apostrophes"""
-    return text.replace("\u2019", "'") if lang == "fr" else text
+    """a README cell in its target README's style: fr READMEs write ASCII apostrophes, ja ones
+    no space between Latin and Japanese"""
+    if lang == "fr":
+        return text.replace("\u2019", "'")
+    if lang == "ja":
+        return JA_SPACE.sub("", text)
+    return text
 
 
 def po_signing(path):
@@ -123,6 +135,25 @@ def po_signing(path):
     if not row or not cell:
         sys.exit(f"{path}: no README.md:175 row or check-macos.sh cell")
     return sentence, row.group(1), cell.group(1)
+
+
+# Variant B of README.md's Gatekeeper row, for a signed run in which the apps open from a
+# quarantined download but freerdp-tk.command is still refused: its second cell, the PO's words
+# (relayed by the coordinator, 2026-11-27; not in a draft file yet). GATEKEEPER_ROW = "B"
+# selects it (remove-quarantine-step.v3.patch); True selects the PO's row as it is (v2).
+GATEKEEPER_ROW_B = ("the client and the server start directly; freerdp-tk.command still needs "
+                    "`xattr -dr com.apple.quarantine <folder>` (a script can't carry a signature)")
+
+
+def gatekeeper_row(row):
+    """the PO's row, or variant B: the same row with its second cell replaced"""
+    if GATEKEEPER_ROW != "B":
+        return row
+    cells = row.split(" | ")
+    if len(cells) != 3:
+        sys.exit(f"the Gatekeeper row has {len(cells)} cells, want 3: {row}")
+    cells[1] = GATEKEEPER_ROW_B
+    return " | ".join(cells)
 
 
 def strings_file(bundle, lang, pairs):
@@ -156,6 +187,7 @@ def main():
     client = po_usage(args[1])
     readme = {lang: readme_style(lang, text) for lang, text in po_readme(args[2]).items()}
     sentence, row, cell = po_signing(args[3])
+    row = gatekeeper_row(row)
     sentence = {lang: readme_style(lang, text) for lang, text in sentence.items()}
     kit = Path(args[4])
     files = {}

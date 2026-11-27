@@ -32,7 +32,7 @@ env:
   FREERDP_BRANCH: feature-camera-mac
   # the probed commit, fixed (the branch may move on): set to the pushed feature-camera-mac
   # commit before pushing this branch; the build job refuses the zeros
-  FREERDP_SHA: "21accb140b0c23ea167f8f226e7dc0c1dbb1bdef"
+  FREERDP_SHA: "067c2d1b30fd653ee2eb5ad783c7a79d230ac66f"
   # the ids: build/macos/id-prefix (io.github.congzhangzh) + .freerdp-shadow (.agent, .camera)
   # and .freerdp, read by build-macos-client.sh
   HOMEBREW_NO_AUTO_UPDATE: 1
