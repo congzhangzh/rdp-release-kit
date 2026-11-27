@@ -69,7 +69,9 @@ public static string Size(int w, int h) {
     if (!EnumDisplaySettings(null, -1, ref dm)) return "the current mode is unknown";
     string was = dm.dmPelsWidth + " x " + dm.dmPelsHeight;
     dm.dmPelsWidth = w; dm.dmPelsHeight = h; dm.dmFields = 0x80000 | 0x100000;
-    return was + " -> " + w + " x " + h + ": " + ChangeDisplaySettings(ref dm, 0);
+    // CDS_UPDATEREGISTRY: kept when a later apply re-reads the registry (run 45928963487: the second
+    // monitor's apply put the first back at 1024 x 768, and the client stretched it to 1600 x 900)
+    return was + " -> " + w + " x " + h + ": " + ChangeDisplaySettings(ref dm, 0x01);
 }
 // a display's mode and place: CDS_UPDATEREGISTRY | CDS_NORESET for the device, then one apply;
 // 60 Hz asked first (DM_DISPLAYFREQUENCY), without it when the driver refuses; 0 = success
@@ -173,10 +175,13 @@ if (-not $second) { Note "MISSING  no second monitor ($(ScreensText $screens))";
 # the second one at 1920 x 1080, right of the first
 "monitor 2: $([Kit.Screen]::Mode($second.Device, 1920, 1080, 1600, 0))" | Tee-Object -FilePath "$Out\where.txt" -Append
 Start-Sleep -Seconds 3
+"screen again: $([Kit.Screen]::Size(1600, 900))" | Tee-Object -FilePath "$Out\where.txt" -Append
+Start-Sleep -Seconds 3
 $screens = Screens
 $first = $screens | Where-Object { $_.Primary } | Select-Object -First 1
 $second = $screens | Where-Object { -not $_.Primary } | Select-Object -First 1
 Note "INFO  monitors: $(ScreensText $screens)"
+if ($first.W -ne 1600 -or $first.H -ne 900) { Note "MISSING  the shared monitor is $($first.W)x$($first.H), not 1600x900"; exit 1 }
 
 # ---- the media page, full screen on the first monitor, in Edge's app mode (no browser UI)
 $wd = "$env:RUNNER_TEMP\webdemo"
@@ -267,7 +272,9 @@ $caps = Select-String -Path "$Out\native.wlog" -Pattern "RecvCapsConfirmPdu: ver
 Note "INFO  native: caps $(if ($caps) { $caps.Matches[0].Value } else { 'none' })"
 $dec = Select-String -Path "$Out\native.wlog" -Pattern "AV1 decoder: (\S+) \(([^,)]+)" -ErrorAction SilentlyContinue | Select-Object -Last 1
 Note "INFO  native: decoder $(if ($dec) { $dec.Line.Trim() } else { 'not logged' })"
-$failed = @(Select-String -Path "$Out\native.wlog" -Pattern "\[ERROR\].*(decode|av1|gfx)" -ErrorAction SilentlyContinue).Count
+# (the AV1 context's "AV1 encoder requires libaom" is the client making no encoder: not a failure)
+$failed = @(Select-String -Path "$Out\native.wlog" -Pattern "\[ERROR\].*(decode|av1|gfx)" -ErrorAction SilentlyContinue |
+    Where-Object { $_.Line -notmatch "AV1 encoder requires libaom" }).Count
 Note "INFO  native: client errors about decode/AV1/GFX: $failed"
 
 # ---- the video: 1280 x 720, the label from the session's own words, a poster and two stills
@@ -287,7 +294,7 @@ if (Test-Path $raw) {
     & ffmpeg -v error -y -i $raw -vf ("scale=1280:720:force_original_aspect_ratio=decrease:flags=lanczos," +
         "pad=1280:720:(ow-iw)/2:(oh-ih)/2,format=yuv420p," +
         "drawtext=fontfile=font.ttf:textfile=label.txt:expansion=none:fontsize=22:fontcolor=white:" +
-        "box=1:boxcolor=black@0.6:boxborderw=10:x=w-tw-28:y=h-th-28") `
+        "box=1:boxcolor=black@0.6:boxborderw=10:x=w-tw-28:y=h-th-72") `
         -c:v libx264 -crf 28 -preset slow -an -movflags +faststart $V
     Pop-Location
     foreach ($s in @(@("", 0.7), @("-mid", 0.5), @("-late", 0.95))) {
