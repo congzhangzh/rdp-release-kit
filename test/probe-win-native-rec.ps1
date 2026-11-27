@@ -1,12 +1,22 @@
-# A record, not a kit test (demo 1.1's probe): the kit's native Windows client (sdl-freerdp) to
-# the kit's Windows shadow server on this PC, in AV1 4:2:0 (/gfx:AV2:off,AV1:i420), while the
-# demo's media page (test/demo/media.html, the video alone) plays in Firefox on the shared
-# desktop. It records the client's window (ffmpeg gdigrab) and says the session's rate from the
-# server's own AV1 encoder lines ("AV1 WxH I420: N frames in T s (F fps)", every 5 s), against
-# the demo bar of 15/s, and which AV1 decoder the client used.
+# A record, not a kit test (demo 1.1's recording): the kit's native Windows client (sdl-freerdp)
+# to the kit's Windows shadow server on this PC, in AV1 4:2:0 (/gfx:AV2:off,AV1:i420), while the
+# demo's media page (test/demo/media.html, the video alone) plays.
+#
+# v2 (the product owner's conditions for the demo): two monitors, so nothing mirrors itself. An
+# IddCx virtual display driver adds a second one (as windows-host-allmon.ps1, the same pinned
+# package); the page plays full screen on the first (1600 x 900), the shadow server shares only
+# that one (/monitors:<its index>), and the client's window sits on the second (1920 x 1080), which
+# the recorder grabs. The page runs in Edge (app mode, its first-run screens off by policy), not
+# Firefox, whose "pin Firefox to your taskbar?" dialog sat over v1's video; Windows' toasts are off.
+# The label quotes what the session logged: "AV1 4:2:0 · <the client's decoder> · <the server's
+# mean rate>/s". The rate comes from the server's own AV1 encoder lines ("AV1 WxH I420: N frames
+# in T s (F fps)", every 5 s), against the demo bar of 15/s; the recorder's written rate is
+# reported beside it (it must not be below the session's).
 #
 #   probe-win-native-rec.ps1 <host folder> <client folder> <demo media folder> <out dir>
-param([string]$HostDir, [string]$ClientDir, [string]$Media, [string]$Out)
+#                            <driver zip> <its sha256> <devnode.exe>
+param([string]$HostDir, [string]$ClientDir, [string]$Media, [string]$Out,
+      [string]$VddZip, [string]$VddSha256, [string]$DevNode)
 $ErrorActionPreference = "Stop"
 New-Item -ItemType Directory -Force -Path $Out | Out-Null
 $HostDir = (Resolve-Path $HostDir).Path
@@ -24,12 +34,15 @@ function Stop($p) {
     Start-Sleep -Seconds 2
 }
 function Note($line) { $line | Tee-Object -FilePath "$Out\verdicts.txt" -Append }
+function Until([int]$s, [scriptblock]$cond) {
+    for ($i = 0; $i -lt $s; $i++) { if (& $cond) { return $true }; Start-Sleep -Seconds 1 }
+    return [bool](& $cond)
+}
 
 $cpu = (Get-CimInstance Win32_Processor | Select-Object -First 1)
 "CPU: $($cpu.Name.Trim()), $($cpu.NumberOfLogicalProcessors) logical" | Tee-Object -FilePath "$Out\where.txt"
 "GPU: $((Get-CimInstance Win32_VideoController | ForEach-Object { $_.Name }) -join '; ')" | Tee-Object -FilePath "$Out\where.txt" -Append
 
-# the screen at 1600 x 900 (the runner's is 1024 x 768), as windows-host.ps1 sets it; window moves
 Add-Type -Namespace Kit -Name Screen -MemberDefinition @'
 [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
 public struct DEVMODE {
@@ -44,17 +57,35 @@ public struct DEVMODE {
 [StructLayout(LayoutKind.Sequential)] public struct RECT { public int Left, Top, Right, Bottom; }
 [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern bool EnumDisplaySettings(string dev, int mode, ref DEVMODE dm);
 [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern int ChangeDisplaySettings(ref DEVMODE dm, int flags);
+[DllImport("user32.dll", CharSet = CharSet.Unicode, EntryPoint = "ChangeDisplaySettingsExW")] static extern int ChangeDisplaySettingsEx(string dev, ref DEVMODE dm, System.IntPtr hwnd, int flags, System.IntPtr param);
+[DllImport("user32.dll", CharSet = CharSet.Unicode, EntryPoint = "ChangeDisplaySettingsExW")] static extern int ChangeDisplaySettingsExApply(System.IntPtr dev, System.IntPtr dm, System.IntPtr hwnd, int flags, System.IntPtr param);
 [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern System.IntPtr FindWindow(string cls, string title);
 [DllImport("user32.dll")] static extern bool PostMessage(System.IntPtr w, uint msg, System.IntPtr wp, System.IntPtr lp);
 [DllImport("user32.dll")] public static extern bool SetWindowPos(System.IntPtr w, System.IntPtr after, int x, int y, int cx, int cy, uint flags);
 [DllImport("user32.dll")] public static extern bool GetWindowRect(System.IntPtr w, out RECT r);
-[DllImport("user32.dll")] public static extern bool SetForegroundWindow(System.IntPtr w);
+[DllImport("user32.dll")] public static extern int GetSystemMetrics(int i);
 public static string Size(int w, int h) {
     DEVMODE dm = new DEVMODE(); dm.dmSize = (short)Marshal.SizeOf(typeof(DEVMODE));
     if (!EnumDisplaySettings(null, -1, ref dm)) return "the current mode is unknown";
     string was = dm.dmPelsWidth + " x " + dm.dmPelsHeight;
     dm.dmPelsWidth = w; dm.dmPelsHeight = h; dm.dmFields = 0x80000 | 0x100000;
     return was + " -> " + w + " x " + h + ": " + ChangeDisplaySettings(ref dm, 0);
+}
+// a display's mode and place: CDS_UPDATEREGISTRY | CDS_NORESET for the device, then one apply;
+// 60 Hz asked first (DM_DISPLAYFREQUENCY), without it when the driver refuses; 0 = success
+public static string Mode(string dev, int w, int h, int x, int y) {
+    DEVMODE dm = new DEVMODE(); dm.dmSize = (short)Marshal.SizeOf(typeof(DEVMODE));
+    if (!EnumDisplaySettings(dev, -1, ref dm)) return "the mode of " + dev + " is unknown";
+    dm.dmPelsWidth = w; dm.dmPelsHeight = h; dm.dmPositionX = x; dm.dmPositionY = y;
+    dm.dmDisplayFrequency = 60; dm.dmFields = 0x80000 | 0x100000 | 0x20 | 0x400000;
+    int set = ChangeDisplaySettingsEx(dev, ref dm, System.IntPtr.Zero, 0x01 | 0x10000000, System.IntPtr.Zero);
+    string hz = "60 Hz";
+    if (set != 0) {
+        dm.dmFields = 0x80000 | 0x100000 | 0x20; hz = "its own rate";
+        set = ChangeDisplaySettingsEx(dev, ref dm, System.IntPtr.Zero, 0x01 | 0x10000000, System.IntPtr.Zero);
+    }
+    int apply = ChangeDisplaySettingsExApply(System.IntPtr.Zero, System.IntPtr.Zero, System.IntPtr.Zero, 0, System.IntPtr.Zero);
+    return dev + " " + w + "x" + h + "+" + x + "+" + y + " at " + hz + ": set " + set + ", apply " + apply;
 }
 public static int Close(string title) {
     int n = 0;
@@ -64,10 +95,32 @@ public static int Close(string title) {
     return n;
 }
 '@
+# the monitors, from a new process each time (Screen.AllScreens caches its list in a process)
+function Screens {
+    $json = pwsh -NoProfile -Command 'Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.Screen]::AllScreens | ForEach-Object { [pscustomobject]@{ Device = $_.DeviceName; Primary = $_.Primary; X = $_.Bounds.X; Y = $_.Bounds.Y; W = $_.Bounds.Width; H = $_.Bounds.Height } } | ConvertTo-Json -Compress'
+    @($json | ConvertFrom-Json)
+}
+function ScreensText($s) { ($s | ForEach-Object { "$($_.Device) $($_.W)x$($_.H)+$($_.X)+$($_.Y)$(if ($_.Primary) { ' primary' })" }) -join "; " }
+
 "screen: $([Kit.Screen]::Size(1600, 900))" | Tee-Object -FilePath "$Out\where.txt" -Append
 "closed $([Kit.Screen]::Close('System Properties')) System Properties dialog(s)" | Tee-Object -FilePath "$Out\where.txt" -Append
-if ($env:GITHUB_ACTIONS -eq "true") {   # as windows-host.ps1: StorSvc burned the CPU in slow rounds
+if ($env:GITHUB_ACTIONS -eq "true") {
+    # on a CI runner only: StorSvc off (it burned the CPU in slow rounds, windows-host.ps1), and
+    # Windows' toasts and notification center off, so no prompt sits over the recording
     try { Set-Service StorSvc -StartupType Disabled; Stop-Service StorSvc -Force -ErrorAction Stop } catch { }
+    New-Item -Force -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\PushNotifications" | Out-Null
+    Set-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\PushNotifications" -Name ToastEnabled -Value 0 -Type DWord
+    New-Item -Force -Path "HKCU:\Software\Policies\Microsoft\Windows\Explorer" | Out-Null
+    Set-ItemProperty -Path "HKCU:\Software\Policies\Microsoft\Windows\Explorer" -Name DisableNotificationCenter -Value 1 -Type DWord
+    # Edge's own first-run screens, sign-in and sync prompts, and its "recommendations"
+    $edgePol = "HKLM:\SOFTWARE\Policies\Microsoft\Edge"
+    New-Item -Force -Path $edgePol | Out-Null
+    foreach ($kv in @(@("HideFirstRunExperience", 1), @("BrowserSignin", 0), @("SyncDisabled", 1),
+                      @("ShowRecommendationsEnabled", 0), @("DefaultBrowserSettingEnabled", 0),
+                      @("PromotionalTabsEnabled", 0), @("AutoplayAllowed", 1), @("TranslateEnabled", 0),
+                      @("StartupBoostEnabled", 0), @("HubsSidebarEnabled", 0))) {
+        Set-ItemProperty -Path $edgePol -Name $kv[0] -Value $kv[1] -Type DWord
+    }
 }
 New-LocalUser -Name $user -Password (ConvertTo-SecureString $pass -AsPlainText -Force) -PasswordNeverExpires | Out-Null
 
@@ -86,59 +139,96 @@ if (-not (Get-Command ffmpeg -ErrorAction SilentlyContinue)) {
 }
 "ffmpeg: $(& ffmpeg -hide_banner -version | Select-Object -First 1)" | Tee-Object -FilePath "$Out\where.txt" -Append
 
-# the media page (the video alone) in Firefox, as windows-host.ps1's webdemo opens it, but on
-# this desktop directly: the shadow server shares this desktop, so the page plays in the session
-$firefox = "${env:ProgramFiles}\Mozilla Firefox\firefox.exe"
+# ---- the second monitor (windows-host-allmon.ps1's steps): the pinned driver, its signer trusted
+# first (pnputil waits on Windows' driver prompt otherwise), the device node
+$actual = (Get-FileHash -Algorithm SHA256 -Path $VddZip).Hash.ToLowerInvariant()
+if ($actual -ne $VddSha256.ToLowerInvariant()) { throw "the driver zip is $actual, not the pinned one" }
+$pkg = "$env:RUNNER_TEMP\vdd"
+Expand-Archive -Path $VddZip -DestinationPath $pkg -Force
+$inf = Get-ChildItem -Path $pkg -Recurse -Filter 'MttVDD.inf' | Select-Object -First 1
+New-Item -ItemType Directory -Force -Path 'C:\VirtualDisplayDriver' | Out-Null
+Copy-Item -Path (Join-Path $inf.DirectoryName 'vdd_settings.xml') -Destination 'C:\VirtualDisplayDriver\vdd_settings.xml' -Force
+$cert = (Get-AuthenticodeSignature -FilePath (Join-Path $inf.DirectoryName 'mttvdd.cat')).SignerCertificate
+$store = New-Object System.Security.Cryptography.X509Certificates.X509Store('TrustedPublisher', 'LocalMachine')
+$store.Open('ReadWrite'); $store.Add($cert); $store.Close()
+function Bounded([string]$name, [string]$exe, [string[]]$arguments, [int]$s) {
+    $p = Start-Process -FilePath $exe -ArgumentList $arguments -NoNewWindow -PassThru `
+        -RedirectStandardOutput "$Out\$name.txt" -RedirectStandardError "$Out\$name.err.txt"
+    if ($p.WaitForExit($s * 1000)) { return $p.ExitCode }
+    Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue
+    return "timeout ${s}s"
+}
+"pnputil: $(Bounded 'pnputil' 'pnputil.exe' @('/add-driver', $inf.FullName, '/install') 120)" | Tee-Object -FilePath "$Out\where.txt" -Append
+"devnode: $(Bounded 'devnode' $DevNode @($inf.FullName, 'Root\MttVDD', 'Display') 120)" | Tee-Object -FilePath "$Out\where.txt" -Append
+[void](Until 30 { [Kit.Screen]::GetSystemMetrics(80) -ge 2 })   # SM_CMONITORS
+$screens = Screens
+$second = $screens | Where-Object { -not $_.Primary } | Select-Object -First 1
+if (-not $second) { Note "MISSING  no second monitor ($(ScreensText $screens))"; exit 1 }
+# the second one at 1920 x 1080, right of the first
+"monitor 2: $([Kit.Screen]::Mode($second.Device, 1920, 1080, 1600, 0))" | Tee-Object -FilePath "$Out\where.txt" -Append
+Start-Sleep -Seconds 3
+$screens = Screens
+$first = $screens | Where-Object { $_.Primary } | Select-Object -First 1
+$second = $screens | Where-Object { -not $_.Primary } | Select-Object -First 1
+Note "INFO  monitors: $(ScreensText $screens)"
+
+# ---- the media page, full screen on the first monitor, in Edge's app mode (no browser UI)
 $wd = "$env:RUNNER_TEMP\webdemo"
-New-Item -ItemType Directory -Force -Path "$wd\site", "$wd\profile" | Out-Null
+New-Item -ItemType Directory -Force -Path "$wd\site", "$wd\edge" | Out-Null
 Copy-Item "$KitTest\demo\media.html" "$wd\site\index.html"
 Copy-Item "$Media\bunny.webm" "$wd\site\"
-Copy-Item "$KitTest\demo\user.js" "$wd\profile\"
-$dist = Join-Path (Split-Path $firefox) "distribution"
-New-Item -ItemType Directory -Force -Path $dist | Out-Null
-Set-Content -Encoding utf8 -Path "$dist\policies.json" -Value (@{ policies = @{
-    UserMessaging = @{ SkipOnboarding = $true; MoreFromMozilla = $false; FeatureRecommendations = $false
-        ExtensionRecommendations = $false; UrlbarInterventions = $false; FirefoxLabs = $false; Locked = $true }
-    DontCheckDefaultBrowser = $true; DisableDefaultBrowserAgent = $true
-    OverrideFirstRunPage = ""; OverridePostUpdatePage = "" } } | ConvertTo-Json -Depth 4)
 $site = Start-Process -FilePath python -PassThru -NoNewWindow -RedirectStandardOutput "$Out\http.log" `
     -RedirectStandardError "$Out\http.err" -ArgumentList "-m", "http.server", "8000", "--bind", "127.0.0.1", "--directory", "$wd\site"
-for ($i = 0; $i -lt 10 -and -not (Listening 8000); $i++) { Start-Sleep -Seconds 1 }
-$ff = Start-Process -FilePath $firefox -PassThru -ArgumentList "-no-remote", "-profile", "$wd\profile",
-    "-width", "1500", "-height", "820", "http://127.0.0.1:8000/?video-only"
+[void](Until 10 { Listening 8000 })
+$edge = @("${env:ProgramFiles(x86)}\Microsoft\Edge\Application\msedge.exe", "${env:ProgramFiles}\Microsoft\Edge\Application\msedge.exe") |
+    Where-Object { Test-Path $_ } | Select-Object -First 1
+"edge: $edge" | Tee-Object -FilePath "$Out\where.txt" -Append
+$browser = Start-Process -FilePath $edge -PassThru -ArgumentList "--user-data-dir=$wd\edge", "--no-first-run",
+    "--no-default-browser-check", "--disable-sync", "--autoplay-policy=no-user-gesture-required",
+    "--window-position=$($first.X),$($first.Y)", "--window-size=$($first.W),$($first.H)", "--start-fullscreen",
+    "--app=http://127.0.0.1:8000/?video-only"
 Start-Sleep -Seconds 12
 
-# the shadow server, by hand, AV1 on and AV2 off (as windows-host.ps1's av1-i420 step)
+# ---- the shadow server, by hand, AV1 on and AV2 off, sharing only the first monitor: its index
+# in the server's own list ("/monitors" lists them: "* [N] WxH +X+Y", * on the primary)
 $env:WLOG_LEVEL = "DEBUG"
 $env:WLOG_APPENDER = "FILE"
 $env:WLOG_FILEAPPENDER_OUTPUT_FILE_PATH = $Out
+$env:WLOG_FILEAPPENDER_OUTPUT_FILE_NAME = "server-monitors.wlog"
+[void](Bounded 'server-monitors' "$HostDir\freerdp-shadow-cli.exe" @('/monitors') 30)
+$list = Get-Content "$Out\server-monitors.wlog", "$Out\server-monitors.txt" -ErrorAction SilentlyContinue |
+    Select-String -Pattern "\[(\d+)\] (\d+)x(\d+)\s+\+(-?\d+)\+(-?\d+)"
+$list | ForEach-Object { Note "INFO  server's monitor list: $($_.Line.Trim())" }
+$index = $list | Where-Object { [int]$_.Matches[0].Groups[4].Value -eq $first.X -and [int]$_.Matches[0].Groups[5].Value -eq $first.Y } |
+    ForEach-Object { $_.Matches[0].Groups[1].Value } | Select-Object -First 1
+if ($null -eq $index) { Note "MISSING  the first monitor is not in the server's list"; exit 1 }
 $env:WLOG_FILEAPPENDER_OUTPUT_FILE_NAME = "server.wlog"
 $server = Start-Process -FilePath "$HostDir\freerdp-shadow-cli.exe" -PassThru -NoNewWindow `
-    -ArgumentList "/bind-address:127.0.0.1", "/port:$port", "/gfx-av1", "/gfx-av2:off"
-for ($i = 0; $i -lt 30 -and -not (Listening $port) -and -not $server.HasExited; $i++) { Start-Sleep -Seconds 1 }
-Note "INFO  server listens on 127.0.0.1:${port}: $(Listening $port)"
+    -ArgumentList "/bind-address:127.0.0.1", "/port:$port", "/gfx-av1", "/gfx-av2:off", "/monitors:$index"
+[void](Until 30 { (Listening $port) -or $server.HasExited })
+Note "INFO  server shares monitor $index only; listens on 127.0.0.1:${port}: $(Listening $port)"
 
-# the native client, 800 x 450 (as the Mac probe), in the screen's lower right, over the
-# page's lower right corner: it shows the whole desktop, the page's video in it
+# ---- the native client, 1600 x 900 (the shared monitor at 1:1), centred on the second monitor
 $env:WLOG_FILEAPPENDER_OUTPUT_FILE_NAME = "native.wlog"
 $client = Start-Process -FilePath "$ClientDir\sdl-freerdp.exe" -PassThru -ArgumentList "/v:127.0.0.1:$port",
-    "/u:$user", "/p:$pass", "/cert:ignore", "/gfx:AV2:off,AV1:i420", "/size:800x450"
+    "/u:$user", "/p:$pass", "/cert:ignore", "/gfx:AV2:off,AV1:i420", "/size:1600x900"
 $h = [IntPtr]::Zero
-for ($i = 0; $i -lt 30 -and $h -eq [IntPtr]::Zero -and -not $client.HasExited; $i++) {
-    Start-Sleep -Seconds 1; $client.Refresh(); $h = $client.MainWindowHandle }
+[void](Until 30 { $client.Refresh(); $script:h = $client.MainWindowHandle; ($script:h -ne [IntPtr]::Zero) -or $client.HasExited })
 Start-Sleep -Seconds 5
 $rect = $null
 if ($h -ne [IntPtr]::Zero) {
-    # SWP_NOSIZE | SWP_SHOWWINDOW; HWND_TOPMOST (-1) so Firefox never covers it
-    [Kit.Screen]::SetWindowPos($h, [IntPtr]-1, 1600 - 820, 900 - 520, 0, 0, 0x0041) | Out-Null
-    Start-Sleep -Seconds 2
     $r = New-Object Kit.Screen+RECT
+    [void][Kit.Screen]::GetWindowRect($h, [ref]$r)
+    $x = $second.X + [math]::Max(0, [int](($second.W - ($r.Right - $r.Left)) / 2))
+    $y = $second.Y + [math]::Max(0, [int](($second.H - ($r.Bottom - $r.Top)) / 2))
+    [Kit.Screen]::SetWindowPos($h, [IntPtr]::Zero, $x, $y, 0, 0, 0x0041) | Out-Null   # SWP_NOSIZE | SWP_SHOWWINDOW
+    Start-Sleep -Seconds 2
     if ([Kit.Screen]::GetWindowRect($h, [ref]$r)) { $rect = $r }
 }
 Note "INFO  native: window $(if ($rect) { "$($rect.Left),$($rect.Top) to $($rect.Right),$($rect.Bottom)" } else { 'unknown' }); title '$($client.MainWindowTitle)'"
 $off = (Get-Item "$Out\server.wlog").Length
 
-# the recording: the client's window (gdigrab, 30/s asked), or the whole screen without its rect
+# ---- the recording: the client's window on the second monitor (gdigrab, 30/s asked)
 $grab = @("-f", "gdigrab", "-framerate", "30", "-draw_mouse", "0")
 if ($rect) {
     $w = 2 * [int][math]::Floor(($rect.Right - $rect.Left) / 2); $hh = 2 * [int][math]::Floor(($rect.Bottom - $rect.Top) / 2)
@@ -151,22 +241,10 @@ $client.Refresh()
 Note "INFO  native: the client held the $seconds s: $(-not $client.HasExited)"
 Stop $client
 Stop $server
-Stop $ff
+Stop $browser
 Stop $site
 
-$V = "$Out\native-av1-i420.mp4"
-if (Test-Path $raw) {
-    & ffmpeg -v error -y -i $raw -vf "scale=1280:720:force_original_aspect_ratio=decrease:flags=lanczos,pad=1280:720:(ow-iw)/2:(oh-ih)/2,format=yuv420p" `
-        -c:v libx264 -crf 28 -preset slow -an -movflags +faststart $V
-    $n = & ffprobe -v error -select_streams v:0 -count_packets -show_entries stream=nb_read_packets -of csv=p=0 $raw
-    $len = [double](& ffprobe -v error -show_entries format=duration -of csv=p=0 $raw)
-    Note ("INFO  native: the recording: $n frames in {0:N1} s ({1:N1} fps written)" -f $len, $(if ($len) { $n / $len } else { 0 }))
-    foreach ($s in @(@("", 0.7), @("-mid", 0.5), @("-late", 0.95))) {
-        & ffmpeg -v error -y -ss ("{0:F2}" -f ($len * $s[1])) -i $V -frames:v 1 -q:v 4 "$Out\native-av1-i420$($s[0]).jpg"
-    }
-} else { Note "MISSING  native: no recording ($((Get-Content "$Out\record.log" -Tail 1) -join ''))" }
-
-# the session's rate: the server's AV1 encoder lines while the recording ran, the page playing
+# ---- the session's rate: the server's AV1 encoder lines while the recording ran
 $fs = [System.IO.File]::Open("$Out\server.wlog", "Open", "Read", "ReadWrite")
 $fs.Seek($off, "Begin") | Out-Null
 $tail = (New-Object System.IO.StreamReader($fs)).ReadToEnd(); $fs.Close()
@@ -175,16 +253,41 @@ $lines = @([regex]::Matches($tail, "AV1 [0-9]+x[0-9]+ I4[24][04]: [0-9]+ frames 
     ForEach-Object { $_.Value })
 $lines | ForEach-Object { Note "INFO  native: server $_" }
 $fps = @($lines | ForEach-Object { [double]([regex]::Match($_, "\(([0-9.]+) fps\)").Groups[1].Value) })
+$mean = if ($fps.Count) { ($fps | Measure-Object -Average).Average } else { 0 }
 if ($fps.Count) {
-    $mean = ($fps | Measure-Object -Average).Average
     Note ("NATIVE-VERDICT  {0}/s (the server encoded a mean {1:N1} fps over {2} lines)" -f $(if ($mean -ge 15) { ">= 15" } else { "< 15" }), $mean, $fps.Count)
 } else { Note "NATIVE-VERDICT  unknown (no AV1 encoder line in this session)" }
-# the frames' codec and caps, and which AV1 decoder the client used
 $caps = Select-String -Path "$Out\native.wlog" -Pattern "RecvCapsConfirmPdu: version: \S+.*" -ErrorAction SilentlyContinue | Select-Object -Last 1
 Note "INFO  native: caps $(if ($caps) { $caps.Matches[0].Value } else { 'none' })"
-Note "INFO  native: decoder lines:"
-Select-String -Path "$Out\native.wlog" -Pattern "dav1d|AV1 decoder|decoder:|MediaFoundation|hardware|D3D11|DXVA" -ErrorAction SilentlyContinue |
-    Select-Object -First 12 | ForEach-Object { Note "    $($_.Line)" }
+$dec = Select-String -Path "$Out\native.wlog" -Pattern "AV1 decoder: (\S+) \(([^,)]+)" -ErrorAction SilentlyContinue | Select-Object -Last 1
+Note "INFO  native: decoder $(if ($dec) { $dec.Line.Trim() } else { 'not logged' })"
+$failed = @(Select-String -Path "$Out\native.wlog" -Pattern "\[ERROR\].*(decode|av1|gfx)" -ErrorAction SilentlyContinue).Count
+Note "INFO  native: client errors about decode/AV1/GFX: $failed"
+
+# ---- the video: 1280 x 720, the label from the session's own words, a poster and two stills
+$V = "$Out\native-av1-i420.mp4"
+if (Test-Path $raw) {
+    $n = & ffprobe -v error -select_streams v:0 -count_packets -show_entries stream=nb_read_packets -of csv=p=0 $raw
+    $len = [double](& ffprobe -v error -show_entries format=duration -of csv=p=0 $raw)
+    $written = if ($len) { $n / $len } else { 0 }
+    Note ("INFO  native: the recording: $n frames in {0:N1} s ({1:N1} fps written; the session {2:N1})" -f $len, $written, $mean)
+    Note ("WRITTEN-VERDICT  {0}" -f $(if ($written -ge $mean) { "written >= session" } else { "written < session" }))
+    $decoder = if ($dec) { "$($dec.Matches[0].Groups[1].Value) ($($dec.Matches[0].Groups[2].Value))" } else { "decoder unknown" }
+    $label = "AV1 4:2:0 · $decoder · $([math]::Round($mean))/s"
+    Note "INFO  label: $label"
+    Set-Content -Encoding utf8NoBOM -Path "$env:RUNNER_TEMP\label.txt" -Value $label -NoNewline
+    Copy-Item "$env:SystemRoot\Fonts\segoeui.ttf" "$env:RUNNER_TEMP\font.ttf"
+    Push-Location $env:RUNNER_TEMP   # relative paths: no drive colon inside the filter
+    & ffmpeg -v error -y -i $raw -vf ("scale=1280:720:force_original_aspect_ratio=decrease:flags=lanczos," +
+        "pad=1280:720:(ow-iw)/2:(oh-ih)/2,format=yuv420p," +
+        "drawtext=fontfile=font.ttf:textfile=label.txt:expansion=none:fontsize=22:fontcolor=white:" +
+        "box=1:boxcolor=black@0.6:boxborderw=10:x=w-tw-28:y=h-th-28") `
+        -c:v libx264 -crf 28 -preset slow -an -movflags +faststart $V
+    Pop-Location
+    foreach ($s in @(@("", 0.7), @("-mid", 0.5), @("-late", 0.95))) {
+        & ffmpeg -v error -y -ss ("{0:F2}" -f ($len * $s[1])) -i $V -frames:v 1 -q:v 4 "$Out\native-av1-i420$($s[0]).jpg"
+    }
+} else { Note "MISSING  native: no recording ($((Get-Content "$Out\record.log" -Tail 1) -join ''))" }
 Remove-LocalUser -Name $user -ErrorAction SilentlyContinue
 Get-Content "$Out\verdicts.txt"
 if (-not (Test-Path $V)) { exit 1 }

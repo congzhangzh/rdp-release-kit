@@ -1,6 +1,6 @@
-# A record, not a kit test (demo 1.1's probe): the kit's native Windows client to the kit's
+# A record, not a kit test (demo 1.1's recording): the kit's native Windows client to the kit's
 # Windows shadow server on a GitHub Windows runner (x86_64), AV1 4:2:0, the demo's media page
-# playing (test/probe-win-native-rec.ps1). It takes the host and the client of the kit's Latest
+# playing on the first monitor and the client on a second, virtual one (test/probe-win-native-rec.ps1). It takes the host and the client of the kit's Latest
 # release (as published, nothing built here) and publishes nothing: the video, its stills and
 # the logs are this run's artifact.
 name: probe-win-native-rec
@@ -38,6 +38,9 @@ jobs:
     needs: [demo-media]
     runs-on: windows-2025
     timeout-minutes: 30
+    env:
+      # the virtual display driver of windows-host.yml's two-monitors job, pinned the same way
+      VDD_SHA256: e24210692b442b39af763536330ce78b423f19342b7a7792c26de3944e418b3a
     steps:
       - uses: actions/checkout@v7
       - uses: actions/download-artifact@v8
@@ -64,11 +67,34 @@ jobs:
           Expand-Archive (Get-ChildItem dl/freerdp-host-*.zip).FullName -DestinationPath host
           Expand-Archive (Get-ChildItem dl/sdl3-freerdp-*.zip).FullName -DestinationPath client
           Get-ChildItem host/*/freerdp-shadow-cli.exe, client/*/sdl-freerdp.exe | ForEach-Object { $_.FullName }
+      - id: vdd
+        uses: actions/cache@v6
+        with:
+          path: dl/vdd/vdd.zip
+          key: vdd-25.7.23-x86-${{ env.VDD_SHA256 }}
+      - if: steps.vdd.outputs.cache-hit != 'true'
+        name: The pinned driver (cache miss)
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path dl/vdd | Out-Null
+          Invoke-WebRequest -Uri 'https://github.com/VirtualDrivers/Virtual-Display-Driver/releases/download/25.7.23/VirtualDisplayDriver-x86.Driver.Only.zip' -OutFile dl/vdd/vdd.zip
+          $h = (Get-FileHash -Algorithm SHA256 dl/vdd/vdd.zip).Hash.ToLowerInvariant()
+          if ($h -ne $env:VDD_SHA256) { Remove-Item dl/vdd/vdd.zip; throw "the driver zip is $h, not the pinned one" }
+      - name: The device node tool (MSVC of the image)
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path tools | Out-Null
+          $vs = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -property installationPath
+          $vcvars = Join-Path $vs 'VC\Auxiliary\Build\vcvarsall.bat'
+          $src = Join-Path $env:GITHUB_WORKSPACE 'test\windows-host-allmon\devnode.c'
+          cmd /c "`"$vcvars`" x64 >nul && cd /d tools && cl /nologo /W3 /O2 `"$src`" setupapi.lib newdev.lib"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: The native client to the Windows shadow, recorded
         shell: pwsh
         run: >
           ./test/probe-win-native-rec.ps1 (Get-ChildItem host -Directory | Select-Object -First 1).FullName
           (Get-ChildItem client -Directory | Select-Object -First 1).FullName dl/media out
+          dl/vdd/vdd.zip $env:VDD_SHA256 tools/devnode.exe
       - uses: actions/upload-artifact@v7
         if: always()
         with:
