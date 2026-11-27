@@ -132,6 +132,17 @@ if ($build -lt 22000) {
     Check "registration as the SYSTEM service: $label" ($asSystem -and $used) ("run as $($owner.Domain)\$($owner.User); " + $(if ($tried) { $tried -join "; " } else { "no registration line in the server's log" }))
     Check "camera: for all users, this session (the mode W0 proved)" ($used -eq "all users, this session") $(if ($used) { $used } else { "none" })
 
+    # Camera privacy for desktop apps: Windows 11 allows it by default, Windows Server 2025
+    # leaves the user's own setting unset and the reader's ActivateObject fails with
+    # E_ACCESSDENIED (run 46066264731; W0 set it too). The values before, then allowed for the run.
+    $consent = 'SOFTWARE\Microsoft\Windows\CurrentVersion\CapabilityAccessManager\ConsentStore\webcam'
+    foreach ($key in @("HKLM:\$consent", "HKCU:\$consent", "HKCU:\$consent\NonPackaged")) {
+        $before = (Get-ItemProperty -Path $key -Name Value -ErrorAction SilentlyContinue).Value
+        New-Item -Path $key -Force -ErrorAction SilentlyContinue | Out-Null
+        Set-ItemProperty -Path $key -Name Value -Value 'Allow' -ErrorAction SilentlyContinue
+        Say "INFO" "camera privacy" "$key was $(if ($before) { $before } else { '(unset)' }), Allow for the run"
+    }
+
     # ---- the still, no client
     $r = Read-Camera 6 "still"
     Check "reader: finds FreeRDP Camera" ($r.found -eq "yes") ($r.devices -join "; ")
@@ -171,12 +182,26 @@ if ($build -lt 22000) {
 # ---- stop: the service, then the camera must be gone
 & "$hostDir\freerdp-shadow-service.exe" uninstall 2>&1 | Out-File "$Out\uninstall.txt" -Encoding utf8
 if ($build -ge 22000) {
-    [void](Until 20 { (ServerLog) -match 'camera: virtual camera removed' })
-    Check "stop: the server removes the virtual camera" ((ServerLog) -match 'camera: virtual camera removed')
+    # freerdp-shadow-service ends the server with TerminateProcess (shadow_service.c, stop_shadow):
+    # the server never runs its own stop, and Windows takes a camera of this session's lifetime
+    # away with the process. So the check is that the camera is gone; the server's own
+    # "virtual camera removed" comes only from a server that stops by itself (a record here).
+    $removed = [bool]((ServerLog) -match 'camera: virtual camera removed')
+    Say "INFO" "stop: the server's own removal line" $(if ($removed) { "logged" } else { "not logged (the service ended the process)" })
     $r = Read-Camera 1 "after"
-    Check "stop: no FreeRDP Camera any more" ($r.found -ne "yes") ($r.devices -join "; ")
+    Check "stop: no FreeRDP Camera once the server is gone" ($r.found -ne "yes") ($r.devices -join "; ")
 }
 Copy-Item -Path "$cameraDir\logs" -Destination "$Out\source-logs" -Recurse -Force -ErrorAction SilentlyContinue
+# what each process that loaded the media source got: the ring, the readers' section, and the
+# token of one that was refused (who it is, its groups, restricted SIDs, integrity level)
+foreach ($f in (Get-ChildItem "$Out\source-logs\*.log" -ErrorAction SilentlyContinue)) {
+    $who = (Select-String -Path $f.FullName -Pattern 'loaded by (.*)$' | Select-Object -First 1).Matches.Groups[1].Value
+    $ring = (Select-String -Path $f.FullName -Pattern "ring (not )?open \(error \d+\), readers' section (not )?open \(error \d+\)" | Select-Object -First 1).Matches.Value
+    Say "INFO" "media source in $who" $(if ($ring) { $ring } else { "(no ring line)" })
+    foreach ($t in (Select-String -Path $f.FullName -Pattern 'token (user|integrity|app container|\(.*\): restricted)' | Select-Object -First 4)) {
+        Say "INFO" "media source in $who" (($t.Line -replace '^\S+ pid \d+ tid \d+ ', ''))
+    }
+}
 Get-WinEvent -FilterHashtable @{ LogName = 'Application'; StartTime = (Get-Date).AddMinutes(-30); Level = 1, 2, 3 } -ErrorAction SilentlyContinue |
     Format-List TimeCreated, Id, ProviderName, Message | Out-File "$Out\application-events.txt" -Width 400
 

@@ -33,7 +33,7 @@ env:
   FREERDP_REPO: https://github.com/congzhangzh/FreeRDP.git
   # the host: the probed commit, fixed (the branch may move on)
   HOST_BRANCH: feature-camera-winshadow
-  HOST_SHA: a216b0a9f4220e5bf897dfe4922c2c41ed6e57e3
+  HOST_SHA: 1a3c814ed63e80afdc764a31be52b4efb93c1f4e
   # the test client with a camera of its own
   CAMSRC_FREERDP_BRANCH: feature-camera-win
   CAMSRC_FREERDP_COMMIT: 7e2cf4814995f99a8a8edd836bc20b323f625c0d

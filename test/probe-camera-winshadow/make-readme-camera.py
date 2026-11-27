@@ -4,9 +4,9 @@
 #
 #   make-readme-camera.py [--check] [--on-demand] <PO README draft> <kit dir>
 #
-#   <PO README draft>  rdp-product-plan/drafts/readme-windows-camera.v2.md (v2: the camera is
+#   <PO README draft>  rdp-product-plan/drafts/readme-windows-camera.v3.md (v2: the camera is
 #                      "FreeRDP Camera"; Windows lists it with its own " (Windows Virtual
-#                      Camera)"): the cell, en/zh/ja/fr
+#                      Camera)"; v3: the camera privacy sentence at the end): the cell, en/zh/ja/fr
 #                      ("- <lang>: <text>" lines)
 #
 # The cell goes in the Windows column of a "Camera" row of the "Shadow server" table (README.md,
@@ -18,8 +18,8 @@
 # space before ":" or ";" a NBSP. README.ja.md writes no space between Latin words and Japanese.
 # These are the only changes made to the draft's bytes.
 #
-# The draft's LAST sentence ("The client's camera runs only while an app reads the virtual
-# camera.") is true only once the camera runs on demand (SOURCE_START/STOP) and a CI step proved
+# The draft's on-demand sentence ("The client's camera runs only while an app reads the virtual
+# camera.", the last but one since v3) is true only once the camera runs on demand (SOURCE_START/STOP) and a CI step proved
 # it: ON_DEMAND_PROVEN below stays False until probe-camera-winshadow.yml's on-demand step has
 # passed, and the sentence is left out until then. --on-demand writes the cell with it (what the
 # probe's run uploads as the README patch to apply once that step is green); it is never the
@@ -37,8 +37,8 @@ LANGS = ("en", "zh", "ja", "fr")
 README = {"en": "README.md", "zh": "README.zh.md", "ja": "README.ja.md", "fr": "README.fr.md"}
 # the row's first cell: the cell's own first word(s), before " (Windows)" / "（Windows）"
 LABEL = {"en": "Camera", "zh": "摄像头", "ja": "カメラ", "fr": "Caméra"}
-# the last sentence, so that it is cut where it starts and nowhere else
-LAST = {
+# the on-demand sentence, cut where it stands (once, whole) and nowhere else
+ON_DEMAND = {
     "en": "The client's camera runs only while an app reads the virtual camera.",
     "zh": "只有应用在读取虚拟摄像头时，客户端的摄像头才会开启。",
     "ja": "クライアントのカメラは、アプリが仮想カメラを読んでいる間だけオンになります。",
@@ -71,11 +71,16 @@ def po_cells(path):
 
 def cell(lang, text, on_demand):
     text = readme_style(lang, text)
-    last = readme_style(lang, LAST[lang])
-    if not text.endswith(last):
-        sys.exit(f"{lang}: the draft's last sentence is not {last!r}")
+    sentence = readme_style(lang, ON_DEMAND[lang])
+    if text.count(sentence) != 1:
+        sys.exit(f"{lang}: the draft has the on-demand sentence {text.count(sentence)} times, want once: {sentence!r}")
     if not on_demand:
-        text = text[: -len(last)].rstrip(" ")
+        at = text.index(sentence)
+        # with the space that joins it to the next sentence (zh and ja have none)
+        end = at + len(sentence)
+        if text[end:end + 1] == " ":
+            end += 1
+        text = (text[:at] + text[end:]).rstrip(" ")
     if "|" in text:
         sys.exit(f"{lang}: a '|' would break the table")
     return text
