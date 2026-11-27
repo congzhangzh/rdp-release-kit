@@ -4,12 +4,15 @@
  *
  * Copyright 2026 Cong Zhang <congzhangzh@gmail.com>
  *
- *   mf-camera-reader camera [--match <text>] [--frames N] [--wait S] [--timeout S] [--log <file>]
- *       waits up to S seconds for a video capture device whose friendly name contains <text>
+ *   mf-camera-reader camera [--match <text>] [--frames N] [--min-seconds S] [--wait S]
+ *                           [--timeout S] [--log <file>] [--only-user <name>]
+ *       waits up to --wait seconds for a video capture device whose friendly name contains <text>
  *       (case-insensitive; default "Remote Desktop Camera", then any camera when --match ""),
- *       logs every camera, opens the one found, logs its native media types, reads N frames
- *       and logs each one (subtype, size, bytes, a hash of its first 4 KiB). Exit 0 when N
- *       frames came, 2 when no camera matched, 3 on the watchdog (--timeout), 1 on an error.
+ *       logs every camera, opens the one found, logs its native media types, reads N frames,
+ *       and keeps reading until the camera was open --min-seconds, logging each frame (subtype,
+ *       size, bytes, a hash of its first 4 KiB). Exit 0 when that came, 2 when no camera
+ *       matched, 3 on the watchdog (--timeout), 1 on an error. --only-user: exit 0 at once, before
+ *       --log touches its file, when another user runs it (a logon Run entry runs for everyone).
  *
  *   mf-camera-reader mjpeg <file.jpg> <width> <height>
  *       the Windows MJPEG decoder: MFTEnumEx(MFT_CATEGORY_VIDEO_DECODER, MJPG in) lists the
@@ -195,7 +198,7 @@ out:
 	return found;
 }
 
-static int run_camera(const WCHAR* match, unsigned frames, unsigned waitS)
+static int run_camera(const WCHAR* match, unsigned frames, unsigned minSeconds, unsigned waitS)
 {
 	IMFActivate* camera = NULL;
 	IMFMediaSource* source = NULL;
@@ -280,7 +283,8 @@ static int run_camera(const WCHAR* match, unsigned frames, unsigned waitS)
 	uint32_t lastHash = 0;
 	LONGLONG firstTs = -1;
 	LONGLONG lastTs = 0;
-	while (got < frames)
+	const ULONGLONG opened = GetTickCount64();
+	while ((got < frames) || (GetTickCount64() - opened < 1000ull * minSeconds))
 	{
 		DWORD flags = 0;
 		LONGLONG ts = 0;
@@ -329,8 +333,8 @@ static int run_camera(const WCHAR* match, unsigned frames, unsigned waitS)
 		type_text(current, text, sizeof(text));
 		IMFMediaType_Release(current);
 	}
-	say("RESULT ok camera=\"%s\" frames=%u distinct=%u span=%.3f s type=%s", name8, got, distinct,
-	    (double)(lastTs - firstTs) / 1e7, text);
+	say("RESULT ok camera=\"%s\" frames=%u distinct=%u span=%.3f s open=%.1f s type=%s", name8, got,
+	    distinct, (double)(lastTs - firstTs) / 1e7, (double)(GetTickCount64() - opened) / 1000.0, text);
 	rc = 0;
 
 out:
@@ -578,10 +582,21 @@ int wmain(int argc, WCHAR** argv)
 	if (argc < 2)
 	{
 		fprintf(stderr, "usage: mf-camera-reader camera [--match <text>] [--frames N] [--wait S] "
-		                "[--timeout S] [--log <file>] | mjpeg <file.jpg> <width> <height> [--log <file>]\n");
+		                "[--min-seconds S] [--timeout S] [--log <file>] [--only-user <name>] | mjpeg <file.jpg> "
+		                "<width> <height> [--log <file>]\n");
 		return 1;
 	}
 
+	for (int i = 2; i + 1 < argc; i++)
+	{
+		if (!wcscmp(argv[i], L"--only-user"))
+		{
+			WCHAR me[256] = L"";
+			DWORD n = ARRAYSIZE(me);
+			if (GetUserNameW(me, &n) && _wcsicmp(me, argv[i + 1]))
+				return 0;
+		}
+	}
 	for (int i = 2; i + 1 < argc; i++)
 	{
 		if (!wcscmp(argv[i], L"--log") && !_wfreopen(argv[i + 1], L"w", stdout))
@@ -591,6 +606,7 @@ int wmain(int argc, WCHAR** argv)
 	const WCHAR* match = L"Remote Desktop Camera";
 	unsigned frames = 60;
 	unsigned waitS = 60;
+	unsigned minSeconds = 0;
 	for (int i = 2; i + 1 < argc; i++)
 	{
 		if (!wcscmp(argv[i], L"--match"))
@@ -601,7 +617,9 @@ int wmain(int argc, WCHAR** argv)
 			waitS = (unsigned)_wtoi(argv[++i]);
 		else if (!wcscmp(argv[i], L"--timeout"))
 			g_timeoutMs = 1000u * (unsigned)_wtoi(argv[++i]);
-		else if (!wcscmp(argv[i], L"--log"))
+		else if (!wcscmp(argv[i], L"--min-seconds"))
+			minSeconds = (unsigned)_wtoi(argv[++i]);
+		else if (!wcscmp(argv[i], L"--log") || !wcscmp(argv[i], L"--only-user"))
 			++i;
 	}
 	HANDLE dog = CreateThread(NULL, 0, watchdog, NULL, 0, NULL);
@@ -628,7 +646,7 @@ int wmain(int argc, WCHAR** argv)
 
 	int rc = 1;
 	if (!wcscmp(argv[1], L"camera"))
-		rc = run_camera(match, frames, waitS);
+		rc = run_camera(match, frames, minSeconds, waitS);
 	else if (!wcscmp(argv[1], L"mjpeg") && (argc >= 5))
 	{
 		char* path = utf8(argv[2]);

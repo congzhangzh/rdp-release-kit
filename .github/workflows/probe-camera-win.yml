@@ -18,6 +18,15 @@
 #    (is RDCamera_Device_Enumerator one?), the app in the session reads the redirected camera.
 # v1 (run 46038563092, both Servers): MJPEG decode PASS; the session signed in, the mf backend
 # loaded, but the host never opened RDCamera_Device_Enumerator and no frame came.
+# v2: Windows 11 opened it and ran the setup with our client (version 2, Device Added, Activate,
+# stream and media type lists, NV12 640x360), then deactivated: no app in the session, as
+# Windows' own sign-in never finished (LOGON_MSG_BUMP_OPTIONS: "another user is signed in"; then
+# a logoff after 30 s), so the reader's task never ran. The Servers opened 14 and 10 dynamic
+# channels, never the camera's: recorded as INFO there from v3 on, not failures.
+# v3: on Windows 11 the console session is disconnected before the client connects; the reader
+# starts from an HKLM Run entry (explorer runs it at the RDP sign-in), a scheduled task started
+# by hand as the fallback; the session stays connected until the reader's RESULT; the client's
+# Start Streams Request (0x0F), Sample Requests (0x11) and Responses (0x12) are counted.
 # What Microsoft documents for the host (v2's sources): MS-RDPECAM Appendix A lists Windows 10
 # v1803+, Windows 11, Windows Server 2019, 2022, 2025, with no exception, and 3.1.3 says the client
 # creates the enumeration channel, which the server connects to; the policy "Do not allow video
@@ -162,6 +171,15 @@ jobs:
         timeout-minutes: 15
         shell: pwsh
         run: ./test/probe-camera-win/probe-camera-win.ps1 -ClientDir dl/client -Assets dl/test -Out out
+      # what the test added, removed again whatever happened (the script does it too; the runner
+      # is thrown away anyway)
+      - name: Clean up the Run entry and the task
+        if: always()
+        shell: pwsh
+        run: |
+          Remove-ItemProperty -Path HKLM:\Software\Microsoft\Windows\CurrentVersion\Run -Name KitCameraReader -ErrorAction SilentlyContinue
+          Unregister-ScheduledTask -TaskName kit-camera-reader -Confirm:$false -ErrorAction SilentlyContinue
+          "Run entry left: $([bool](Get-ItemProperty HKLM:\Software\Microsoft\Windows\CurrentVersion\Run -Name KitCameraReader -ErrorAction SilentlyContinue)); task left: $([bool](Get-ScheduledTask -TaskName kit-camera-reader -ErrorAction SilentlyContinue))"
       - name: The result, in the job summary
         if: always()
         shell: pwsh

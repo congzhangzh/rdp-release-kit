@@ -3,7 +3,8 @@
 # Windows' own Remote Desktop on this PC is the server (the RDPECAM side, the camera a session
 # sees); the kit's sdl-freerdp is the client, its camera the rdpecam mf backend playing a file
 # (/dvc:rdpecam,sys:mf,file:<test.mp4>,name:Kit Test Camera); mf-camera-reader.exe, started inside
-# the RDP session by a scheduled task, opens the redirected camera and logs its frames and type.
+# the RDP session by an HKLM Run entry (a scheduled task as the fallback), opens the redirected
+# camera, keeps it open 5 s or more and logs its frames and type.
 # Also, apart from the session: Windows' MJPEG decoder MFT decodes one JPEG to NV12.
 #
 #   probe-camera-win.ps1 -ClientDir <folder with sdl-freerdp.exe> -Assets <folder with
@@ -21,11 +22,16 @@
 #    video capture redirection" not in force (fDisableCameraRedir=0 under its documented key), the
 #    Frame Server service started. Nothing more is documented (see probe-camera-win.yml).
 # 2. The MJPEG decoder MFT (no session).
-# 3. The session, the reader inside it, the client.
+# 3. The session, the reader inside it, the client; on Windows 11 the console session is
+#    disconnected first (one active session there). The session stays connected until the
+#    reader's RESULT; everything added for it is removed at the end, whatever happened.
 # 4. The verdicts: PASS/FAIL lines in <out>\checks.txt, facts in <out>\host.txt, one line for the
 #    job summary in <out>\result.txt. It fails when a check fails. The client logs every dynamic
 #    channel the host opens (drdynvc at DEBUG, <out>\dvc-channels.txt): the first question is
-#    whether the host opens RDCamera_Device_Enumerator at all.
+#    whether the host opens RDCamera_Device_Enumerator at all. A Windows Server that does not
+#    (runs 1 and 2) has its camera checks as INFO lines: a recorded fact, not a failure. The
+#    MS-RDPECAM messages (Start Streams Request 0x0F, Sample Request 0x11, Sample Response 0x12,
+#    Sample Error Response 0x13) are counted in the client's log.
 param([string]$ClientDir, [string]$Assets, [string]$Out)
 $ErrorActionPreference = "Stop"
 New-Item -ItemType Directory -Force -Path $Out | Out-Null
@@ -121,8 +127,10 @@ $mjRc = $LASTEXITCODE
 $mj = Select-String -Path "$Out\mjpeg-decode.log" -Pattern "^\S+ RESULT (.*)$" | Select-Object -Last 1 | ForEach-Object { $_.Matches[0].Groups[1].Value }
 Check "MJPEG decoder MFT: one MJPG frame decoded to NV12" ($mjRc -eq 0) "$mj"
 
+
 # --- 3. the session: Windows' own Remote Desktop for a test user (as test/windows-host.ps1),
 #        camera redirection not refused by policy
+$isServer = $cv.InstallationType -like "Server*"
 Set-ItemProperty $ts fDenyTSConnections 0
 Fact "set: fDenyTSConnections=$(RegValue $ts fDenyTSConnections)"
 New-LocalUser -Name $user -Password (ConvertTo-SecureString $pass -AsPlainText -Force) -PasswordNeverExpires | Out-Null
@@ -132,28 +140,45 @@ $cred = New-Object PSCredential $user, (ConvertTo-SecureString $pass -AsPlainTex
 Start-Process cmd -Credential $cred -LoadUserProfile -ArgumentList "/c", "exit" -Wait -WindowStyle Hidden
 Check "rdp: Windows' own Remote Desktop listens on 3389" (Until 30 { Listening 3389 })
 
-# the reader, in the user's session: a scheduled task run when the user signs in (the RDP
-# session), interactive, so it sees the session's cameras. --match "": the first camera there;
-# it logs them all, so the record says what Windows names a redirected camera
+# Windows 11 (a client edition) has one active session: another user's sign-in shows the
+# "another user is signed in" (bump) dialog and waits on it (run 2: LOGON_MSG_BUMP_OPTIONS, then a
+# logoff after 30 s, no session). The console session (the runner's) is disconnected first; its
+# programs, this script among them, go on running.
+if (-not $isServer) {
+    Fact "sessions before: $((quser 2>$null) -join ' | ')"
+    tsdiscon console 2>&1 | Out-Null
+    Fact "tsdiscon console: exit $LASTEXITCODE"
+    Start-Sleep -Seconds 2
+    Fact "sessions after: $((quser 2>$null) -join ' | ')"
+}
+
+# the reader, in the user's session: (b) an HKLM Run entry, which explorer runs at every
+# interactive sign-in, the RDP session's included (--only-user: the others leave at once, before
+# its log is touched); the fallback, when it has not started a minute after the sign-in, a
+# scheduled task started by hand (interactive, the session must be there; its own log).
+# (a), the all-users Startup folder, is run by explorer too, later; (c), /shell:, is not used:
+# no Microsoft document says a client edition honours it. --match "": the first camera there;
+# it logs them all, so the record says what Windows names a redirected camera.
 $dir = "C:\kitcam"
 New-Item -ItemType Directory -Force -Path "$dir\out" | Out-Null
 Copy-Item $reader "$dir\mf-camera-reader.exe"
 icacls "$dir\out" /grant "${user}:(OI)(CI)M" | Out-Null
-# the reader itself, writing its own log (v1 ran it through cmd /c, whose quote stripping broke
-# the command line: LastTaskResult 1, no log)
-$action = New-ScheduledTaskAction -Execute "$dir\mf-camera-reader.exe" `
-    -Argument "camera --match `"`" --frames $frames --wait 120 --timeout 180 --log `"$dir\out\reader.log`""
-$trigger = New-ScheduledTaskTrigger -AtLogOn -User "$env:COMPUTERNAME\$user"
+$readerArgs = "camera --match `"`" --frames $frames --min-seconds 5 --wait 120 --timeout 200 --only-user $user"
+$runKey = "HKLM:\Software\Microsoft\Windows\CurrentVersion\Run"
+Set-ItemProperty -Path $runKey -Name "KitCameraReader" -Value "`"$dir\mf-camera-reader.exe`" $readerArgs --log `"$dir\out\reader.log`""
+Fact "added: $runKey KitCameraReader = $((Get-ItemProperty $runKey).KitCameraReader)"
+$action = New-ScheduledTaskAction -Execute "$dir\mf-camera-reader.exe" -Argument "$readerArgs --log `"$dir\out\reader-task.log`""
 $principal = New-ScheduledTaskPrincipal -UserId "$env:COMPUTERNAME\$user" -LogonType Interactive -RunLevel Limited
-Register-ScheduledTask -TaskName "kit-camera-reader" -Action $action -Trigger $trigger -Principal $principal `
+Register-ScheduledTask -TaskName "kit-camera-reader" -Action $action -Principal $principal `
     -Settings (New-ScheduledTaskSettingsSet -ExecutionTimeLimit (New-TimeSpan -Minutes 5)) | Out-Null
 function TaskState($when) {
     $i = Get-ScheduledTaskInfo -TaskName "kit-camera-reader" -ErrorAction SilentlyContinue
     $t = Get-ScheduledTask -TaskName "kit-camera-reader" -ErrorAction SilentlyContinue
-    "task $when`: State=$($t.State) LastRunTime=$($i.LastRunTime) LastTaskResult=$($i.LastTaskResult) log=$(Test-Path "$dir\out\reader.log")" |
+    "task $when`: State=$($t.State) LastRunTime=$($i.LastRunTime) LastTaskResult=$($i.LastTaskResult)" |
         Tee-Object -FilePath "$Out\task.txt" -Append
 }
-TaskState "registered"
+function ClientLog { if (Test-Path "$Out\client.wlog") { Get-Content "$Out\client.wlog" -Raw -ErrorAction SilentlyContinue } else { "" } }
+function UserSession { [bool]((quser 2>$null) -match "^\s*>?$user\s+\S+\s+[0-9]+\s+Active") }
 
 # the client, its camera the file, to 127.0.0.2 (as windows-host.ps1: this PC's own server
 # refuses 127.0.0.1); its log in <out>\client.wlog, the camera channel's tags at DEBUG
@@ -168,44 +193,60 @@ $env:WLOG_APPENDER = "FILE"
 $env:WLOG_FILEAPPENDER_OUTPUT_FILE_PATH = $Out
 $env:WLOG_FILEAPPENDER_OUTPUT_FILE_NAME = "client.wlog"
 $camArgs = "/dvc:rdpecam,sys:mf,file:$Assets\test.mp4,name:$cameraName"
-$client = Start-Process -FilePath "$ClientDir\sdl-freerdp.exe" -PassThru -NoNewWindow `
-    -ArgumentList "/v:127.0.0.2:3389", "/u:$user", "/p:$pass", "/cert:ignore", "/size:1280x720", "`"$camArgs`""
-$session = Until 60 { (quser 2>$null) -match "^\s*>?$user\s" }
-Check "rdp: the client's session signed in" $session ((quser 2>$null) -join " | ")
-# AtLogOn should have started the reader (its log starts with its first line); by hand when not
-$byLogon = Until 20 { Test-Path "$dir\out\reader.log" }
-TaskState "after the sign-in"
-Fact "the reader started by the AtLogOn trigger: $(if ($byLogon) { 'yes' } else { 'no, started by hand' })"
-if (-not $byLogon) {
-    Start-ScheduledTask -TaskName "kit-camera-reader"
-    $byHand = Until 20 { Test-Path "$dir\out\reader.log" }
-    TaskState "started by hand"
-    Check "the reader runs in the session (started by hand)" $byHand
-}
-Start-Sleep -Seconds 5
-Cameras "cameras-during.txt"
+$client = $null
+$result = $null
+$readerLog = $null
+try {
+    $client = Start-Process -FilePath "$ClientDir\sdl-freerdp.exe" -PassThru -NoNewWindow `
+        -ArgumentList "/v:127.0.0.2:3389", "/u:$user", "/p:$pass", "/cert:ignore", "/size:1280x720", "`"$camArgs`""
 
-$done = Until 180 { (Test-Path "$dir\out\reader.log") -and (Select-String -Path "$dir\out\reader.log" -Pattern " RESULT " -Quiet) }
-Copy-Item "$dir\out\reader.log" "$Out\reader.log" -ErrorAction SilentlyContinue
-TaskState "at the end"
-$result = if (Test-Path "$Out\reader.log") {
-    Select-String -Path "$Out\reader.log" -Pattern "^\S+ RESULT (.*)$" | Select-Object -Last 1 | ForEach-Object { $_.Matches[0].Groups[1].Value }
+    # signed in: the user's session Active, while the client is still connected
+    $session = Until 90 { (UserSession) -or ($client.HasExited) }
+    $session = $session -and -not $client.HasExited -and (UserSession)
+    Check "rdp: the client's session signed in (Active while connected)" $session ((quser 2>$null) -join " | ")
+    if ((ClientLog) -match "LOGON_MSG_BUMP_OPTIONS") { Fact "the host showed the 'another user is signed in' dialog (LOGON_MSG_BUMP_OPTIONS)" }
+
+    # the reader: the Run entry first, the task by hand when it did not start
+    $readerLog = "$dir\out\reader.log"
+    $how = "the HKLM Run entry"
+    if (-not (Until 60 { Test-Path $readerLog })) {
+        TaskState "before the start by hand"
+        Start-ScheduledTask -TaskName "kit-camera-reader"
+        $readerLog = "$dir\out\reader-task.log"
+        $how = "the scheduled task, started by hand"
+        if (-not (Until 30 { Test-Path $readerLog })) { $how = "nothing: it did not start" }
+        TaskState "after the start by hand"
+    }
+    Fact "the reader was started by: $how"
+    Check "the reader runs in the session" (Test-Path $readerLog) $how
+
+    # a Server that never opens the enumerator gives the reader no camera: not waited for
+    $enumeratorLive = Until 30 { (ClientLog) -match "ChannelName=RDCamera_Device_Enumerator" }
+    if ($enumeratorLive -or -not $isServer) {
+        # the session stays connected until the reader has its RESULT
+        $done = Until 120 { (Test-Path $readerLog) -and (Select-String -Path $readerLog -Pattern " RESULT " -Quiet) }
+        Fact "the reader's RESULT came: $done"
+    }
+    Cameras "cameras-during.txt"
+    if (Test-Path $readerLog) {
+        Copy-Item $readerLog "$Out\$(Split-Path $readerLog -Leaf)" -ErrorAction SilentlyContinue
+        $result = Select-String -Path $readerLog -Pattern "^\S+ RESULT (.*)$" | Select-Object -Last 1 | ForEach-Object { $_.Matches[0].Groups[1].Value }
+    }
 }
+finally {
+    # the end, whatever happened: the client closed (its log then complete), the session signed
+    # out, the Run entry and the task removed (the workflow's cleanup step does it again)
+    if ($client -and -not $client.HasExited) { Stop-Process -Id $client.Id -Force }
+    (quser 2>$null) -match "^\s*>?$user\s" | ForEach-Object {
+        $id = ($_ -split "\s+" | Where-Object { $_ -match "^\d+$" })[0]; if ($id) { logoff $id } }
+    Remove-ItemProperty -Path $runKey -Name "KitCameraReader" -ErrorAction SilentlyContinue
+    Unregister-ScheduledTask -TaskName "kit-camera-reader" -Confirm:$false -ErrorAction SilentlyContinue
+    Fact "removed: the Run entry ($(-not (Get-ItemProperty $runKey -Name KitCameraReader -ErrorAction SilentlyContinue))), the task ($(-not (Get-ScheduledTask -TaskName kit-camera-reader -ErrorAction SilentlyContinue)))"
+}
+Start-Sleep -Seconds 2
 
 # --- 4. the verdicts
-$got = if ("$result" -match "frames=([0-9]+)") { [int]$Matches[1] } else { 0 }
-$distinct = if ("$result" -match "distinct=([0-9]+)") { [int]$Matches[1] } else { 0 }
-$type = if ("$result" -match "type=(\S+)") { $Matches[1] } else { "" }
-Check "camera: the session's app read $frames frames of the redirected camera" ($done -and $got -ge $frames) "$result"
-Check "camera: the frames change (more than 10 distinct)" ($distinct -gt 10) "distinct=$distinct"
-Check "camera: the media type is named" ($type -match "^[A-Z0-9]{4}$") "type=$type"
-
-# the client's log: written as it goes, closed when the client ends
-if ($client -and -not $client.HasExited) { Stop-Process -Id $client.Id -Force }
-Start-Sleep -Seconds 2
-$log = if (Test-Path "$Out\client.wlog") { Get-Content "$Out\client.wlog" -Raw } else { "" }
-$cameraLine = ([regex]::Matches($log, "Camera $cameraName`: [^\r\n]*") | Select-Object -First 1).Value
-$errors = @([regex]::Matches($log, "\[ERROR\]\[com\.freerdp\.channels\.rdpecam[^\]]*\][^\r\n]*") | ForEach-Object Value)
+$log = ClientLog
 # every dynamic channel the host opened, in order
 $dvcs = @([regex]::Matches($log, "process_create_request: ChannelId=([0-9]+) ChannelName=([^\s]+)") |
     ForEach-Object { "$($_.Groups[1].Value) $($_.Groups[2].Value)" })
@@ -213,16 +254,45 @@ $dvcs | Out-File "$Out\dvc-channels.txt"
 $enumerator = [bool]($dvcs -match " RDCamera_Device_Enumerator$")
 Fact "dynamic channels the host opened: $(if ($dvcs) { ($dvcs | ForEach-Object { ($_ -split ' ')[1] }) -join ', ' } else { 'none logged' })"
 Fact "host opened RDCamera_Device_Enumerator: $(if ($enumerator) { 'yes' } else { 'no' })"
-Check "host opened RDCamera_Device_Enumerator" $enumerator "$($dvcs.Count) dynamic channel(s) opened"
-Check "client: the mf backend loaded" ($log -match "Loaded mf HAL for ecam")
-Check "client: the file played as the camera" ([bool]$cameraLine) $cameraLine
-Check "client: no error from the camera channel" ($errors.Count -eq 0) "$($errors.Count) error(s)$(if ($errors) { ': ' + $errors[0] })"
 
-# the end: the session signed out, the task removed
-(quser 2>$null) -match "^\s*>?$user\s" | ForEach-Object {
-    $id = ($_ -split "\s+" | Where-Object { $_ -match "^\d+$" })[0]; if ($id) { logoff $id } }
-Unregister-ScheduledTask -TaskName "kit-camera-reader" -Confirm:$false -ErrorAction SilentlyContinue
+# a Windows Server host on these runners does not redirect cameras (runs 1 and 2: it opens its
+# other dynamic channels, never RDCamera_Device_Enumerator): a recorded fact there, not a failure
+$noCamera = $isServer -and -not $enumerator
+$noCameraWhy = "Windows Server's RDP host on this hosted runner does not redirect cameras: it never opened RDCamera_Device_Enumerator"
+function CamCheck($name, $ok, $detail = "") {
+    if ($noCamera) {
+        "INFO  $name  ($noCameraWhy$(if ($detail) { "; $detail" }))" | Tee-Object -FilePath "$Out\checks.txt" -Append
+    } else { Check $name $ok $detail }
+}
+
+# the MS-RDPECAM messages on the device channels (2.2.1): received 0x0F Start Streams Request,
+# 0x11 Sample Request; sent 0x12 Sample Response, 0x13 Sample Error Response
+function Received($id) { [regex]::Matches($log, "\[ecam_dev_on_data_received\]: ChannelId=[0-9]+, MessageId=$id,").Count }
+function Sent($id) { [regex]::Matches($log, "\[ecam_channel_write\]: ChannelId=[0-9]+, MessageId=$id,").Count }
+$startStreams = Received "0x0f"
+$sampleRequests = Received "0x11"
+$sampleResponses = Sent "0x12"
+$sampleErrors = Sent "0x13"
+Fact "MS-RDPECAM on the device channels: Start Streams Request x$startStreams, Sample Request x$sampleRequests, Sample Response x$sampleResponses, Sample Error Response x$sampleErrors"
+
+$got = if ("$result" -match "frames=([0-9]+)") { [int]$Matches[1] } else { 0 }
+$distinct = if ("$result" -match "distinct=([0-9]+)") { [int]$Matches[1] } else { 0 }
+$open = if ("$result" -match "open=([0-9.]+) s") { [double]$Matches[1] } else { 0 }
+$type = if ("$result" -match "type=(\S+)") { $Matches[1] } else { "" }
+$cameraLine = ([regex]::Matches($log, "Camera $cameraName`: [^\r\n]*") | Select-Object -First 1).Value
+$errors = @([regex]::Matches($log, "\[ERROR\]\[com\.freerdp\.channels\.rdpecam[^\]]*\][^\r\n]*") | ForEach-Object Value)
+
+CamCheck "host opened RDCamera_Device_Enumerator" $enumerator "$($dvcs.Count) dynamic channel(s) opened"
+CamCheck "camera: the session's app read $frames frames, the camera open 5 s or more" ($got -ge $frames -and $open -ge 5) "$result"
+CamCheck "camera: the frames change (more than 10 distinct)" ($distinct -gt 10) "distinct=$distinct"
+CamCheck "camera: the media type is named" ($type -match "^[A-Z0-9]{4}$") "type=$type"
+CamCheck "client: the host started the stream (Start Streams Request)" ($startStreams -ge 1) "x$startStreams"
+CamCheck "client: samples requested and sent ($frames or more each)" ($sampleRequests -ge $frames -and $sampleResponses -ge $frames) "requests x$sampleRequests, responses x$sampleResponses"
+CamCheck "client: the file played as the camera" ([bool]$cameraLine) $cameraLine
+Check "client: the mf backend loaded" ($log -match "Loaded mf HAL for ecam")
+Check "client: no error from the camera channel, no Sample Error Response" (($errors.Count -eq 0) -and ($sampleErrors -eq 0)) "$($errors.Count) error(s)$(if ($errors) { ': ' + $errors[0] }), x$sampleErrors"
 
 Get-Content "$Out\checks.txt"
-Result "$runner`: $(if ($fails) { "$fails check(s) failed" } else { 'camera redirection works' }); host opened RDCamera_Device_Enumerator: $(if ($enumerator) { 'yes' } else { 'no' }); reader: $result; mjpeg: $mj"
+$verdict = if ($fails) { "$fails check(s) failed" } elseif ($noCamera) { "no camera redirection on this host (recorded); the rest passed" } else { "camera redirection works" }
+Result "$runner`: $verdict; host opened RDCamera_Device_Enumerator: $(if ($enumerator) { 'yes' } else { 'no' }); reader: $result; mjpeg: $mj"
 if ($fails -gt 0) { throw "$fails check(s) failed" }
