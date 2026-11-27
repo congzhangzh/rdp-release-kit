@@ -18,8 +18,11 @@ set -uo pipefail
 MODE=$1; A=$2; B=$3; TEAM=${4:-}
 fails=0
 check() { if [ "$2" = 1 ]; then echo "PASS  $1"; else echo "FAIL  $1"; fails=$((fails + 1)); fi; }
-dr() { codesign -d -r- "$1" 2>&1 | sed -n 's/^designated => //p'; }
-cdhash() { codesign -d -v "$1" 2>&1 | sed -n 's/^CDHash=//p'; }
+# an ad hoc signature has no explicit requirement: codesign prints the implicit one as a
+# comment ("# designated => cdhash H\"...\""), a signed one without the "# "
+dr() { codesign -d -r- "$1" 2>&1 | sed -n 's/^#\{0,1\} *designated => //p'; }
+# CDHash= only at verbosity 3 (-dvvv)
+cdhash() { codesign -dvvv "$1" 2>&1 | sed -n 's/^CDHash=//p' | head -1; }
 ID=$(/usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "$A/FreeRDP-Shadow.app/Contents/Info.plist")
 
 for part in "FreeRDP-Shadow.app:$ID" "FreeRDP-Shadow.app/Contents/MacOS/freerdp-shadow-agent:$ID.agent"; do
@@ -27,6 +30,8 @@ for part in "FreeRDP-Shadow.app:$ID" "FreeRDP-Shadow.app/Contents/MacOS/freerdp-
     da=$(dr "$A/$path"); db=$(dr "$B/$path")
     ca=$(cdhash "$A/$path"); cb=$(cdhash "$B/$path")
     echo "-- $path"
+    [ -n "$da" ] && [ -n "$ca" ] && ok=1 || ok=0
+    check "$path: codesign shows a cdhash and a designated requirement" $ok
     echo "   A: cdhash $ca"
     echo "      DR $da"
     echo "   B: cdhash $cb"
