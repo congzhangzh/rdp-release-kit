@@ -18,7 +18,9 @@
 #    kernel ships (0.15.3 in Ubuntu's 7.0 kernels, run 46066070526): the ondemand checks for 0.13
 #    or newer (no Start Streams before an app reads, Start when it opens the camera, Stop ~500 ms
 #    after it closes it, twice, the client's log agreeing), the fallback checks otherwise; mjpg
-#    (the client's camera offers MJPG, the host decodes it), h264 (the CI-only client).
+#    (the client's camera offers MJPG, the host decodes it), h264 (the CI-only client), owncamera
+#    (a client camera named "FreeRDP Camera" is refused by the host: no loop).
+#    The client's camera device is written by test/probe-camera-linux/v4l2-writer.c (CI only).
 #  - test-v4l2loopback-0.12.7: the fallback, proven with the version Ubuntu 24.04 packages:
 #    v4l2loopback 0.12.7 from its source tag (CI only, a GPL module never in an archive), with
 #    compat-0.12.7.sh renaming the kernel APIs it predates (it does not build on 7.0 otherwise):
@@ -41,7 +43,7 @@ env:
   FREERDP_REPO: https://github.com/congzhangzh/FreeRDP.git
   FREERDP_BRANCH: feature-camera-shadow
   # the probed commit, fixed: the branch may move on (stacked on feature-camera-unix)
-  FREERDP_SHA: 9164681573fbf6cfae5d85a401bfc2206c75fac2
+  FREERDP_SHA: 8de7f0a07cd2384fedd533026b328e84e17e5d2b
 
 jobs:
   host:
@@ -300,6 +302,11 @@ jobs:
         run: |
           test/probe-camera-linux/module.sh kernel out/module-h264
           test/probe-camera-linux/camera-e2e.sh h264 dl/host/pkg dl/gst-client/xfreerdp out/h264
+      - name: "owncamera: the host refuses a client camera named FreeRDP Camera (no loop)"
+        if: always()
+        run: |
+          test/probe-camera-linux/module.sh kernel out/module-owncamera
+          test/probe-camera-linux/camera-e2e.sh owncamera dl/host/pkg dl/gst-client/xfreerdp out/owncamera
       - name: Results
         if: always()
         run: cat out/*/result.txt | tee -a "$GITHUB_STEP_SUMMARY" || true

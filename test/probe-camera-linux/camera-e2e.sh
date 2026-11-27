@@ -21,6 +21,9 @@
 #             picks MJPG and decodes it with its LGPL FFmpeg (mjpeg); >= 60 changing frames
 #   h264      a CI-only client (GStreamer backend, Ubuntu's FFmpeg encodes H.264) sends H.264:
 #             the host picks H264 and decodes it with its LGPL FFmpeg (h264); >= 60 frames
+#   owncamera the CI-only client offers a camera named "FreeRDP Camera": the host refuses it in
+#             exactly one line ("it is a FreeRDP server's own camera") and it never streams
+# The client's camera device (/dev/video40) is written by v4l2-writer.c, built here (CI only).
 #
 # <client>: the kit's sdl-freerdp (V4L2 backend, /dev/video40 as its camera), or for h264 the
 # CI-only xfreerdp. Results: <out dir>/result.txt (PASS/FAIL lines), logs beside it.
@@ -97,17 +100,28 @@ host() {
 }
 
 source_camera() {  # source_camera yuyv|mjpg: the test pattern into the client's camera device
-    local caps='video/x-raw,format=YUY2,width=640,height=480,framerate=30/1'
-    local tail=()
-    [ "$1" = mjpg ] && { caps='video/x-raw,format=I420,width=640,height=480,framerate=30/1'; tail=(! jpegenc quality=85 ! image/jpeg); }
-    GST_DEBUG='*:2,v4l2*:4' gst-launch-1.0 -q videotestsrc is-live=true pattern=ball ! "$caps" "${tail[@]}" ! v4l2sink device=$SRC_DEV \
-        > "$OUT/source.log" 2>&1 &
+    # v4l2-writer.c (CI only): write(), which every v4l2loopback has. GStreamer's v4l2sink gave
+    # 0.12.7 no frame and could not negotiate MJPEG with 0.15.3 (run 46079009433)
+    gcc -O2 -Wall -Wextra -Werror -o "$OUT/v4l2-writer" "$HERE/v4l2-writer.c" > "$OUT/writer-build.log" 2>&1 ||
+        { cat "$OUT/writer-build.log"; exit 1; }
+    local frames=()
+    if [ "$1" = mjpg ]; then
+        # the JPEG frames, made beforehand by GStreamer's jpegenc (no device involved)
+        mkdir -p "$OUT/jpeg"
+        gst-launch-1.0 -q videotestsrc num-buffers=60 pattern=ball ! video/x-raw,width=640,height=480 \
+            ! jpegenc quality=85 ! multifilesink location="$OUT/jpeg/frame%03d.jpg" > "$OUT/jpeg.log" 2>&1 ||
+            { cat "$OUT/jpeg.log"; exit 1; }
+        frames=("$OUT"/jpeg/frame*.jpg)
+    fi
+    "$OUT/v4l2-writer" $SRC_DEV "$1" 640 480 30 "${frames[@]}" > "$OUT/source.log" 2>&1 &
     PIDS+=($!)
-    # exclusive_caps=1: the device offers capture once its writer is attached
-    wait_for 15 "v4l2-ctl -d $SRC_DEV --all 2> /dev/null | grep -q 'Video Capture'" ||
-        { echo "the source device has no writer" >&2; cat "$OUT/source.log"; exit 1; }
+    # exclusive_caps=1: the device offers capture once its writer wrote. Its Device Caps (not
+    # "Streaming Parameters Video Capture", which v4l2-ctl --all always prints)
+    wait_for 15 "grep -q 'frame 0 written' '$OUT/source.log' && v4l2-ctl -d $SRC_DEV --info 2> /dev/null | sed -n '/Device Caps/,\$p' | grep -q 'Video Capture'" ||
+        { echo "FAIL  the source device $SRC_DEV offers no capture: its writer did not start" | tee -a "$OUT/result.txt"
+          cat "$OUT/source.log"; v4l2-ctl -d $SRC_DEV --all; exit 1; }
     v4l2-ctl -d $SRC_DEV --all > "$OUT/source-device.txt" 2>&1 || true
-    mark "source camera ($1) on $SRC_DEV"
+    mark "source camera ($1) on $SRC_DEV: $(head -1 "$OUT/source.log")"
 }
 
 client() {  # client [extra /dvc options]: the kit's client with its V4L2 camera, or the gst one
@@ -186,10 +200,20 @@ case $CASE in
         host
         check "the host found the FreeRDP Camera" "grep -q 'camera: v4l2loopback /dev/video41' '$OUT/host.log'"
         client
+        # a hard precondition: the client's camera is the Test Source, else nothing below means
+        # anything (run 46079009433: with no source, the client offered the FreeRDP Camera alone)
+        if ! wait_for 30 "grep -q 'camera: \"Test Source\" of client .* owns the virtual camera' '$OUT/host.log'"; then
+            echo "FAIL  the client's Test Source does not own the camera; the client's cameras as the host saw them:" |
+                tee -a "$OUT/result.txt"
+            camera_lines | grep -F ' of client ' | sed 's/^.*\]: /      /' | tee -a "$OUT/result.txt"
+            camera_lines > "$OUT/host-camera-lines.txt"
+            exit 1
+        fi
+        echo "PASS  the client's Test Source owns the camera" | tee -a "$OUT/result.txt"
         wait_for 30 "grep -q 'camera: \"Test Source\" of client .*: chose' '$OUT/host.log'"
-        check "the client's Test Source owns the camera" "grep -q 'camera: \"Test Source\" of client .* owns the virtual camera' '$OUT/host.log'"
-        check "the FreeRDP Camera, announced by the client too, is refused (no loop)" \
-            "grep -q 'camera: \"FreeRDP Camera\" of client .* refused: another client owns the camera' '$OUT/host.log'"
+        # the client skips it (rdpecam_is_freerdp_camera); the host would refuse it too
+        check "the FreeRDP Camera did not become the client's camera (no loop)" \
+            "! grep -q 'camera: \"FreeRDP Camera\" of client .* owns the virtual camera' '$OUT/host.log'"
         format=YUY2
         [ "$CASE" = mjpg ] && format=MJPG
         check "the host chose $format" "grep -q 'camera: \"Test Source\" of client .*: chose $format 640x480' '$OUT/host.log'"
@@ -249,6 +273,21 @@ case $CASE in
         read_camera 150 "$OUT/read-1.yuyv"
         check "an app reads >= 60 changing frames, decoded by the host's FFmpeg" \
             "python3 '$HERE/frames.py' '$OUT/read-1.yuyv' $WIDTH $HEIGHT 60 | tee '$OUT/frames-1.txt'"
+        ;;
+    owncamera)
+        # a client offering a camera named "FreeRDP Camera" (the CI-only client: a GStreamer camera
+        # given that name): the host refuses it, it never owns the camera
+        labels
+        xserver 91
+        xserver 92
+        host
+        echo "videotestsrc is-live=true pattern=ball ! video/x-raw,width=640,height=480,framerate=30/1" > "$OUT/pipeline.txt"
+        client "sys:gst,pipeline-file:$OUT/pipeline.txt,name:FreeRDP Camera"
+        wait_for 30 "grep -q 'camera: \"FreeRDP Camera\" of client' '$OUT/host.log'"
+        check "the host refuses a camera named FreeRDP Camera: exactly one line" \
+            "[ \"\$(grep -c -F 'camera: \"FreeRDP Camera\" of client 127.0.0.1 refused: it is a FreeRDP server'\"'\"'s own camera' '$OUT/host.log')\" = 1 ]"
+        check "it never owns the camera, no Start Streams" \
+            "! grep -q -E 'owns the virtual camera|Start Streams' '$OUT/host.log'"
         ;;
     *) echo "unknown case $CASE" >&2; exit 2 ;;
 esac
