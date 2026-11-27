@@ -1,0 +1,74 @@
+# probe-camera-winvcam: a record, not a kit test. Can a GitHub-hosted Windows runner
+# register a Media Foundation virtual camera (MFCreateVirtualCamera: Microsoft documents
+# Windows 11 build 22000 as the minimum client and names no server version), and can an
+# app read frames from it through Frame Server? W0 of the shadow server's virtual camera
+# (freerdp-comp-camera-g1, 2026-11-27). Publishes nothing; the artifacts carry the evidence
+# and each job's summary has a table of its results.
+#
+# Our code only (test/probe-camera-winvcam, Apache-2.0): a minimal media source DLL with a
+# moving NV12 test pattern, built with the image's MSVC and registered for the run, and a
+# probe that reads it in process, then as a virtual camera. A missing API or a camera
+# Windows refuses is a result; the job fails only when our own code does.
+name: probe-camera-winvcam
+
+on:
+  push:
+    branches: [probe-camera-winvcam]
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: windows-2025   # Windows Server 2025, build 26100
+            arch: x64
+          - runner: windows-2022   # Windows Server 2022, build 20348
+            arch: x64
+          - runner: windows-11-arm # Windows 11 Enterprise on Arm, build 26200
+            arch: arm64
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 20
+    env:
+      OUT: ${{ github.workspace }}\probe-out
+      PROBE: ${{ github.workspace }}\test\probe-camera-winvcam\probe-camera-winvcam.ps1
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: 1. Windows, camera services, MFCreateVirtualCamera export
+        shell: pwsh
+        run: '& $env:PROBE -Stage info -Arch ${{ matrix.arch }} -Out $env:OUT -Runner ${{ matrix.runner }}'
+
+      - name: 2. Start Frame Server if stopped
+        shell: pwsh
+        run: '& $env:PROBE -Stage start -Arch ${{ matrix.arch }} -Out $env:OUT -Runner ${{ matrix.runner }}'
+
+      - name: 3. Build and register the media source (MSVC of the image)
+        shell: pwsh
+        run: '& $env:PROBE -Stage build -Arch ${{ matrix.arch }} -Out $env:OUT -Runner ${{ matrix.runner }}'
+
+      - name: 4. Read it in process, then as a virtual camera
+        timeout-minutes: 10
+        shell: pwsh
+        run: '& $env:PROBE -Stage probe -Arch ${{ matrix.arch }} -Out $env:OUT -Runner ${{ matrix.runner }}'
+
+      - name: 5. Remove the camera and the registration
+        if: always()
+        shell: pwsh
+        run: '& $env:PROBE -Stage cleanup -Arch ${{ matrix.arch }} -Out $env:OUT -Runner ${{ matrix.runner }}'
+
+      - name: Summary
+        if: always()
+        shell: pwsh
+        run: '& $env:PROBE -Stage summary -Arch ${{ matrix.arch }} -Out $env:OUT -Runner ${{ matrix.runner }}'
+
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: probe-camera-winvcam-${{ matrix.runner }}
+          path: probe-out
+          retention-days: 7
+          if-no-files-found: warn
