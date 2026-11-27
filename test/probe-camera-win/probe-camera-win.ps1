@@ -22,9 +22,17 @@
 #    video capture redirection" not in force (fDisableCameraRedir=0 under its documented key), the
 #    Frame Server service started. Nothing more is documented (see probe-camera-win.yml).
 # 2. The MJPEG decoder MFT (no session).
-# 3. The session, the reader inside it, the client; on Windows 11 the console session is
-#    disconnected first (one active session there). The session stays connected until the
+# 3. The session, the reader inside it, the client. The session stays connected until the
 #    reader's RESULT; everything added for it is removed at the end, whatever happened.
+#    -TakeOverConsole (the windows-11-arm job only; the RM's one try of option A): Windows 11
+#    has one active session, and another user's sign-in waits on the "another user is signed
+#    in" dialog (runs 2 and 3, LOGON_MSG_BUMP_OPTIONS; tsdiscon left the console Active). So no
+#    test user: runneradmin gets a random password for this run (masked first, never logged,
+#    given to the client on its command line only), and the client signs in as runneradmin,
+#    which takes the console session over: this script's own session becomes the RDP session,
+#    and the script starts the reader in it. That session is never signed out (the runner
+#    lives in it). If it does not become the RDP session, that is the result: "A failed: ...";
+#    nothing further is tried.
 # 4. The verdicts: PASS/FAIL lines in <out>\checks.txt, facts in <out>\host.txt, one line for the
 #    job summary in <out>\result.txt. It fails when a check fails. The client logs every dynamic
 #    channel the host opens (drdynvc at DEBUG, <out>\dvc-channels.txt): the first question is
@@ -32,14 +40,16 @@
 #    (runs 1 and 2) has its camera checks as INFO lines: a recorded fact, not a failure. The
 #    MS-RDPECAM messages (Start Streams Request 0x0F, Sample Request 0x11, Sample Response 0x12,
 #    Sample Error Response 0x13) are counted in the client's log.
-param([string]$ClientDir, [string]$Assets, [string]$Out)
+param([string]$ClientDir, [string]$Assets, [string]$Out, [switch]$TakeOverConsole)
 $ErrorActionPreference = "Stop"
 New-Item -ItemType Directory -Force -Path $Out | Out-Null
 $ClientDir = (Resolve-Path $ClientDir).Path
 $Assets = (Resolve-Path $Assets).Path
 $Out = (Resolve-Path $Out).Path
-$user = "kitcam"
+$user = if ($TakeOverConsole) { "runneradmin" } else { "kitcam" }
 $pass = "Camera-7" + [guid]::NewGuid().ToString("N").Substring(0, 12)
+# the password is a secret of this run: masked in the job's log before anything can print it
+Write-Host "::add-mask::$pass"
 $frames = 60
 $cameraName = "Kit Test Camera"
 $arch = if (($env:PROCESSOR_ARCHITECTURE -eq "ARM64") -or ($env:PROCESSOR_ARCHITEW6432 -eq "ARM64")) { "aarch64" } else { "x86_64" }
@@ -133,24 +143,28 @@ Check "MJPEG decoder MFT: one MJPG frame decoded to NV12" ($mjRc -eq 0) "$mj"
 $isServer = $cv.InstallationType -like "Server*"
 Set-ItemProperty $ts fDenyTSConnections 0
 Fact "set: fDenyTSConnections=$(RegValue $ts fDenyTSConnections)"
-New-LocalUser -Name $user -Password (ConvertTo-SecureString $pass -AsPlainText -Force) -PasswordNeverExpires | Out-Null
-Add-LocalGroupMember -Group "Remote Desktop Users" -Member $user
-$cred = New-Object PSCredential $user, (ConvertTo-SecureString $pass -AsPlainText -Force)
-# the user's profile made now, so the session's first sign-in is quick
-Start-Process cmd -Credential $cred -LoadUserProfile -ArgumentList "/c", "exit" -Wait -WindowStyle Hidden
-Check "rdp: Windows' own Remote Desktop listens on 3389" (Until 30 { Listening 3389 })
-
-# Windows 11 (a client edition) has one active session: another user's sign-in shows the
-# "another user is signed in" (bump) dialog and waits on it (run 2: LOGON_MSG_BUMP_OPTIONS, then a
-# logoff after 30 s, no session). The console session (the runner's) is disconnected first; its
-# programs, this script among them, go on running.
-if (-not $isServer) {
-    Fact "sessions before: $((quser 2>$null) -join ' | ')"
-    tsdiscon console 2>&1 | Out-Null
-    Fact "tsdiscon console: exit $LASTEXITCODE"
-    Start-Sleep -Seconds 2
-    Fact "sessions after: $((quser 2>$null) -join ' | ')"
+if ($TakeOverConsole) {
+    Fact "option A: the job runs as $env:USERNAME; sessions: $((quser 2>$null) -join ' | ')"
+    if ($env:USERNAME -ne "runneradmin") {
+        Result "$runner`: A failed: the job does not run as runneradmin but as $env:USERNAME; nothing changed"
+        throw "A failed: the job does not run as runneradmin"
+    }
+    # its output is a status line only; the password is on the command line, not logged
+    net user runneradmin $pass | Out-Null
+    $changed = ($LASTEXITCODE -eq 0)
+    Fact "runner change: runneradmin password changed for this run: $(if ($changed) { 'yes' } else { "no (net user exit $LASTEXITCODE)" })"
+    if (-not $changed) {
+        Result "$runner`: A failed: the runneradmin password could not be set (net user exit $LASTEXITCODE)"
+        throw "A failed: net user"
+    }
+} else {
+    New-LocalUser -Name $user -Password (ConvertTo-SecureString $pass -AsPlainText -Force) -PasswordNeverExpires | Out-Null
+    Add-LocalGroupMember -Group "Remote Desktop Users" -Member $user
+    $cred = New-Object PSCredential $user, (ConvertTo-SecureString $pass -AsPlainText -Force)
+    # the user's profile made now, so the session's first sign-in is quick
+    Start-Process cmd -Credential $cred -LoadUserProfile -ArgumentList "/c", "exit" -Wait -WindowStyle Hidden
 }
+Check "rdp: Windows' own Remote Desktop listens on 3389" (Until 30 { Listening 3389 })
 
 # the reader, in the user's session: (b) an HKLM Run entry, which explorer runs at every
 # interactive sign-in, the RDP session's included (--only-user: the others leave at once, before
@@ -159,6 +173,9 @@ if (-not $isServer) {
 # (a), the all-users Startup folder, is run by explorer too, later; (c), /shell:, is not used:
 # no Microsoft document says a client edition honours it. --match "": the first camera there;
 # it logs them all, so the record says what Windows names a redirected camera.
+# -TakeOverConsole: the RDP sign-in reconnects to a session that runs already, so no Run entry
+# fires there; the script starts the reader itself, in its own session, once that is the RDP
+# session (the Run entry stays, --only-user runneradmin).
 $dir = "C:\kitcam"
 New-Item -ItemType Directory -Force -Path "$dir\out" | Out-Null
 Copy-Item $reader "$dir\mf-camera-reader.exe"
@@ -178,7 +195,11 @@ function TaskState($when) {
         Tee-Object -FilePath "$Out\task.txt" -Append
 }
 function ClientLog { if (Test-Path "$Out\client.wlog") { Get-Content "$Out\client.wlog" -Raw -ErrorAction SilentlyContinue } else { "" } }
-function UserSession { [bool]((quser 2>$null) -match "^\s*>?$user\s+\S+\s+[0-9]+\s+Active") }
+# the user's session Active; with -TakeOverConsole it must be on rdp-tcp (the console taken over)
+function UserSession {
+    $name = if ($TakeOverConsole) { "rdp-tcp#[0-9]+" } else { "\S+" }
+    [bool]((quser 2>$null) -match "^\s*>?$user\s+$name\s+[0-9]+\s+Active")
+}
 
 # the client, its camera the file, to 127.0.0.2 (as windows-host.ps1: this PC's own server
 # refuses 127.0.0.1); its log in <out>\client.wlog, the camera channel's tags at DEBUG
@@ -203,13 +224,24 @@ try {
     # signed in: the user's session Active, while the client is still connected
     $session = Until 90 { (UserSession) -or ($client.HasExited) }
     $session = $session -and -not $client.HasExited -and (UserSession)
-    Check "rdp: the client's session signed in (Active while connected)" $session ((quser 2>$null) -join " | ")
+    $sessionName = if ($TakeOverConsole) { "the runneradmin session on rdp-tcp, Active while connected" } else { "the client's session signed in (Active while connected)" }
+    Check "rdp: $sessionName" $session ((quser 2>$null) -join " | ")
     if ((ClientLog) -match "LOGON_MSG_BUMP_OPTIONS") { Fact "the host showed the 'another user is signed in' dialog (LOGON_MSG_BUMP_OPTIONS)" }
 
-    # the reader: the Run entry first, the task by hand when it did not start
+    # the reader: the Run entry first, the task by hand when it did not start; with
+    # -TakeOverConsole the script itself, in its session, once that is the RDP session
     $readerLog = "$dir\out\reader.log"
     $how = "the HKLM Run entry"
-    if (-not (Until 60 { Test-Path $readerLog })) {
+    if ($TakeOverConsole) {
+        if ($session) {
+            Start-Process -FilePath "$dir\mf-camera-reader.exe" -WindowStyle Hidden `
+                -ArgumentList "$readerArgs --log `"$readerLog`""
+            $how = "this script, in its own session (the console session the RDP sign-in took over)"
+        } else {
+            $how = "nothing: the session did not become the RDP session"
+        }
+        $null = Until 30 { Test-Path $readerLog }
+    } elseif (-not (Until 60 { Test-Path $readerLog })) {
         TaskState "before the start by hand"
         Start-ScheduledTask -TaskName "kit-camera-reader"
         $readerLog = "$dir\out\reader-task.log"
@@ -236,9 +268,14 @@ try {
 finally {
     # the end, whatever happened: the client closed (its log then complete), the session signed
     # out, the Run entry and the task removed (the workflow's cleanup step does it again)
+    # (-TakeOverConsole: never signed out, the runner lives in that session; closing the client
+    # only disconnects it)
     if ($client -and -not $client.HasExited) { Stop-Process -Id $client.Id -Force }
-    (quser 2>$null) -match "^\s*>?$user\s" | ForEach-Object {
-        $id = ($_ -split "\s+" | Where-Object { $_ -match "^\d+$" })[0]; if ($id) { logoff $id } }
+    if (-not $TakeOverConsole) {
+        (quser 2>$null) -match "^\s*>?$user\s" | ForEach-Object {
+            $id = ($_ -split "\s+" | Where-Object { $_ -match "^\d+$" })[0]; if ($id) { logoff $id } }
+    }
+    Fact "sessions at the end: $((quser 2>$null) -join ' | ')"
     Remove-ItemProperty -Path $runKey -Name "KitCameraReader" -ErrorAction SilentlyContinue
     Unregister-ScheduledTask -TaskName "kit-camera-reader" -Confirm:$false -ErrorAction SilentlyContinue
     Fact "removed: the Run entry ($(-not (Get-ItemProperty $runKey -Name KitCameraReader -ErrorAction SilentlyContinue))), the task ($(-not (Get-ScheduledTask -TaskName kit-camera-reader -ErrorAction SilentlyContinue)))"
@@ -293,6 +330,6 @@ Check "client: the mf backend loaded" ($log -match "Loaded mf HAL for ecam")
 Check "client: no error from the camera channel, no Sample Error Response" (($errors.Count -eq 0) -and ($sampleErrors -eq 0)) "$($errors.Count) error(s)$(if ($errors) { ': ' + $errors[0] }), x$sampleErrors"
 
 Get-Content "$Out\checks.txt"
-$verdict = if ($fails) { "$fails check(s) failed" } elseif ($noCamera) { "no camera redirection on this host (recorded); the rest passed" } else { "camera redirection works" }
+$verdict = if ($TakeOverConsole -and -not $session) { "A failed: the runneradmin session did not become the RDP session ($(if ((ClientLog) -match 'LOGON_MSG_BUMP_OPTIONS') { 'the host showed the bump dialog' } else { 'see host.txt' }))" } elseif ($fails) { "$fails check(s) failed" } elseif ($noCamera) { "no camera redirection on this host (recorded); the rest passed" } else { "camera redirection works" }
 Result "$runner`: $verdict; host opened RDCamera_Device_Enumerator: $(if ($enumerator) { 'yes' } else { 'no' }); reader: $result; mjpeg: $mj"
 if ($fails -gt 0) { throw "$fails check(s) failed" }
