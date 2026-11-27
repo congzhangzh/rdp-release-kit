@@ -55,6 +55,11 @@
    "zh": "FreeRDP Web 连接 macOS 主机，AV1",
    "ja": "macOS ホストへの FreeRDP Web、AV1",
    "fr": "FreeRDP Web sur un hôte macOS, AV1"
+  },
+  "FreeRDP shadow server + Windows Server 2025, native client, AV1": {
+   "zh": "FreeRDP 影子服务器 + Windows Server 2025，原生客户端，AV1",
+   "ja": "FreeRDP シャドウサーバー + Windows Server 2025、ネイティブ クライアント、AV1",
+   "fr": "Serveur miroir FreeRDP + Windows Server 2025, client natif, AV1"
   }
  },
  "captions": {
@@ -112,6 +117,11 @@
    "zh": "Windows 上的 freerdp-tk（Server 2025，一台 CI 机器）：在 PowerShell 中解压 kit 的 Windows 客户端 zip，从中启动 freerdp-tk，连接同一台电脑上 Windows 自带的远程桌面：用 Win+R 打开记事本，然后在会话里的 Firefox 中播放网页视频和 WebGL，声音经会话传来；断开后再次打开 freerdp-tk，用 Windows 凭据管理器中的密码打开保存的连接。Big Buck Bunny © Blender Foundation，CC BY 3.0；WebGL Aquarium © Google，BSD。",
    "ja": "Windows（Server 2025、CI マシン）上の freerdp-tk です。kit の Windows クライアントを PowerShell で zip から展開し、そこから freerdp-tk を起動して、同じ PC 上の Windows 標準のリモート デスクトップに接続します。Win+R からメモ帳を開き、セッション内の Firefox で Web 動画と WebGL を再生し、音声はセッション経由で届きます。切断してから freerdp-tk をもう一度開き、Windows の資格情報マネージャーのパスワードで保存した接続を開きます。Big Buck Bunny © Blender Foundation、CC BY 3.0。WebGL Aquarium © Google、BSD。",
    "fr": "freerdp-tk sur Windows (Server 2025, une machine de CI) : le client Windows du kit décompressé depuis son zip dans PowerShell, freerdp-tk lancé depuis celui-ci, une connexion au Bureau à distance de Windows sur le même PC : le Bloc-notes depuis Win+R, puis Firefox dans la session avec une vidéo web et du WebGL, le son passant par la session ; déconnexion, freerdp-tk à nouveau, et la connexion enregistrée ouverte avec le mot de passe du Gestionnaire d’identification de Windows. Big Buck Bunny © Blender Foundation, CC BY 3.0 ; WebGL Aquarium © Google, BSD."
+  },
+  "The kit's native client (sdl-freerdp) on a Windows Server 2025 machine of the CI, to FreeRDP's shadow server on the same machine (loopback, no network in between): the server shares only the first monitor (/monitors:0), where Edge plays web video, and the client's window sits on a second, virtual monitor, so it doesn't show itself. AV1 4:2:0, decoded in software (dav1d: the CI machine has no GPU); the label's rate is the server encoder's own (the CI machine has no sound card, so no sound here). Big Buck Bunny © Blender Foundation, CC BY 3.0.": {
+   "zh": "在 CI 的一台 Windows Server 2025 机器上，套件的原生客户端（sdl-freerdp）连接同一台机器上的 FreeRDP 影子服务器（本机回环，中间没有网络）：服务器只共享第一个显示器（/monitors:0），Edge 在那里播放网页视频；客户端窗口放在第二个虚拟显示器上，所以画面里不会出现它自己。AV1 4:2:0，软件解码（dav1d：CI 机器没有 GPU）；标签上的帧率是服务器编码器自己的数字（CI 机器没有声卡，所以这里没有声音）。Big Buck Bunny © Blender Foundation，CC BY 3.0。",
+   "ja": "CI の Windows Server 2025 マシン上で、キットのネイティブ クライアント（sdl-freerdp）から同じマシンの FreeRDP シャドウサーバーに接続します（ループバックで、間にネットワークはありません）。サーバーは 1 台目のモニター（/monitors:0）だけを共有し、そこで Edge が Web 動画を再生します。クライアントのウィンドウは 2 台目の仮想モニターにあるため、画面に自分自身は映りません。AV1 4:2:0、ソフトウェアでデコードしています（dav1d：CI マシンには GPU がありません）。ラベルのレートはサーバーのエンコーダー自身の値です（CI マシンにはサウンドカードがないため、音声はありません）。Big Buck Bunny © Blender Foundation、CC BY 3.0。",
+   "fr": "Le client natif du kit (sdl-freerdp), sur une machine Windows Server 2025 de la CI, vers le serveur miroir de FreeRDP sur la même machine (boucle locale, aucun réseau entre les deux) : le serveur ne partage que le premier écran (/monitors:0), où Edge lit une vidéo web, et la fenêtre du client se trouve sur un second écran, virtuel, pour qu’elle ne se montre pas elle-même. AV1 4:2:0, décodé en logiciel (dav1d : la machine de CI n’a pas de GPU) ; le débit de l’étiquette est celui de l’encodeur du serveur (la machine de CI n’a pas de carte son, donc pas de son ici). Big Buck Bunny © Blender Foundation, CC BY 3.0."
   }
  }
 }

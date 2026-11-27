@@ -306,3 +306,78 @@ jobs:
           name: windows-host-two-monitors
           path: out
           retention-days: 7
+
+  # Demo 1.1 of the product plan (Boss Cong's go, 2026-11-27): the native Windows client to the
+  # shadow server, AV1 4:2:0, web video playing (test/demo-win-native.ps1): the page on the first
+  # monitor, the client's window on a second, virtual one (the pinned driver above), the server
+  # sharing only the first. windows-native.mp4/.jpg come out only when the session passes the
+  # demo's bar (the server's mean at least 15/s and more), and kit.yml's release adds them to
+  # demo.json when they are there. A record otherwise: never a failure of the round
+  native-demo:
+    needs: [build, client]
+    if: ${{ !cancelled() && needs.build.result == 'success' && (needs.client.result == 'success' || needs.client.result == 'skipped') }}
+    runs-on: windows-2025
+    continue-on-error: true
+    timeout-minutes: 30
+    env:
+      VDD_SHA256: e24210692b442b39af763536330ce78b423f19342b7a7792c26de3944e418b3a
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        with:
+          name: freerdp-host-windows-x86_64
+          path: dl/host
+      - uses: actions/download-artifact@v8
+        with:
+          name: sdl3-freerdp-windows-x86_64
+          path: dl/client
+      - uses: actions/download-artifact@v8
+        with:
+          name: windows-host-demo-media
+          path: dl/media
+      - id: vdd
+        uses: actions/cache@v6
+        with:
+          path: dl/vdd/vdd.zip
+          key: vdd-25.7.23-x86-${{ env.VDD_SHA256 }}
+      - if: steps.vdd.outputs.cache-hit != 'true'
+        name: The pinned driver (cache miss)
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path dl/vdd | Out-Null
+          Invoke-WebRequest -Uri 'https://github.com/VirtualDrivers/Virtual-Display-Driver/releases/download/25.7.23/VirtualDisplayDriver-x86.Driver.Only.zip' -OutFile dl/vdd/vdd.zip
+          $h = (Get-FileHash -Algorithm SHA256 dl/vdd/vdd.zip).Hash.ToLowerInvariant()
+          if ($h -ne $env:VDD_SHA256) { Remove-Item dl/vdd/vdd.zip; throw "the driver zip is $h, not the pinned one" }
+      - name: Unpack, the device node tool (MSVC of the image)
+        shell: pwsh
+        run: |
+          Expand-Archive (Get-ChildItem dl/host/*.zip | Select-Object -First 1).FullName -DestinationPath host
+          Expand-Archive (Get-ChildItem dl/client/*.zip | Select-Object -First 1).FullName -DestinationPath client
+          New-Item -ItemType Directory -Force -Path tools | Out-Null
+          $vs = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -property installationPath
+          $vcvars = Join-Path $vs 'VC\Auxiliary\Build\vcvarsall.bat'
+          $src = Join-Path $env:GITHUB_WORKSPACE 'test\windows-host-allmon\devnode.c'
+          cmd /c "`"$vcvars`" x64 >nul && cd /d tools && cl /nologo /W3 /O2 `"$src`" setupapi.lib newdev.lib"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: The native client to the shadow server, recorded
+        timeout-minutes: 15
+        shell: pwsh
+        run: >
+          ./test/demo-win-native.ps1 (Get-ChildItem host -Directory | Select-Object -First 1).FullName
+          (Get-ChildItem client -Directory | Select-Object -First 1).FullName dl/media out
+          dl/vdd/vdd.zip $env:VDD_SHA256 tools/devnode.exe
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: windows-host-native-demo-test
+          path: out
+          retention-days: 7
+      # the demo itself, only when it passed its bar (the release takes it when it is there)
+      - uses: actions/upload-artifact@v7
+        with:
+          name: windows-native-demo
+          path: |
+            out/windows-native.mp4
+            out/windows-native.jpg
+          if-no-files-found: ignore
+          retention-days: 3

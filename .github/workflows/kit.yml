@@ -981,6 +981,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           build/newest-artifact.sh windows-host-demo dist/demo
+          # demo 1.1, only when windows-host.yml's native-demo passed its bar
+          build/newest-artifact.sh windows-native-demo dist/demo --optional
           build/newest-artifact.sh demo-release dist/demo
           build/newest-artifact.sh mac-host-test dist/mac-host-test --optional
       # the Linux host (x86_64 and aarch64), each job's newest attempt too: the tarballs
@@ -1026,6 +1028,14 @@ jobs:
                  src: "demo/mac-host.mp4", poster: "demo/mac-host.jpg",
                  caption: "The kit'"'"'s macOS host (FreeRDP-Shadow.app, ScreenCaptureKit) on a GitHub macOS runner, and the kit'"'"'s macOS client connected to it on the same Mac, so the client shows the screen it is part of; apps open and close; the picture in AV1. The runner has no sound card, so no sound here."} as $m
                 | .mac = [$m] | .videos += [$m]' dist/demo/demo.json > dist/demo/demo.json.new && mv dist/demo/demo.json.new dist/demo/demo.json
+          fi
+          # demo 1.1 (Boss Cong's go, 2026-11-27; the product owner's words): the native Windows
+          # client to the shadow server, at the end of the order, when the round recorded it
+          if [ -s dist/demo/windows-native.mp4 ]; then
+            jq --arg t "FreeRDP shadow server + Windows Server 2025, native client, AV1" \
+               --arg c "The kit's native client (sdl-freerdp) on a Windows Server 2025 machine of the CI, to FreeRDP's shadow server on the same machine (loopback, no network in between): the server shares only the first monitor (/monitors:0), where Edge plays web video, and the client's window sits on a second, virtual monitor, so it doesn't show itself. AV1 4:2:0, decoded in software (dav1d: the CI machine has no GPU); the label's rate is the server encoder's own (the CI machine has no sound card, so no sound here). Big Buck Bunny © Blender Foundation, CC BY 3.0." \
+               '.videos += [{title: $t, src: "demo/windows-native.mp4", poster: "demo/windows-native.jpg", caption: $c}]' \
+              dist/demo/demo.json > dist/demo/demo.json.new && mv dist/demo/demo.json.new dist/demo/demo.json
           fi
           # freerdp-tk on Windows (test/client-demo/windows.ps1), with the other freerdp-tk
           # videos on Get a client, when the run made it
