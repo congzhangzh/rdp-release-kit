@@ -55,7 +55,7 @@ session() {  # session <name> <codec expected> [client options...]
         ( sleep 3; screencapture -x -V 15 "$OUT/mac-host.mov" ) > "$OUT/mac-host-video.log" 2>&1 &
         REC=$!
     fi
-    WLOG_FILEAPPENDER_OUTPUT_FILE_NAME="$name.wlog" "$CLIENT" /v:127.0.0.1:4489 /u:probe /p:probe \
+    WLOG_FILEAPPENDER_OUTPUT_FILE_NAME="$name.wlog" "$CLIENT" /v:127.0.0.1:${PORT:-4489} /u:probe /p:probe \
         /cert:ignore /sec:tls /size:1280x720 "$@" > "$OUT/$name.out" 2>&1 &
     c=$!
     sleep 20
@@ -120,6 +120,49 @@ if alive; then
     check "the host is still running after the AV2 session" $ok
 else
     echo "SKIP  av2: the host is gone"
+fi
+# HEVC 4:2:0 in the kit's own macOS client: the host encodes it with VideoToolbox, the client
+# decodes it with VideoToolbox (both WITH_GFX_AZURE). HEVC is opt-in on both sides: a server of
+# its own with /gfx-hevc:i420 on 4491, and two sessions:
+#  - hevc: /gfx-codec-order:HEVC,AVC420, AVC on as the fallback (what a user types);
+#  - hevc-avc-off: /gfx:AV2:off,AV1:off,HEVC:i420, no AVC asked for, so the caps say
+#    AVC_DISABLED (the path of a client whose H.264 is off, FreeRDP 7dca5d051); AV1 and AV2 off,
+#    or the server takes them first (HEVC in /gfx: turns no other codec off)
+# Each one: 11.x confirmed with HEVC_ENABLE, HEVC420 frames, no failed decode, and the client's
+# log names its decoder ("HEVC decoder: VideoToolbox (hardware)", FreeRDP's h264.c)
+hevc_ok=1
+for b in "$SERVER" "$CLIENT"; do
+    "$b" /buildconfig 2> /dev/null | tr " " "\n" | grep -qx "WITH_GFX_AZURE=ON" || hevc_ok=0
+done
+check "native HEVC: the host and the client are built with WITH_GFX_AZURE" $hevc_ok
+if [ $hevc_ok = 1 ]; then
+    WLOG_FILEAPPENDER_OUTPUT_FILE_NAME=server-hevc.wlog "$SERVER" /bind-address:127.0.0.1 /port:4491 \
+        /sec:tls /gfx-av1 /gfx-av2:off -gfx-avc444 /gfx-hevc:i420 -auth > "$OUT/server-hevc.out" 2>&1 &
+    HSRV=$!
+    for i in $(seq 1 30); do listening 4491 && break; sleep 1; done
+    listening 4491 && ok=1 || ok=0
+    check "native HEVC: the server with /gfx-hevc:i420 listens" $ok
+    for s in "hevc /gfx-codec-order:HEVC,AVC420" "hevc-avc-off /gfx:AV2:off,AV1:off,HEVC:i420"; do
+        name=${s%% *}
+        PORT=4491 session "$name" HEVC420 "${s#* }"
+        log="$OUT/$name.wlog"
+        grep -E "RecvCapsConfirmPdu: version: RDPGFX_CAPVERSION_11[0-9]+ .*[{|]HEVC_ENABLE[|}]" "$log" \
+            2> /dev/null > /dev/null && ok=1 || ok=0
+        check "$name: the server confirms 11.x with HEVC_ENABLE" $ok \
+            "$(grep -m1 -oE 'RecvCapsConfirmPdu: version: .*' "$log" 2> /dev/null)"
+        if [ "$name" = hevc-avc-off ]; then
+            grep -qE "RecvCapsConfirmPdu: version: .*[{|]AVC_DISABLED[|}]" "$log" 2> /dev/null && ok=1 || ok=0
+            check "$name: AVC_DISABLED in the confirm" $ok
+        fi
+        n=$(grep -cE "VideoToolbox HEVC decode failed|VideoToolbox HEVC decoder requires a key picture" "$log" 2> /dev/null || true)
+        [ "${n:-0}" = 0 ] && ok=1 || ok=0
+        check "$name: no failed HEVC decode" $ok "${n:-0} failed"
+        dec=$(grep -m1 -oE "HEVC decoder: [^ ]+ \([a-z]+\)" "$log" 2> /dev/null)
+        case "$dec" in "HEVC decoder: VideoToolbox ("*) ok=1 ;; *) ok=0 ;; esac
+        check "$name: the client names its decoder" $ok "${dec:-no decoder line}"
+    done
+    grep -ohE "VideoToolbox HEVC encoder: [0-9]+x[0-9]+.*" "$OUT/server-hevc.wlog" 2> /dev/null | grep -v ": 256x256 " | tail -2
+    kill $HSRV 2> /dev/null; sleep 2
 fi
 # the demo video, the Windows host's way (test/windows-host.ps1): FreeRDP Web in headless
 # Chrome, which no screen shows, to a server of its own with AV1 only (the page takes AV2
