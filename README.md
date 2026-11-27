@@ -171,7 +171,7 @@ are made for.
 | Linux, no display | freerdp-tk's window | Tk draws through X11 (on a Wayland desktop through XWayland), so it needs a desktop session. The client itself still runs from a terminal with `/v:`. |
 | Linux on Arch, ARM64 | not tested | Arch publishes x86_64 images only, so the smoke test runs Arch on x86_64 alone. |
 | Windows 7, 8, 8.1; 32-bit x86 | not supported; not built | The client uses the Universal C Runtime that is part of Windows 10 and later (llvm-mingw's UCRT target), and the bundled CPython 3.13 is built for Windows 10 and later. 32-bit Windows is not built. |
-| macOS, a browser download | starts directly | The client, its Python and the server are signed with our Developer ID and notarized by Apple, so Gatekeeper accepts a downloaded copy. |
+| macOS, a browser download | starts only after `xattr -dr com.apple.quarantine <folder>` | The client and its Python are signed ad hoc, not notarized by Apple (that needs a paid developer account), so Gatekeeper refuses a quarantined download. |
 | macOS 11 and older | not supported | The client is built for macOS 12 (`MACOSX_DEPLOYMENT_TARGET`), the oldest release with security updates until 2024 that every Apple Silicon Mac and Intel Macs from 2015 run. |
 | xrdp packages | RHEL/Alma/Rocky, openSUSE; releases older than those listed | Not built (the kit's lists, `distros.list` and `deps/`, cover Debian, Ubuntu and Fedora); EPEL has an xrdp for RHEL's family. xorgxrdp is an Xorg driver that must match its Xorg server exactly, so each release gets its own build. |
 | xrdp packages | Debian 12 | Not built since the kit builds one xrdp, ours: its GNOME backend uses Mutter's remote desktop API of GNOME 46 and newer, and Debian 12 has GNOME 43. |

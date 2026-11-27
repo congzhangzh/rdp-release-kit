@@ -18,5 +18,4 @@ kit-readme	README.md	en	Both are signed with our Developer ID and notarized by A
 kit-readme	README.zh.md	zh-Hans	两者都用我们的 Developer ID 签名，并经过 Apple 公证：改用这种签名后的第一次更新会再询问一次这两项权限，之后的更新会保留它们。
 kit-readme	README.ja.md	ja	どちらも私たちのDeveloper IDで署名され、Appleの公証を受けています。この署名に切り替えた最初の更新で2つの許可をもう一度求め、以降の更新では許可が保持されます。
 kit-readme	README.fr.md	fr	Les deux sont signés avec notre Developer ID et notariés par Apple : la première mise à jour signée ainsi redemande une fois les deux autorisations, les suivantes les conservent.
-kit-readme	README.md	en	| macOS, a browser download | starts directly | The client, its Python and the server are signed with our Developer ID and notarized by Apple, so Gatekeeper accepts a downloaded copy. |
 kit-readme	README.md	en	a Developer ID signature, notarized

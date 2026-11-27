@@ -85,6 +85,12 @@ def po_readme(path):
     return out
 
 
+# README.md's Gatekeeper row says a browser download "starts directly": true only once the
+# probe's signed job proved a quarantined download opens. Until then the row stays as it is and is
+# no generated text; the held patch remove-quarantine-step (with the xattr step's removal) sets
+# this to True.
+GATEKEEPER_ROW = False
+
 README_FILE = {"en": "README.md", "zh-Hans": "README.zh.md", "ja": "README.ja.md", "fr": "README.fr.md"}
 # the sentence each README had while the apps were signed ad hoc (it may wrap over two lines)
 OLD_SIGNING = {
@@ -178,16 +184,18 @@ def main():
             if n != 1:
                 sys.exit(f"{p}: the old signing sentence found {n} times, want 1")
         if lang == "en":
-            text, n = re.subn(r"^\| macOS, a browser download \|.*\|$", lambda _: row, text, flags=re.M)
-            if n != 1:
-                sys.exit(f"{p}: the Gatekeeper row found {n} times, want 1")
+            if GATEKEEPER_ROW:
+                text, n = re.subn(r"^\| macOS, a browser download \|.*\|$", lambda _: row, text, flags=re.M)
+                if n != 1:
+                    sys.exit(f"{p}: the Gatekeeper row found {n} times, want 1")
             if cell not in text:
                 text, n = re.subn(r"an ad-hoc signature", lambda _: cell, text)
                 if n != 1:
                     sys.exit(f"{p}: 'an ad-hoc signature' found {n} times, want 1")
         files[p] = text
         lines.append(f"kit-readme\t{README_FILE[lang]}\t{lang}\t{sentence[lang]}")
-    lines.append(f"kit-readme\tREADME.md\ten\t{row}")
+    if GATEKEEPER_ROW:
+        lines.append(f"kit-readme\tREADME.md\ten\t{row}")
     lines.append(f"kit-readme\tREADME.md\ten\t{cell}")
     files[kit / "test/probe-camera-mac/expected-strings.txt"] = "\n".join(lines) + "\n"
     bad = 0
