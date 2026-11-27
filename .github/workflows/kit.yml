@@ -983,6 +983,33 @@ jobs:
           build/newest-artifact.sh windows-host-demo dist/demo
           # demo 1.1, only when windows-host.yml's native-demo passed its bar
           build/newest-artifact.sh windows-native-demo dist/demo --optional
+          # When this round's recording missed the bar (the runner's CPU decides: kit run
+          # 45930141668 had 11.2/s on a Zen 3 EPYC, the passing ones 16.7 to 22 on Zen 4), the
+          # newest earlier release's clip, as it was released (its SHA256SUMS), for at most 14
+          # days from its own recording; it says its own day and kit run on the picture and in
+          # windows-native.json. Only this demo (the product owner, 2026-11-27)
+          if [ ! -s dist/demo/windows-native.mp4 ]; then
+            now=$(date -u +%s)
+            for tag in $(gh release list -R "$GITHUB_REPOSITORY" --exclude-pre-releases -L 60 --json tagName -q '.[].tagName'); do
+              gh release view "$tag" -R "$GITHUB_REPOSITORY" --json assets -q '.assets[].name' | grep -qx windows-native.json || continue
+              prev=$(mktemp -d)
+              gh release download "$tag" -R "$GITHUB_REPOSITORY" -D "$prev" \
+                -p windows-native.json -p windows-native.mp4 -p windows-native.jpg -p SHA256SUMS
+              if ! (cd "$prev" && grep -E ' windows-native\.(json|mp4|jpg)$' SHA256SUMS | sha256sum -c -); then
+                echo "demo 1.1: $tag's clip doesn't match its SHA256SUMS: left out"; break
+              fi
+              rec=$(jq -r .recorded "$prev/windows-native.json")
+              age=$(( (now - $(date -u -d "$rec" +%s)) / 86400 ))
+              if [ "$age" -le 14 ]; then
+                jq --arg tag "$tag" '. + {reused_from: (.reused_from // $tag)}' "$prev/windows-native.json" > dist/demo/windows-native.json
+                cp "$prev/windows-native.mp4" "$prev/windows-native.jpg" dist/demo/
+                echo "demo 1.1: this round's clip missed the bar; reused from $tag (recorded $rec, $age days ago)"
+              else
+                echo "demo 1.1: the newest passing clip ($tag, recorded $rec) is $age days old: left out"
+              fi
+              break
+            done
+          fi
           build/newest-artifact.sh demo-release dist/demo
           build/newest-artifact.sh mac-host-test dist/mac-host-test --optional
       # the Linux host (x86_64 and aarch64), each job's newest attempt too: the tarballs
@@ -1034,7 +1061,8 @@ jobs:
           if [ -s dist/demo/windows-native.mp4 ]; then
             jq --arg t "FreeRDP shadow server + Windows Server 2025, native client, AV1" \
                --arg c "The kit's native client (sdl-freerdp) on a Windows Server 2025 machine of the CI, to FreeRDP's shadow server on the same machine (loopback, no network in between): the server shares only the first monitor (/monitors:0), where Edge plays web video, and the client's window sits on a second, virtual monitor, so it doesn't show itself. AV1 4:2:0, decoded in software (dav1d: the CI machine has no GPU); the label's rate is the server encoder's own (the CI machine has no sound card, so no sound here). Big Buck Bunny © Blender Foundation, CC BY 3.0." \
-               '.videos += [{title: $t, src: "demo/windows-native.mp4", poster: "demo/windows-native.jpg", caption: $c}]' \
+               --slurpfile r dist/demo/windows-native.json \
+               '.videos += [{title: $t, src: "demo/windows-native.mp4", poster: "demo/windows-native.jpg", caption: $c, recorded: $r[0]}]' \
               dist/demo/demo.json > dist/demo/demo.json.new && mv dist/demo/demo.json.new dist/demo/demo.json
           fi
           # freerdp-tk on Windows (test/client-demo/windows.ps1), with the other freerdp-tk

@@ -379,5 +379,6 @@ jobs:
           path: |
             out/windows-native.mp4
             out/windows-native.jpg
+            out/windows-native.json
           if-no-files-found: ignore
           retention-days: 3

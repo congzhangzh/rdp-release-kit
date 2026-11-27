@@ -290,14 +290,22 @@ if (Test-Path $raw) {
     Note ("WRITTEN-VERDICT  {0}" -f $(if ($written -ge $mean) { "written >= session" } else { "written < session" }))
     $decoder = if ($dec) { "$($dec.Matches[0].Groups[1].Value) ($($dec.Matches[0].Groups[2].Value))" } else { "decoder unknown" }
     $label = "AV1 4:2:0 · $decoder · $([math]::Round($mean))/s"
-    Note "INFO  label: $label"
+    # its own facts on the picture (the product owner's condition for a reused clip: it never looks
+    # recorded by a later round): the day (UTC) and the kit run that recorded it
+    $recordedAt = (Get-Date).ToUniversalTime()
+    $runId = if ($env:GITHUB_RUN_ID) { $env:GITHUB_RUN_ID } else { "local" }
+    $facts = "recorded $($recordedAt.ToString('yyyy-MM-dd')) · kit run $runId"
+    Note "INFO  label: $label / $facts"
     Set-Content -Encoding utf8NoBOM -Path "$env:RUNNER_TEMP\label.txt" -Value $label -NoNewline
+    Set-Content -Encoding utf8NoBOM -Path "$env:RUNNER_TEMP\facts.txt" -Value $facts -NoNewline
     Copy-Item "$env:SystemRoot\Fonts\segoeui.ttf" "$env:RUNNER_TEMP\font.ttf"
     Push-Location $env:RUNNER_TEMP   # relative paths: no drive colon inside the filter
     & ffmpeg -v error -y -i $raw -vf ("scale=1280:720:force_original_aspect_ratio=decrease:flags=lanczos," +
         "pad=1280:720:(ow-iw)/2:(oh-ih)/2,format=yuv420p," +
         "drawtext=fontfile=font.ttf:textfile=label.txt:expansion=none:fontsize=22:fontcolor=white:" +
-        "box=1:boxcolor=black@0.6:boxborderw=10:x=w-tw-28:y=h-th-72") `
+        "box=1:boxcolor=black@0.6:boxborderw=10:x=w-tw-28:y=h-th-98," +
+        "drawtext=fontfile=font.ttf:textfile=facts.txt:expansion=none:fontsize=15:fontcolor=white@0.9:" +
+        "box=1:boxcolor=black@0.6:boxborderw=6:x=w-tw-28:y=h-th-64") `
         -c:v libx264 -crf 28 -preset slow -an -movflags +faststart $V
     Pop-Location
     foreach ($s in @(@("", 0.7), @("-mid", 0.5), @("-late", 0.95))) {
@@ -311,6 +319,12 @@ $demoOk = (Test-Path $V) -and $fps.Count -and ($mean -ge 15) -and ($written -ge 
 if ($demoOk) {
     Copy-Item $V "$Out\windows-native.mp4"
     Copy-Item "$Out\native-av1-i420.jpg" "$Out\windows-native.jpg"
+    # the same facts for the release (kit.yml: a later round that misses the bar reuses the newest
+    # passing clip for at most 14 days, by this date)
+    [ordered]@{ recorded = $recordedAt.ToString("yyyy-MM-ddTHH:mm:ssZ"); run = $runId
+                run_attempt = $env:GITHUB_RUN_ATTEMPT; kit = $env:GITHUB_SHA
+                mean_fps = [math]::Round($mean, 1); written_fps = [math]::Round($written, 1)
+                label = $label } | ConvertTo-Json | Set-Content -Encoding utf8NoBOM "$Out\windows-native.json"
     Note "DEMO  windows-native: in (mean $([math]::Round($mean, 1))/s, written $([math]::Round($written, 1))/s)"
 } else {
     Note "DEMO  windows-native: left out (mean $([math]::Round($mean, 1))/s, written $([math]::Round($written, 1))/s, failures $failed)"
