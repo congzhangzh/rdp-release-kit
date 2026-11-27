@@ -216,7 +216,10 @@ jobs:
           recorded, videos, clients = {}, {}, {}
           for f in glob.glob(f"{src}/demo-*/demo.json"):
               d = json.load(open(f, encoding="utf-8"))
-              recorded = recorded or d["recorded"]
+              # every file's: shadow-multimon's names only the kit, record-demos.sh's the web
+              # client too; the first file read (file-system order) was shadow-multimon's in kit
+              # run 45930141668, and "web" was missing (KeyError)
+              recorded = {**d["recorded"], **recorded}
               for key, into in (("videos", videos), ("clients", clients)):
                   for v in d.get(key, []):
                       video = os.path.basename(v["src"])[:-len(".mp4")]
