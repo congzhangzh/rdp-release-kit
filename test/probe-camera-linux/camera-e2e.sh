@@ -8,8 +8,11 @@
 #   nodevice  no v4l2loopback at all: the host logs exactly the PO's line "camera: no v4l2loopback
 #             device; no camera. Load the module: modprobe v4l2loopback card_label=..."
 #             and runs (a client connects)
-#   fallback  a module that can't tell its readers (Ubuntu's 0.12.7): exactly one line saying so,
-#             the camera on while the client is connected, an app reads >= 60 changing frames
+#   fallback  a module that can't tell its readers (0.12.7): exactly one line saying so, with its
+#             version ("before 0.13" when the module declares none, as 0.12.7), the camera on
+#             while the client is connected, an app reads >= 60 changing frames
+#   ubuntu-module  whatever v4l2loopback the runner's kernel or Ubuntu gave (module.sh kernel):
+#             the ondemand checks for 0.13 or newer, the fallback checks for an older one
 #   ondemand  a module with client usage events (0.13+): no Start Streams before an app reads,
 #             Start Streams when it opens the camera, Stop Streams about 500 ms after it closes
 #             it, twice; the client's log agrees (its Start/Stop Streams requests, its V4L2
@@ -36,6 +39,8 @@ PORT=33891
 WIDTH=1280
 HEIGHT=720
 SAFE=(env -u DBUS_SESSION_BUS_ADDRESS -u XDG_RUNTIME_DIR -u WAYLAND_DISPLAY -u DISPLAY)
+# the loaded module's version, from its MODULE_VERSION (0.12.x declares none)
+MODULE_VERSION=$(cat /sys/module/v4l2loopback/version 2> /dev/null || true)
 FALLBACK="can't tell when an app reads it; the camera stays on while connected; 0.13+ fixes this"
 PIDS=()
 status=0
@@ -95,7 +100,7 @@ source_camera() {  # source_camera yuyv|mjpg: the test pattern into the client's
     local caps='video/x-raw,format=YUY2,width=640,height=480,framerate=30/1'
     local tail=()
     [ "$1" = mjpg ] && { caps='video/x-raw,format=I420,width=640,height=480,framerate=30/1'; tail=(! jpegenc quality=85 ! image/jpeg); }
-    gst-launch-1.0 -q videotestsrc is-live=true pattern=ball ! "$caps" "${tail[@]}" ! v4l2sink device=$SRC_DEV \
+    GST_DEBUG='*:2,v4l2*:4' gst-launch-1.0 -q videotestsrc is-live=true pattern=ball ! "$caps" "${tail[@]}" ! v4l2sink device=$SRC_DEV \
         > "$OUT/source.log" 2>&1 &
     PIDS+=($!)
     # exclusive_caps=1: the device offers capture once its writer is attached
@@ -137,6 +142,28 @@ host_ms() {  # host_ms <text> <n>: when the host logged its n-th line with <text
 event_ms() { ms_of "$(grep -F -- "$1" "$OUT/events.txt" | sed -n "${2}p" | cut -d' ' -f1)"; }
 
 : > "$OUT/result.txt"
+if [ "$CASE" = ubuntu-module ]; then
+    if [ -n "$MODULE_VERSION" ] && [ "$(printf '%s\n0.13\n' "$MODULE_VERSION" | sort -V | head -1)" = 0.13 ]; then
+        CASE=ondemand
+    else
+        CASE=fallback
+    fi
+    echo "INFO  ubuntu-module: v4l2loopback ${MODULE_VERSION:-without a version (older than 0.13)}: the $CASE checks" |
+        tee -a "$OUT/result.txt"
+fi
+# the devices module.sh loaded, by their exact names (card_label), before anything else
+labels() {
+    local n want got
+    for n in 40:"Test Source" 41:"FreeRDP Camera"; do
+        want=${n#*:}
+        got=$(cat "/sys/devices/virtual/video4linux/video${n%%:*}/name" 2> /dev/null || true)
+        if [ "$got" != "$want" ]; then
+            echo "FAIL  /dev/video${n%%:*} is named [$got], not [$want]: card_label went wrong" | tee -a "$OUT/result.txt"
+            exit 1
+        fi
+    done
+    echo "PASS  the loopback devices are named exactly [Test Source] and [FreeRDP Camera]" | tee -a "$OUT/result.txt"
+}
 case $CASE in
     nodevice)
         check "no /dev/video* before the test" '! ls /dev/video* > /dev/null 2>&1'
@@ -152,6 +179,7 @@ case $CASE in
         check "no other camera line" "[ \"\$(grep -c -F 'com.freerdp.server.shadow.camera' '$OUT/host.log')\" = 1 ]"
         ;;
     fallback | ondemand | mjpg)
+        labels
         xserver 91
         xserver 92
         source_camera "$([ "$CASE" = mjpg ] && echo mjpg || echo yuyv)"
@@ -166,8 +194,10 @@ case $CASE in
         [ "$CASE" = mjpg ] && format=MJPG
         check "the host chose $format" "grep -q 'camera: \"Test Source\" of client .*: chose $format 640x480' '$OUT/host.log'"
         if [ "$CASE" = fallback ]; then
-            check "exactly one line: the module can't tell its readers" \
-                "[ \"\$(grep -c -F \"$FALLBACK\" '$OUT/host.log')\" = 1 ]" "$(grep -o -E 'v4l2loopback [^ ]+( 0\.13)? can.t tell' "$OUT/host.log" | head -1)"
+            line="camera: v4l2loopback ${MODULE_VERSION:-before 0.13} $FALLBACK"
+            check "exactly one line: $line" \
+                "[ \"\$(grep -c -F \"$line\" '$OUT/host.log')\" = 1 ] && [ \"\$(grep -c -F \"$FALLBACK\" '$OUT/host.log')\" = 1 ]" \
+                "$(grep -o -E 'v4l2loopback .* can.t tell' "$OUT/host.log" | head -1)"
             wait_for 20 "grep -q 'first frame from' '$OUT/host.log'"
             check "the camera runs while connected, no app reading" "grep -q 'Start Streams #1 (the sink can.t tell its readers)' '$OUT/host.log'"
             read_camera 150 "$OUT/read-1.yuyv"
@@ -208,6 +238,7 @@ case $CASE in
         fi
         ;;
     h264)
+        labels
         xserver 91
         xserver 92
         host

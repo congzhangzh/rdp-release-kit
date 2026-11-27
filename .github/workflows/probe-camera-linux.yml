@@ -12,13 +12,18 @@
 #    -DWITH_RDPECAM_UVC_H264=OFF, the V4L2 backend (the shipped configuration); the same checks.
 #  - gst-client: CI only, never shipped: xfreerdp with the GStreamer backend, built natively
 #    against Ubuntu's packages, whose FFmpeg (GPL, libx264) encodes H.264 for the h264 case.
-#  - test-ubuntu-module: no module (nodevice: exactly the PO's "camera: no v4l2loopback device; no camera. Load the module: …" line, the host
-#    runs), then Ubuntu's own v4l2loopback (fallback: exactly one line that it can't tell its
-#    readers, the camera on while connected, an app reads >= 60 changing frames).
-#  - test-source-module: v4l2loopback built from its source tag (0.15.4, CI only, a GPL module
-#    never in an archive): ondemand (no Start Streams before an app reads, Start when it opens the
-#    camera, Stop ~500 ms after it closes it, twice, the client's log agreeing), mjpg (the client's
-#    camera offers MJPG, the host decodes it), h264 (the CI-only client).
+#  - test-ubuntu-module: no module (nodevice: exactly the PO's "camera: no v4l2loopback device;
+#    no camera. Load the module: …" line, the host runs); the README's own modprobe line typed as
+#    in bash (the device named exactly "FreeRDP Camera"); then the v4l2loopback the runner's
+#    kernel ships (0.15.3 in Ubuntu's 7.0 kernels, run 46066070526): the ondemand checks for 0.13
+#    or newer (no Start Streams before an app reads, Start when it opens the camera, Stop ~500 ms
+#    after it closes it, twice, the client's log agreeing), the fallback checks otherwise; mjpg
+#    (the client's camera offers MJPG, the host decodes it), h264 (the CI-only client).
+#  - test-v4l2loopback-0.12.7: the fallback, proven with the version Ubuntu 24.04 packages:
+#    v4l2loopback 0.12.7 from its source tag (CI only, a GPL module never in an archive), with
+#    compat-0.12.7.sh renaming the kernel APIs it predates (it does not build on 7.0 otherwise):
+#    exactly one line that it can't tell its readers ("before 0.13": it declares no version),
+#    the camera on while connected, an app reads >= 60 changing frames.
 # In each test the client's camera is /dev/video40, a second loopback device fed by GStreamer's
 # videotestsrc; the host writes /dev/video41 ("FreeRDP Camera"), which v4l2-ctl reads as an app
 # would (test/probe-camera-linux/). The host runs on its own Xvfb with /subsystem:x11.
@@ -37,9 +42,6 @@ env:
   FREERDP_BRANCH: feature-camera-shadow
   # the probed commit, fixed: the branch may move on (stacked on feature-camera-unix)
   FREERDP_SHA: 9164681573fbf6cfae5d85a401bfc2206c75fac2
-  # v4l2loopback with client usage events (0.13.0 and later), by its tag's commit
-  V4L2LOOPBACK_TAG: v0.15.4
-  V4L2LOOPBACK_SHA: 0f9ee86760b7f2bea174b7e3e7a1d38845da0ab4
 
 jobs:
   host:
@@ -251,38 +253,6 @@ jobs:
           } | tee -a "$GITHUB_STEP_SUMMARY"
 
   test-ubuntu-module:
-    needs: [host, client]
-    runs-on: ubuntu-24.04
-    timeout-minutes: 30
-    steps:
-      - uses: actions/checkout@v7
-      - uses: actions/download-artifact@v8
-        with:
-          name: probe-camera-linux-host-camera
-          path: dl/host
-      - uses: actions/download-artifact@v8
-        with:
-          name: probe-camera-linux-client
-          path: dl/client
-      - name: Tools and the packages
-        run: test/probe-camera-linux/runner-setup.sh out
-      - name: "nodevice: no v4l2loopback"
-        run: test/probe-camera-linux/camera-e2e.sh nodevice dl/host/pkg dl/client/pkg/bin/sdl-freerdp out/nodevice
-      - name: Ubuntu's v4l2loopback
-        run: test/probe-camera-linux/module.sh ubuntu out/module
-      - name: "fallback: a module that can't tell its readers"
-        run: test/probe-camera-linux/camera-e2e.sh fallback dl/host/pkg dl/client/pkg/bin/sdl-freerdp out/fallback
-      - name: Results
-        if: always()
-        run: cat out/*/result.txt | tee -a "$GITHUB_STEP_SUMMARY" || true
-      - uses: actions/upload-artifact@v7
-        if: always()
-        with:
-          name: probe-camera-linux-test-ubuntu-module
-          path: out
-          retention-days: 7
-
-  test-source-module:
     needs: [host, client, gst-client]
     runs-on: ubuntu-24.04
     timeout-minutes: 40
@@ -308,22 +278,70 @@ jobs:
           sudo apt-get install -y -q --no-install-recommends $(grep -v '^#' test/probe-camera-linux/gst-client-deps.txt) \
               > out/apt-gst-client.log 2>&1
           chmod +x dl/gst-client/xfreerdp
-      - name: v4l2loopback from its source tag
-        run: test/probe-camera-linux/module.sh source out/module
-      - name: "ondemand: the client's camera runs only while an app reads"
-        run: test/probe-camera-linux/camera-e2e.sh ondemand dl/host/pkg dl/client/pkg/bin/sdl-freerdp out/ondemand
+      - name: "nodevice: no v4l2loopback"
+        run: test/probe-camera-linux/camera-e2e.sh nodevice dl/host/pkg dl/client/pkg/bin/sdl-freerdp out/nodevice
+      - name: "The README's modprobe line, as typed in bash: the device named exactly FreeRDP Camera"
+        if: always()
+        run: test/probe-camera-linux/module.sh readme out/readme
+      - name: The runner kernel's v4l2loopback
+        if: always()
+        run: test/probe-camera-linux/module.sh kernel out/module
+      - name: "ubuntu-module: on demand (0.13+) or the fallback, by the version the kernel ships"
+        if: always()
+        run: test/probe-camera-linux/camera-e2e.sh ubuntu-module dl/host/pkg dl/client/pkg/bin/sdl-freerdp out/ubuntu-module
+      # each case on a freshly loaded module: a device keeps the format its last writer set
       - name: "mjpg: the host decodes the client's MJPG"
         if: always()
-        run: test/probe-camera-linux/camera-e2e.sh mjpg dl/host/pkg dl/client/pkg/bin/sdl-freerdp out/mjpg
+        run: |
+          test/probe-camera-linux/module.sh kernel out/module-mjpg
+          test/probe-camera-linux/camera-e2e.sh mjpg dl/host/pkg dl/client/pkg/bin/sdl-freerdp out/mjpg
       - name: "h264: the host decodes H.264 (CI-only client)"
         if: always()
-        run: test/probe-camera-linux/camera-e2e.sh h264 dl/host/pkg dl/gst-client/xfreerdp out/h264
+        run: |
+          test/probe-camera-linux/module.sh kernel out/module-h264
+          test/probe-camera-linux/camera-e2e.sh h264 dl/host/pkg dl/gst-client/xfreerdp out/h264
       - name: Results
         if: always()
         run: cat out/*/result.txt | tee -a "$GITHUB_STEP_SUMMARY" || true
       - uses: actions/upload-artifact@v7
         if: always()
         with:
-          name: probe-camera-linux-test-source-module
+          name: probe-camera-linux-test-ubuntu-module
+          path: out
+          retention-days: 7
+
+  test-v4l2loopback-0-12-7:
+    needs: [host, client]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      # Ubuntu 24.04's packaged version (v4l2loopback-dkms 0.12.7-2ubuntu5.2), by its tag's commit
+      V4L2LOOPBACK_TAG: v0.12.7
+      V4L2LOOPBACK_SHA: 1ecf810f0d687b647caa3050ae30cf51b5902afd
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        with:
+          name: probe-camera-linux-host-camera
+          path: dl/host
+      - uses: actions/download-artifact@v8
+        with:
+          name: probe-camera-linux-client
+          path: dl/client
+      - name: Tools and the packages
+        run: test/probe-camera-linux/runner-setup.sh out
+      - name: v4l2loopback 0.12.7 from its source tag, the kernel APIs renamed
+        env:
+          V4L2LOOPBACK_COMPAT: test/probe-camera-linux/compat-0.12.7.sh
+        run: test/probe-camera-linux/module.sh source out/module
+      - name: "fallback: a module that can't tell its readers"
+        run: test/probe-camera-linux/camera-e2e.sh fallback dl/host/pkg dl/client/pkg/bin/sdl-freerdp out/fallback
+      - name: Results
+        if: always()
+        run: cat out/*/result.txt | tee -a "$GITHUB_STEP_SUMMARY" || true
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: probe-camera-linux-test-v4l2loopback-0.12.7
           path: out
           retention-days: 7
