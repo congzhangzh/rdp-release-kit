@@ -115,7 +115,7 @@ fi
 if alive; then
     # a client that offers AV2 (the kit's own, by default) gets AV2; before FreeRDP
     # 20261101.20's 8 MiB client thread stack, that crashed the host (kit run 41370598608)
-    session av2 AV2
+    session av2 AV2 /gfx:AV2
     alive && ok=1 || ok=0
     check "the host is still running after the AV2 session" $ok
 else
@@ -124,10 +124,10 @@ fi
 # HEVC 4:2:0 in the kit's own macOS client: the host encodes it with VideoToolbox, the client
 # decodes it with VideoToolbox (both WITH_GFX_AZURE). HEVC is opt-in on both sides: a server of
 # its own with /gfx-hevc:i420 on 4491, and two sessions:
-#  - hevc: /gfx-codec-order:HEVC,AVC420, AVC on as the fallback (what a user types);
-#  - hevc-avc-off: /gfx:AV2:off,AV1:off,HEVC:i420, no AVC asked for, so the caps say
-#    AVC_DISABLED (the path of a client whose H.264 is off, FreeRDP 7dca5d051); AV1 and AV2 off,
-#    or the server takes them first (HEVC in /gfx: turns no other codec off)
+#  - hevc: /gfx:HEVC:i420,AVC420, AVC on as the fallback (what a user types);
+#  - hevc-avc-off: /gfx:HEVC:i420, HEVC alone (a /gfx: list offers only what it names, since
+#    FreeRDP 20261128.5), no AVC asked for, so the caps say AVC_DISABLED (the path of a client
+#    whose H.264 is off, FreeRDP 7dca5d051)
 # Each one: 11.x confirmed with HEVC_ENABLE, HEVC420 frames, no failed decode, and the client's
 # log names its decoder ("HEVC decoder: VideoToolbox (hardware)", FreeRDP's h264.c)
 hevc_ok=1
@@ -142,7 +142,7 @@ if [ $hevc_ok = 1 ]; then
     for i in $(seq 1 30); do listening 4491 && break; sleep 1; done
     listening 4491 && ok=1 || ok=0
     check "native HEVC: the server with /gfx-hevc:i420 listens" $ok
-    for s in "hevc /gfx-codec-order:HEVC,AVC420" "hevc-avc-off /gfx:AV2:off,AV1:off,HEVC:i420"; do
+    for s in "hevc /gfx:HEVC:i420,AVC420" "hevc-avc-off /gfx:HEVC:i420"; do
         name=${s%% *}
         PORT=4491 session "$name" HEVC420 "${s#* }"
         log="$OUT/$name.wlog"
@@ -242,7 +242,7 @@ else
     # HEVC 4:2:0 in FreeRDP Web: the host encodes it with VideoToolbox (WITH_GFX_AZURE), the page
     # decodes it through WebCodecs. A server of its own with /gfx-hevc:i420 (HEVC is opt-in), on the
     # same port behind the same websockify; the page asks as a user does, in Extra options
-    # (/gfx-codec-order:HEVC,AVC420, test/web-hevc.mjs). Safari is the check (WebCodecs HEVC through
+    # (/gfx:HEVC:i420,AVC420, test/web-hevc.mjs). Safari is the check (WebCodecs HEVC through
     # VideoToolbox); Chrome is only recorded, whether this runner's Chrome decodes HEVC or not.
     kill $SRV 2> /dev/null; sleep 2
     "$SERVER" /buildconfig 2> /dev/null | tr " " "\n" | grep -qx "WITH_GFX_AZURE=ON" && ok=1 || ok=0

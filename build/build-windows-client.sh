@@ -201,8 +201,8 @@ if overridden "$FREERDP"; then
     fi
 fi
 # The client decodes HEVC 4:2:0 with Media Foundation when Windows has the HEVC Video
-# Extensions, else (and HEVC 4:4:4 always) with the LGPL FFmpeg above; AV1 stays what it
-# offers first, HEVC only when asked for (/gfx-codec-order). H.264 comes with both
+# Extensions, else (and HEVC 4:4:4 always) with the LGPL FFmpeg above; a client that names no
+# codec prefers HEVC, then AV1, then AV2 (FreeRDP 20261128.5). H.264 comes with both
 # decoders but stays off unless asked for (/gfx:AVC420, /gfx:AVC444): offered by default it
 # would get AVC444 from Windows' own Remote Desktop (WITH_GFX_H264_DEFAULT=OFF). The host
 # keeps its options. test/windows-hevc/inject.cmake adds the CI's HEVC decode test to the

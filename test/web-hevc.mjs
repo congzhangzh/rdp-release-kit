@@ -6,7 +6,7 @@
 //   SERVER_LOG=<the server's wlog> node test/web-hevc.mjs <page url> <gateway host:port> <browser>
 //
 // <browser> is safari or chrome. The server runs with /gfx-hevc:i420. The page asks for HEVC as a
-// user does, in Extra options: extra=/gfx-codec-order:HEVC,AVC420. That turns AV1, AV2 and H.264
+// user does, in Extra options: extra=/gfx:HEVC:i420,AVC420. That turns AV1, AV2 and H.264
 // 4:4:4 off, so the client offers HEVC_ENABLE in the 11.x caps with AVC on: AVC420 stays as the
 // fallback (AVC_DISABLED would say the page decodes no AVC at all), and the server's codec order
 // puts HEVC first.
@@ -104,7 +104,7 @@ try {
   info(`browser ${await js("return navigator.userAgent")}`);
 
   const offset = logSize();
-  const url = `${PAGE}?v=${GATEWAY}&u=${encodeURIComponent(USER)}&extra=${encodeURIComponent("/gfx-codec-order:HEVC,AVC420")}&fs=0`;
+  const url = `${PAGE}?v=${GATEWAY}&u=${encodeURIComponent(USER)}&extra=${encodeURIComponent("/gfx:HEVC:i420,AVC420")}&fs=0`;
   await wd("POST", `/session/${sid}/url`, { url });
   const ready = await waitFor(async () => (await js("const s = document.getElementById('status'); return s ? s.textContent : null")) === "ready", 45000);
   const env = JSON.parse(await js("return JSON.stringify({ isolated: self.crossOriginIsolated, webcodecs: typeof VideoDecoder })"));

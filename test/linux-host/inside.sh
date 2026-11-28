@@ -213,10 +213,11 @@ if [ "$MODE" = gnome ]; then
     as "pkill -x foot"
     kill $CPID 2> /dev/null; sleep 2
 
-    # AV2: the client as it comes (offers AV2). libavm, AV2's reference encoder: a
+    # AV2: asked for by name (a client that names no codec prefers HEVC, then AV1, since
+    # FreeRDP 20261128.5). libavm, AV2's reference encoder: a
     # few frames a second on a runner's cores, so fewer
     as "nohup foot sh -c '$CLOCK' > /tmp/foot-clock.log 2>&1 &"
-    connect av2
+    connect av2 /gfx:AV2
     sleep 25
     n=$(frames av2 AV2)
     check "av2: the session holds" 'kill -0 $CPID'

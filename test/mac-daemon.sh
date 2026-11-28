@@ -41,11 +41,11 @@ motion() {  # something on screen changes during a session (ScreenCaptureKit sen
 frames() {  # frames <session name>: the AV1 frames the client got
     n=$(grep -c "Got GFX RDPGFX_CODECID_AV1\b" "$OUT/$1.wlog" 2> /dev/null); echo "${n:-0}"
 }
-session() {  # session <name>: 20 s of AV1 (AV2 off on the client) to 127.0.0.1:3388
+session() {  # session <name>: 20 s of AV1 (asked for by name: the plist turns HEVC on) to 127.0.0.1:3388
     motion
     WLOG_LEVEL=DEBUG WLOG_APPENDER=FILE WLOG_FILEAPPENDER_OUTPUT_FILE_PATH="$OUT" \
         WLOG_FILEAPPENDER_OUTPUT_FILE_NAME="$1.wlog" "$CLIENT" /v:127.0.0.1:3388 /u:probe /p:probe \
-        /cert:ignore /sec:tls /size:1280x720 /gfx:AV2:off > "$OUT/$1.out" 2>&1 &
+        /cert:ignore /sec:tls /size:1280x720 /gfx:AV1 > "$OUT/$1.out" 2>&1 &
     c=$!
     sleep 20
     screencapture -x "$OUT/$1.png" 2> /dev/null || true

@@ -369,7 +369,7 @@ fi
 # FFmpeg: HEVC through the GFX channel's Azure extension (WITH_GFX_AZURE), decoded by
 # libavcodec (WITH_VIDEO_FFMPEG; no sound through it, WITH_DSP_FFMPEG=OFF, which would also
 # want libswresample). H.264 is built but offered only when asked for (/gfx:AVC420 or AVC444,
-# /gfx-codec-order): WITH_GFX_H264_DEFAULT=OFF, so a client given no codec offers what it did
+# /gfx:HEVC:i420,AVC420): WITH_GFX_H264_DEFAULT=OFF, so a client given no codec offers what it did
 # before FFmpeg came in. FreeRDP's FindFFmpeg finds the static libraries by name, in the order
 # avcodec, avutil, swscale, and libswscale.a needs libavutil.a after it, and libm: both go at
 # the end of every link line (CMAKE_<LANG>_STANDARD_LIBRARIES; without it the link misses
