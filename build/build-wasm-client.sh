@@ -8,7 +8,8 @@
 # memory between threads) and linked statically. FreeRDP is the preview
 # branch with the open Emscripten pull requests; the page is freerdp-web.
 # The result is <output dir>/web/, the page ready to serve, and
-# <output dir>/freerdp-web-<version>.zip.
+# <output dir>/freerdp-web-<version>.zip. It redirects the browser's camera
+# (MS-RDPECAM, H.264 from WebCodecs), when the user ticks Camera.
 #
 # PAGE_SRC=<dir> takes the page from a local checkout instead of the pinned
 # commit, while the page is being changed (not for releases); a local
@@ -108,6 +109,9 @@ fi
 # FreeRDP with wasm SIMD (Boss Cong 2026-11-19, "A"): its SSE primitives built with -msimd128
 # (WinPR reports SSE..SSE4.1 under __wasm_simd128__): bit-exact, ~10.7 ms less per 1440p AV2 frame
 # (16->8 narrowing 3.1x, YUV->RGB 1.8x). Needs Safari 16.4 / iOS 16.4, Chrome 91, Firefox 89.
+# Camera redirection (MS-RDPECAM): the rdpecam client channel with its "emscripten" backend, the
+# browser's camera (getUserMedia) encoded to H.264 by WebCodecs' VideoEncoder, key frames only at
+# a stream's start (no V4L, no FFmpeg, nothing more to link); the page's Camera box turns it on.
 freerdp_link() {
 configure "$WORK/build/freerdp" \
     emcmake cmake -G Ninja -S "$src" -B "$WORK/build/freerdp" -DCMAKE_BUILD_TYPE=Release \
@@ -120,7 +124,7 @@ configure "$WORK/build/freerdp" \
     -DWITH_PLATFORM_SERVER=OFF -DWITH_X11=OFF -DWITH_WAYLAND=OFF -DWITH_ALSA=OFF \
     -DWITH_PULSE=OFF -DWITH_OSS=OFF -DWITH_CUPS=OFF -DWITH_PCSC=OFF -DWITH_KRB5=OFF \
     -DWITH_FUSE=OFF -DWITH_SYSTEMD=OFF -DWITH_FFMPEG=OFF -DWITH_SWSCALE=OFF \
-    -DWITH_DSP_FFMPEG=OFF -DWITH_OPENH264=OFF -DCHANNEL_URBDRC=OFF -DCHANNEL_RDPECAM=OFF \
+    -DWITH_DSP_FFMPEG=OFF -DWITH_OPENH264=OFF -DCHANNEL_URBDRC=OFF -DCHANNEL_RDPECAM=ON -DCHANNEL_RDPECAM_CLIENT=ON \
     -DWITH_SIMD=ON -DWITH_AVX2=OFF -DWITH_MANPAGES=OFF -DWITH_TIMEZONE_ICU=OFF -DWITH_UNICODE_BUILTIN=ON \
     -DUSE_UNWIND=OFF -DWITH_OPUS=ON -DWITH_GFX_AV1=ON -DWITH_DAV1D=ON -DWITH_GFX_AZURE=ON \
     -DWITH_GFX_AV2=ON -DWITH_AVM=ON -DWITH_AVM_ENCODER=OFF \
@@ -133,7 +137,17 @@ configure "$WORK/build/freerdp" \
 -sEXPORTED_RUNTIME_METHODS=callMain,FS,ENV,ccall,HEAPU8 -sEXPORTED_FUNCTIONS=_main,_malloc,_free" \
     "${DEV[@]}" >> "$WORK/log/freerdp.log" 2>&1
 grep -q -e "AV1 decoder: dav1d" -e "configuration kept" "$WORK/log/freerdp.log"
+# the camera: the channel in the CMake cache (CMake only warns about an option it does not know)
+for found in "CHANNEL_RDPECAM:BOOL=ON" "CHANNEL_RDPECAM_CLIENT:BOOL=ON"; do
+    grep -q -x -F "$found" "$WORK/build/freerdp/CMakeCache.txt" ||
+        { echo "freerdp: no $found in its CMake cache, no camera (log/freerdp.log)" >&2; exit 1; }
+done
 cmake --build "$WORK/build/freerdp" --target sdl3-freerdp >> "$WORK/log/freerdp.log" 2>&1
+# and its JavaScript side linked in (camera_emscripten.js). A FreeRDP without the emscripten
+# backend stops at configure instead ("libv4l-dev required for CHANNEL_RDPECAM_CLIENT"): this kit
+# change needs fork feature-camera-web (b4f178a86) in the pinned FreeRDP.
+grep -q -F "_cam_web_start" "$WORK/build/freerdp/client/SDL/SDL3/sdl-freerdp.js" ||
+    { echo "freerdp: the client has no browser camera (_cam_web_start), log/freerdp.log" >&2; exit 1; }
 }
 # Asyncify, which every browser with WebAssembly runs, in dist/wasm/web; JSPI
 # (smaller and faster, no Asyncify rewrite, in Chrome 137+ for now) in its
