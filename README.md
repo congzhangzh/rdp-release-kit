@@ -20,6 +20,10 @@ directly: `bin/sdl-freerdp /v:server /u:user` (Windows: `sdl-freerdp.exe`).
 The release notes have a table per platform, the checksums and how to
 verify a file's origin.
 
+<!-- camera-client -->
+Camera (clients): to share this computer's camera, tick Camera in freerdp-tk, or add /dvc:rdpecam to the command line. It needs a client from release 20261128.2 or newer: an older client refuses to connect when given it.
+<!-- /camera-client -->
+
 To share a computer's own screen (Windows, Linux or a Mac), take its
 `freerdp-host-*` archive: see [Shadow server](#shadow-server-share-this-computers-own-screen).
 

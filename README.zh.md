@@ -16,6 +16,10 @@ macOS：`freerdp-tk.command`，需先清除下载文件的隔离属性，见下�
 `bin/sdl-freerdp /v:server /u:user`（Windows：`sdl-freerdp.exe`）。
 发布说明中有每个平台的表格、校验和，以及如何验证文件来源。
 
+<!-- camera-client -->
+摄像头（客户端）：要共享这台电脑的摄像头，在 freerdp-tk 中勾选“摄像头”，或在命令行加上 /dvc:rdpecam。需要 20261128.2 或更新版本的客户端：旧版客户端遇到这个选项会拒绝连接。
+<!-- /camera-client -->
+
 如果要共享一台电脑自己的屏幕（Windows、Linux 或 Mac），请下载它的
 `freerdp-host-*` 压缩包：见 [Shadow server：共享这台电脑自己的屏幕](#shadow-server共享这台电脑自己的屏幕)。
 

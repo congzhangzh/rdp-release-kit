@@ -15,11 +15,15 @@
 #                      CoreMediaIO system extension needs the Developer ID), en/zh/ja/fr
 #   <PO R2 texts>      rdp-product-plan/drafts/r2-camera-texts.v1.md: "## 1." the macOS client's
 #                      release line (en), which ends pins.notes' "product macos" row after "; ";
-#                      "## 2." the Linux server's cell, en/zh/ja/fr
+#                      "## 2." the Linux server's cell, en/zh/ja/fr; v2 adds "## 3." the clients'
+#                      camera paragraph, en/zh/ja/fr (how to turn the camera on)
 #
 # The cells go in the Windows, Linux and macOS columns of a "Camera" row of the "Shadow server"
 # table (README.md, README.zh.md, README.ja.md, README.fr.md): the row is added before the table's
 # last row ("Tested in CI"), or its three cells are replaced.
+# The clients' paragraph (section 3) goes in the Download section, after the paragraph that starts
+# with the latest release's link ("**["), between the markers <!-- camera-client --> and
+# <!-- /camera-client --> (GitHub shows neither): added once, then the text between them replaced.
 #
 # The README style rule (the RM, 2026-11-27): a README cell takes its target README's style.
 # README.fr.md writes ASCII apostrophes and NBSP before ":" and ";": U+2019 becomes "'" and a plain
@@ -87,8 +91,9 @@ def po_sections(path):
         m = re.match(r"^- (en|zh|ja|fr): (.+)$", line)
         if m and sec:
             out.setdefault(sec, {})[m.group(1)] = m.group(2)
-    if sorted(out.get("1", {})) != ["en"] or sorted(out.get("2", {})) != sorted(LANGS):
-        sys.exit(f"{path}: want section 1 in en, section 2 in en, zh, ja, fr")
+    if (sorted(out.get("1", {})) != ["en"] or sorted(out.get("2", {})) != sorted(LANGS)
+            or sorted(out.get("3", {})) != sorted(LANGS)):
+        sys.exit(f"{path}: want section 1 in en, sections 2 and 3 in en, zh, ja, fr")
     return out
 
 
@@ -160,6 +165,30 @@ def update(text, lang, value, linux, mac):
     return "\n".join(lines)
 
 
+CLIENT_OPEN, CLIENT_CLOSE = "<!-- camera-client -->", "<!-- /camera-client -->"
+
+
+def client_paragraph(text, lang, value):
+    """the clients' camera paragraph between its markers, after the latest release's paragraph"""
+    lines = text.split("\n")
+    block = [CLIENT_OPEN, value, CLIENT_CLOSE]
+    opens = [i for i, l in enumerate(lines) if l == CLIENT_OPEN]
+    closes = [i for i, l in enumerate(lines) if l == CLIENT_CLOSE]
+    if opens or closes:
+        if len(opens) != 1 or len(closes) != 1 or closes[0] < opens[0]:
+            sys.exit(f"{README[lang]}: want one {CLIENT_OPEN} before one {CLIENT_CLOSE}")
+        lines[opens[0]:closes[0] + 1] = block
+        return "\n".join(lines)
+    starts = [i for i, l in enumerate(lines) if l.startswith("**[")]
+    if not starts:
+        sys.exit(f"{README[lang]}: no paragraph starting with the latest release's link (\"**[\")")
+    end = starts[0]
+    while end < len(lines) and lines[end].strip():
+        end += 1
+    lines[end:end] = [""] + block
+    return "\n".join(lines)
+
+
 def main():
     args = sys.argv[1:]
     check = "--check" in args
@@ -181,6 +210,7 @@ def main():
         else:
             new = update(old, lang, cell(lang, cells[lang], on_demand),
                          plain_cell(lang, r2["2"][lang], "Linux"), plain_cell(lang, mac[lang], "macOS"))
+            new = client_paragraph(new, lang, readme_style(lang, r2["3"][lang]))
         if new.encode("utf-8") == old.encode("utf-8"):
             continue
         if check:

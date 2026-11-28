@@ -20,6 +20,10 @@ directement le client : `bin/sdl-freerdp /v:server /u:user` (Windows : `sdl-fr
 Les notes de version contiennent un tableau par plateforme, les sommes de contrôle et la façon de
 vérifier l'origine d'un fichier.
 
+<!-- camera-client -->
+Caméra (clients) : pour partager la caméra de cet ordinateur, cochez Caméra dans freerdp-tk, ou ajoutez /dvc:rdpecam à la ligne de commande. Il faut un client de la version 20261128.2 ou plus récente : un client plus ancien refuse de se connecter avec cette option.
+<!-- /camera-client -->
+
 Pour partager l'écran d'un ordinateur (Windows, Linux ou Mac), prenez son
 archive `freerdp-host-*` : voir [Serveur shadow](#serveur-shadow--partager-lécran-de-cet-ordinateur).
 
