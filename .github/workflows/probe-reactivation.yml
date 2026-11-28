@@ -136,3 +136,77 @@ jobs:
           name: probe-reactivation
           path: out
           retention-days: 7
+
+  # A/B: the same 40 connects against the host WITHOUT the fix (release-20261128.5 8b329d935), so
+  # the probe shows it would catch the race. RECORD only: this arm never fails the run.
+  mac-host-baseline:
+    runs-on: macos-15
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v7
+      - name: FreeRDP for the host, release-20261128.5 (no fix)
+        run: |
+          mkdir -p logs
+          sed -E -i '' 's/^(freerdp_mac_host +)[^ ]+( +git\+[^ ]+ +)[0-9a-f]{40}$/\120261128.5\28b329d93552e3a7f71c329b15729e3512a5c3c2f/' sources.lock
+          grep -E '^freerdp_mac_host ' sources.lock | tee logs/freerdp-host.txt
+          grep -q '^freerdp_mac_host .* 8b329d93552e3a7f71c329b15729e3512a5c3c2f$' sources.lock
+      - name: Cache sources
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/rdp-release-kit/sources
+          key: sources-${{ hashFiles('sources.lock') }}
+      - name: Cache compiled objects
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/rdp-release-kit/ccache/macos
+          key: ccache-macos-host-arm64-reactivation-baseline-${{ github.sha }}
+          restore-keys: |
+            ccache-macos-host-arm64-
+            ccache-macos-arm64-
+      - name: Build tools
+        run: brew install bash meson nasm ccache
+      - name: Build (as the release)
+        env:
+          CCACHE_MAXSIZE: 1G
+          HOST: "1"
+        run: ./build-macos.sh arm64 2>&1 | tee logs/build.txt
+      - uses: actions/upload-artifact@v7
+        with:
+          name: probe-host-baseline-macos-arm64
+          path: dist/freerdp-host-*.zip
+          if-no-files-found: error
+          retention-days: 3
+
+  reactivation-baseline:
+    needs: [mac-client, mac-host-baseline]
+    runs-on: macos-15
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        with:
+          name: probe-host-baseline-macos-arm64
+          path: dl/host
+      - uses: actions/download-artifact@v8
+        with:
+          name: probe-client-macos-arm64
+          path: dl/client
+      - name: Unpack
+        run: |
+          cd dl/host && ditto -x -k freerdp-host-*.zip . && cd ../client && tar -xf sdl3-freerdp-*.tar.xz
+          cd .. && xattr -dr com.apple.quarantine . || true
+          ls -d host/*/ client/*/
+      - name: Reactivation without the fix (RECORD only)
+        run: |
+          test/mac-reactivation.sh "$(ls -d dl/host/freerdp-host-*-macos-arm64)" \
+              "$(ls -d dl/client/sdl3-freerdp-*-macos-arm64)" out > out-baseline.txt 2>&1 || true
+          # its checks are the baseline's record: PASS/FAIL become RECORD lines, the arm never fails
+          sed -E 's/^(PASS|FAIL)  /RECORD  baseline \1: /' out-baseline.txt | tee out-baseline-record.txt
+          mkdir -p out && mv out-baseline.txt out-baseline-record.txt out/
+          grep -E '^RECORD ' out/out-baseline-record.txt >> "$GITHUB_STEP_SUMMARY" || true
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: probe-reactivation-baseline
+          path: out
+          retention-days: 7
