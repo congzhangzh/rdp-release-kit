@@ -5,7 +5,10 @@
 # v1 (2ed6b4e, run 46170606490): FreeRDP 20261128.6 = 42cc49a52, 2 of 11 runs stuck; the DEBUG log
 # named tcp.c's two resets. v2: FreeRDP pinned to fork fix-sdl-stop-mac 4eeb8dbb7 (42cc49a52 + the
 # SDL stop flag, the display probe's flush, tcp.c keeping CONNECT_CANCELLED): every run must end
-# (the sweep is a gate, STRICT=1), the shim test must pass. Then:
+# (the sweep is a gate, STRICT=1), the shim test must pass. v2 run 46171429688: green, but every
+# SIGTERM came after the TCP stage (a faster runner): the early path not tried. v3: the delays
+# 0.2-1.5 s, and at least one run must get the signal before the connect began (REQUIRE_EARLY=1).
+# Then:
 #  - test/mac-client-shim.sh as the kit runs it (a gate in v2);
 #  - test/probe-shim-debug/sweep.sh: the shim's exec check, the SIGTERM delay swept from 1 to 3.5 s,
 #    com.freerdp.core at DEBUG, so the log names what clears CONNECT_CANCELLED ("resetting error
@@ -69,6 +72,8 @@ jobs:
         if: always()
         env:
           STRICT: "1"
+          REQUIRE_EARLY: "1"
+          DELAYS: "0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0 1.25 1.5"
         run: |
           rc=0
           test/probe-shim-debug/sweep.sh "$(ls -d shim-check/sdl3-freerdp-*/)" out/sweep || rc=$?

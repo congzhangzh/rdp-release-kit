@@ -6,13 +6,18 @@
 # (WLOG_FILTER=com.freerdp.core:DEBUG), so freerdp_set_last_error_ex's "resetting error state"
 # names the function, file and line that clear a CONNECT_CANCELLED. Per run: exec-<delay>.out and
 # one line in sweep.txt (ended within 5 s or not, the lines that matter). STRICT=1: exit 1 when a
-# run did not end (with a fix pinned). Bash 3.2 is enough.
+# run did not end (with a fix pinned). DELAYS="<s> ..." picks the delays. REQUIRE_EARLY=1: exit 1
+# unless at least one run got the signal before the connect began (its abort handler logs
+# "running it now"): without one, the early path was not tried. Bash 3.2 is enough.
 set -u
 PKG=$(cd "$1" && pwd); OUT=$2
 mkdir -p "$OUT"; OUT=$(cd "$OUT" && pwd)
 SHIM=$PKG/bin/sdl-freerdp
 stuck=0
-for delay in 1.0 1.25 1.5 1.75 2.0 2.25 2.5 2.75 3.0 3.25 3.5; do
+early=0
+runs=0
+for delay in ${DELAYS:-1.0 1.25 1.5 1.75 2.0 2.25 2.5 2.75 3.0 3.25 3.5}; do
+    runs=$((runs + 1))
     log=$OUT/exec-$delay.out
     WLOG_FILTER=com.freerdp.core:DEBUG "$SHIM" /v:192.0.2.1 /cert:ignore /timeout:30000 > "$log" 2>&1 &
     pid=$!
@@ -24,13 +29,18 @@ for delay in 1.0 1.25 1.5 1.75 2.0 2.25 2.5 2.75 3.0 3.25 3.5; do
         sleep 0.5
     done
     [ "$ended" = yes ] || stuck=$((stuck + 1))
+    grep -q 'running it now' "$log" && early=$((early + 1))
     kill -KILL "$pid" 2> /dev/null; wait "$pid" 2> /dev/null
     {
         echo "delay $delay s: ended within 5 s: $ended"
         grep -E 'Caught signal|running it now|sig_abort_connect|abortConnect|resetting error state|already set|ERRCONNECT_|log_build_warn\]: \*{5}' "$log" | sed -n '1,40p' | sed 's/^/    /'
     } >> "$OUT/sweep.txt"
 done
-echo "sweep: $stuck of 11 runs did not end within 5 s of the SIGTERM" | tee -a "$OUT/sweep.txt"
+echo "sweep: $stuck of $runs runs did not end within 5 s of the SIGTERM; $early got it before the connect began" | tee -a "$OUT/sweep.txt"
 grep -h 'resetting error state' "$OUT"/exec-*.out | sed 's/^\[[^]]*\] \[[^]]*\] //' | sort | uniq -c | tee "$OUT/resets.txt"
 if [ "${STRICT:-0}" = 1 ] && [ "$stuck" -gt 0 ]; then exit 1; fi
+if [ "${REQUIRE_EARLY:-0}" = 1 ] && [ "$early" = 0 ]; then
+    echo "no run got the signal before the connect began: the early path was not tried" | tee -a "$OUT/sweep.txt"
+    exit 1
+fi
 exit 0
