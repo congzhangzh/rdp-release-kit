@@ -5,7 +5,8 @@
 # test/mac-client-shim.sh sends one after 3 s. com.freerdp.core logs at DEBUG
 # (WLOG_FILTER=com.freerdp.core:DEBUG), so freerdp_set_last_error_ex's "resetting error state"
 # names the function, file and line that clear a CONNECT_CANCELLED. Per run: exec-<delay>.out and
-# one line in sweep.txt (ended within 5 s or not, the lines that matter). Bash 3.2 is enough.
+# one line in sweep.txt (ended within 5 s or not, the lines that matter). STRICT=1: exit 1 when a
+# run did not end (with a fix pinned). Bash 3.2 is enough.
 set -u
 PKG=$(cd "$1" && pwd); OUT=$2
 mkdir -p "$OUT"; OUT=$(cd "$OUT" && pwd)
@@ -31,4 +32,5 @@ for delay in 1.0 1.25 1.5 1.75 2.0 2.25 2.5 2.75 3.0 3.25 3.5; do
 done
 echo "sweep: $stuck of 11 runs did not end within 5 s of the SIGTERM" | tee -a "$OUT/sweep.txt"
 grep -h 'resetting error state' "$OUT"/exec-*.out | sed 's/^\[[^]]*\] \[[^]]*\] //' | sort | uniq -c | tee "$OUT/resets.txt"
+if [ "${STRICT:-0}" = 1 ] && [ "$stuck" -gt 0 ]; then exit 1; fi
 exit 0
