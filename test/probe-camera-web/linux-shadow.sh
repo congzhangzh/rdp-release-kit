@@ -6,10 +6,12 @@
 # context), reached through websockify, in headless Chrome with Chrome's fake camera.
 #
 # Checks: the page offers the camera (Chrome encodes H.264), the browser allows it, the host
-# chooses H264 for the browser's camera, an app on the host reads >= 60 changing frames that the
-# host decoded, the client logs its first sample and, after the app closed the camera, its
-# counters (bit rate sent, first-sample delay, key frames, encode time), no camera error on
-# either side. Results: <out dir>/result.txt (PASS/FAIL/INFO lines), logs beside it.
+# chooses H264 for the browser's camera; then twice (on demand: Start, Stop, Start, Stop) an app
+# on the host reads >= 60 changing frames that the host decoded, and after it closed the camera
+# the client logs its counters (bit rate sent, first-sample delay, encode time) with exactly one
+# key frame for that stream (no periodic key frame: the second stream decodes from its own);
+# no camera error on either side. Results: <out dir>/result.txt (PASS/FAIL/INFO lines), logs
+# beside it.
 set -uo pipefail
 
 HOSTDIR=$(realpath "${1:?usage: linux-shadow.sh <host dir> <page dir> <out dir>}")
@@ -95,14 +97,20 @@ if wait_for 90 "grep -q 'camera: \".*\" of client .*: chose' '$OUT/host.log'"; t
 fi
 check "the host chose H264 for the browser's camera" "camera_lines() { grep -F 'com.freerdp.server.shadow.camera' '$OUT/host.log'; }; camera_lines | grep -q ': chose H264 '"
 
-# an app reads the host's camera: the host starts the browser's stream (on demand)
-mark "reader opens $CAM_DEV"
+# an app reads the host's camera: the host starts the browser's stream (on demand), stops it
+# about 500 ms after the app closed it; the client releases the browser's camera then. Twice.
 v4l2-ctl -d $CAM_DEV --all > "$OUT/camera-device.txt" 2>&1 || true
-timeout 90 v4l2-ctl -d $CAM_DEV --stream-mmap=4 --stream-count=240 --stream-to="$OUT/read-1.yuyv" \
-    > "$OUT/read-1.log" 2>&1
-mark "reader closed $CAM_DEV (rc $?)"
-check "an app reads >= 60 changing frames, the browser's H.264 decoded by the host" \
-    "python3 '$HERE/frames.py' '$OUT/read-1.yuyv' $WIDTH $HEIGHT 60 | tee '$OUT/frames-1.txt'"
+for n in 1 2; do
+    mark "reader $n opens $CAM_DEV"
+    timeout 90 v4l2-ctl -d $CAM_DEV --stream-mmap=4 --stream-count=240 --stream-to="$OUT/read-$n.yuyv" \
+        > "$OUT/read-$n.log" 2>&1
+    mark "reader $n closed $CAM_DEV (rc $?)"
+    check "stream $n: an app reads >= 60 changing frames, the browser's H.264 decoded by the host" \
+        "python3 '$HERE/frames.py' '$OUT/read-$n.yuyv' $WIDTH $HEIGHT 60 | tee '$OUT/frames-$n.txt'"
+    # the client stops its stream (Stop Streams, or 2 s without sample requests)
+    wait_for 20 "[ \$(grep -c 'camera web0 stopped: H264 ' '$OUT/page-live.log' 2> /dev/null) -ge $n ]" ||
+        mark "stream $n: the client's stop line did not come in 20 s"
+done
 touch "$OUT/reader-done"
 wait "$BROWSER"
 mark "browser done (rc $?)"
@@ -112,17 +120,19 @@ cat "$OUT/browser.txt"
 check "the page offers Camera (the browser encodes H.264)" "grep -q '\"checkboxDisabled\":false' '$OUT/browser.txt'"
 check "the browser allowed the camera after Camera was ticked" "grep -q '\"permission\":\"allowed\"' '$OUT/browser.txt'"
 check "the session's options carry /dvc:rdpecam,sys:emscripten" "grep -q 'dvc:rdpecam,sys:emscripten' '$OUT/browser.txt'"
-check "the client started H264 and sent its first sample" \
-    "grep -q 'camera web0: start H264 ' '$OUT/page.log' && grep -q 'camera web0: first H264 sample' '$OUT/page.log'"
-check "the client released the camera after the app closed it, with its counters" \
-    "grep -q 'camera web0 stopped: H264 ' '$OUT/page.log'"
+check "the client started H264 twice, a first sample each time" \
+    "[ \$(grep -c 'camera web0: start H264 ' '$OUT/page.log') = 2 ] && [ \$(grep -c 'camera web0: first H264 sample' '$OUT/page.log') = 2 ]"
+check "the client released the camera after each stream, with its counters" \
+    "[ \$(grep -c 'camera web0 stopped: H264 ' '$OUT/page.log') = 2 ]"
+check "exactly one key frame per stream (no periodic key frame)" \
+    "[ \$(grep -o 'camera web0 stopped: H264 .*' '$OUT/page.log' | grep -c '(1 key)') = 2 ]"
 check "no camera error in the client" \
     "! grep -E '\\[(ERROR|WARN)\\]\\[com\\.freerdp\\.channels\\.rdpecam|\\[rdpecam\\] camera .* failed|cannot be sent' '$OUT/page.log'"
 check "no camera error in the host" \
     "! grep -E '\\[ERROR\\]\\[com\\.freerdp\\.server\\.shadow\\.camera' '$OUT/host.log'"
 info "client: $(grep -o 'camera web0: start H264 [^\"]*' "$OUT/page.log" | head -1)"
-info "client: $(grep -o 'camera web0: first H264 sample [^\"]*' "$OUT/page.log" | head -1)"
-info "client: $(grep -o 'camera web0 stopped: H264 [^\"]*' "$OUT/page.log" | head -1)"
+grep -o 'camera web0: first H264 sample [^"]*' "$OUT/page.log" | while read -r l; do info "client: $l"; done
+grep -o 'camera web0 stopped: H264 [^"]*' "$OUT/page.log" | while read -r l; do info "client: $l"; done
 info "browser: $(grep -o '"browser":"[^"]*"' "$OUT/browser.txt")"
 info "host: $(camera_lines | grep -m1 ': chose' | sed 's/.*camera: //')"
 exit $status

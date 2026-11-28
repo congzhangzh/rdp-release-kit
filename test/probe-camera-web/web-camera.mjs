@@ -8,7 +8,9 @@
 // side's reader finished) and 6 s more (the client releases the camera after 2 s without sample
 // requests). Writes <out dir>/page.log, stats.jsonl, camera.json, page.png.
 //
-// CHROME=<binary> (default google-chrome); CHROME_FLAGS=<more flags>; CDP_PORT (default 9348).
+// CHROME=<binary> (default google-chrome); CHROME_FLAGS=<more flags>; CDP_PORT (default 9348);
+// WEB_USER, WEB_PASS: the account (default camera/camera, a server without authentication); the
+// password comes through the environment only, never a command line or a log.
 import { spawn } from "node:child_process";
 import { existsSync, mkdtempSync, rmSync, writeFileSync, appendFileSync } from "node:fs";
 import { join } from "node:path";
@@ -103,9 +105,12 @@ result.ticked = await ev("document.getElementById('optCamera').checked");
 result.preview = await ev("document.getElementById('preview')?.textContent ?? ''");
 if (!result.ticked) { await save(); finish(1); }
 
+const account = { user: process.env.WEB_USER || "camera", pass: process.env.WEB_PASS || "camera" };
 const fill = `document.getElementById('host').value = ${JSON.stringify(gateway)};
-              document.getElementById('user').value = "camera"; document.getElementById('pass').value = "camera"; true`;
-const held = `document.getElementById('host').value === ${JSON.stringify(gateway)} && document.getElementById('pass').value === "camera"`;
+              document.getElementById('user').value = ${JSON.stringify(account.user)};
+              document.getElementById('pass').value = ${JSON.stringify(account.pass)}; true`;
+const held = `document.getElementById('host').value === ${JSON.stringify(gateway)} &&
+              document.getElementById('pass').value === ${JSON.stringify(account.pass)}`;
 for (let i = 0; i < 5; i++) { await ev(fill); await sleep(1000); if (await ev(held)) break; }
 await click("go");
 const t0 = Date.now();
@@ -117,6 +122,8 @@ while (Date.now() - t0 < 240000) {
   await sleep(1000);
   const s = await ev("JSON.stringify(globalThis.Module?.freerdpCameraStats ?? {})");
   appendFileSync(join(out, "stats.jsonl"), JSON.stringify({ t: Date.now() - t0, stats: JSON.parse(s || "{}") }) + "\n");
+  // the page's log so far, for the server side's script (the client's stop lines)
+  writeFileSync(join(out, "page-live.log"), await pageLog());
   if (existsSync(doneFile) && ++after >= 6) break;
 }
 result.stats = JSON.parse((await ev("JSON.stringify(globalThis.Module?.freerdpCameraStats ?? {})")) || "{}");
