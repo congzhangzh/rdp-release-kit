@@ -334,7 +334,7 @@ if [ -n "${CLIENT_DEMO:-}" ]; then
     ascii="glyphs: .*'dots': '\.\.\.'"
     # shellcheck disable=SC2034
     # the release's own client is in its bin/; the wheel's (uvx) in freerdp_tk/client/
-    own_first="clients: \['/home/demo/[^']*/(bin|freerdp_tk/client)/[^']*', '/usr/bin/sdl-freerdp3'"
+    own_first="clients: \['/home/demo/[^']*/(bin|freerdp_tk/client|rdp_kit_client/client)/[^']*', '/usr/bin/sdl-freerdp3'"
     # Tk without Xft (uv's Python, the release's): ASCII instead of … and •
     check "freerdp-tk shows ASCII glyphs, its Tk has no Xft" 'grep -q "$ascii" "$OUT/client/driver.log"'
     check "the second visit logged in from the saved connection, with no password asked" \

@@ -127,7 +127,7 @@ env = {
     "implementation_name": "cpython", "platform_python_implementation": "CPython",
 }
 pkgs = tomllib.load(open(lock, "rb"))["package"]
-want, todo = {}, [d for p in pkgs if p["name"] == "freerdp-tk" for d in p.get("dependencies", [])]
+want, todo = {}, [d for p in pkgs if p["name"] in ("freerdp-tk", "rdp-kit-client") for d in p.get("dependencies", [])]
 while todo:
     d = todo.pop()
     if "marker" in d and not Marker(d["marker"]).evaluate(env):
@@ -168,9 +168,12 @@ PY
 check_launcher() {
     local pkg=$1
     PYTHONPATH=$pkg/lib/freerdp-tk "$pkg/python/bin/python3" -s -c '
-import importlib.util, sys, _tkinter, tkinter, freerdp_tk.app
+import importlib.util, sys, _tkinter, tkinter
+# rdp_kit_client once freerdp-tk is renamed; freerdp_tk before
+top = "rdp_kit_client" if importlib.util.find_spec("rdp_kit_client") else "freerdp_tk"
+importlib.import_module(top + ".app")
 print("launcher: Python", sys.version.split()[0], "with Tk", _tkinter.TK_VERSION)
-if importlib.util.find_spec("freerdp_tk.credentials"):
+if importlib.util.find_spec(top + ".credentials"):
     # the backend modules swallow a missing library, so import what they need too
     import keyring
     need = {"linux": ["keyring.backends.SecretService", "secretstorage", "jeepney", "cryptography"],

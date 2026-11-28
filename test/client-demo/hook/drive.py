@@ -110,7 +110,7 @@ class Driver:
         # window (uvx: uv's own, after freerdp-tk started again), the clients
         # "(auto)" chose from (release: its own first, Debian's after it),
         # and the glyphs (ASCII where Tk has no Xft)
-        from freerdp_tk import app as tkapp
+        tkapp = tk_app()
         say("python:", sys.base_prefix)  # the install behind uvx's environment
         say("clients:", self.app.clients)
         say("glyphs:", getattr(tkapp, "GLYPHS", None))
@@ -249,7 +249,7 @@ class Driver:
     # ---- the two visits ---------------------------------------------------
 
     def phase1(self):
-        from freerdp_tk import app as tkapp
+        tkapp = tk_app()
         a = self.app
         win = MODE == "windows"
         yield 1.0
@@ -334,7 +334,8 @@ class Driver:
             yield 22.0
         # back to freerdp-tk: disconnect, then quit it
         # its title: "FreeRDP" up to 20261107.3, "freerdp-tk <version>" after it
-        tkwin = self.io.find("^(FreeRDP|freerdp-tk( .*)?)$")
+        # "RDP Kit Client <version>" once freerdp-tk is renamed rdp-kit-client (both, until the kit switches)
+        tkwin = self.io.find("^(FreeRDP|freerdp-tk( .*)?|RDP Kit Client( .*)?)$")
         if tkwin:
             self.io.activate(tkwin)
         yield 1.0
@@ -377,12 +378,21 @@ class Driver:
         mark("done")
 
 
+def tk_app():
+    """the connection window's app module: rdp_kit_client, or freerdp_tk before the rename"""
+    try:
+        from rdp_kit_client import app
+    except ImportError:
+        from freerdp_tk import app
+    return app
+
+
 def install():
     """Starts the driver once freerdp-tk's window enters Tk's loop."""
     plain = tk.Misc.mainloop
 
     def mainloop(self, n=0):
-        from freerdp_tk import app as tkapp
+        tkapp = tk_app()
         ui = [w for w in self.winfo_children() if isinstance(w, tkapp.App)]
         if ui:
             try:
