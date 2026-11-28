@@ -1,0 +1,4 @@
+Camera (macOS): started from Terminal or freerdp-tk, macOS asks for Terminal's camera permission; started from Finder or with `open FreeRDP.app`, it asks for FreeRDP's own. Allowing Terminal lets any program you run in Terminal use the camera.
+摄像头（macOS）：从“终端”或 freerdp-tk 启动时，macOS 请求的是“终端”的摄像头权限；从“访达”或用 `open FreeRDP.app` 启动时，请求的是 FreeRDP 自己的权限。允许“终端”后，在终端里运行的任何程序都能使用摄像头。
+カメラ（macOS）：ターミナルまたはfreerdp-tkから起動すると、macOSは「ターミナル」のカメラ許可を求めます。Finderまたは `open FreeRDP.app` で起動すると、FreeRDP自身の許可を求めます。「ターミナル」に許可すると、ターミナルで実行するすべてのプログラムがカメラを使えるようになります。
+Caméra (macOS) : lancé depuis le Terminal ou freerdp-tk, macOS demande l'autorisation caméra du Terminal ; lancé depuis le Finder ou avec `open FreeRDP.app`, il demande celle de FreeRDP. Autoriser le Terminal permet à tout programme lancé dans le Terminal d'utiliser la caméra.

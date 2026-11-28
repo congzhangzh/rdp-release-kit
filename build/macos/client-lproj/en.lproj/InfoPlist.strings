@@ -1,0 +1,3 @@
+/* FreeRDP.app, en (made by build/macos/make-strings.py) */
+"NSCameraUsageDescription" = "FreeRDP shares your camera with the remote computer while you are connected.";
+"NSMicrophoneUsageDescription" = "FreeRDP sends your microphone's sound to the remote computer while you are connected.";

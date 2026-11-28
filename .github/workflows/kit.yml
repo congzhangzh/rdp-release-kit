@@ -315,6 +315,21 @@ jobs:
           CCACHE_MAXSIZE: 1G
         run: ./build-macos.sh ${{ matrix.arch }}
 
+      # the client is FreeRDP.app (its camera's usage words checked by the build), bin/sdl-freerdp
+      # a shell shim: old command lines behave as before, and the build has the camera channel
+      # (test/mac-client-shim.sh, from the probe probe-camera-mac)
+      - name: bin/sdl-freerdp, the shim, and the camera channel
+        run: |
+          mkdir -p shim-check
+          tar -C shim-check -xf dist/sdl3-freerdp-*-macos-${{ matrix.arch }}.tar.xz
+          test/mac-client-shim.sh "$(ls -d shim-check/sdl3-freerdp-*/)" out/shim
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: mac-client-shim-${{ matrix.arch }}
+          path: out/shim
+          retention-days: 7
+
       - uses: actions/upload-artifact@v7
         with:
           name: sdl3-freerdp-macos-${{ matrix.arch }}
