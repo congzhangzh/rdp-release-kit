@@ -19,6 +19,9 @@
         <!-- H.264 as AVC420 (FreeRDP 20261101.10 gives RDP 10 clients AVC420): AVC444 sent
              15-18 times the bytes for the same screen (freerdp-bc's A/B, 2026-11-01) -->
         <string>-gfx-avc444</string>
+        <!-- H.265 4:2:0, VideoToolbox's hardware encoder: what a client that names no codec gets
+             first (FreeRDP's client order HEVC, AV1, AV2); AV2 stays for a client that asks for it -->
+        <string>/gfx-hevc:i420</string>
     </array>
     <key>RunAtLoad</key>          <true/>
     <key>KeepAlive</key>          <true/>

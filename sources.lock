@@ -128,7 +128,7 @@
 # 20261103.1: .4 + the input race fix (#14020), WinPR's 8 MiB default stack (#14004), the Mutter review fixes
 # 20261102.4: integration-all rebuilt on master 9f9d97e81 (#13934, #13948, #13974 merged upstream), with the
 # DXGI cleanup and the Linux GNOME (Mutter) shadow backend incl. its no-spin and end-on-Stop fixes (freerdp-d2, freerdp-ce)
-freerdp     20261128.4 git+https://github.com/congzhangzh/FreeRDP.git                                      e18902ea9b3169c50a925453e240e68ac6086030
+freerdp     20261128.4-b3b1 git+https://github.com/congzhangzh/FreeRDP.git                                      8b329d93552e3a7f71c329b15729e3512a5c3c2f
 # FreeRDP for the Windows host (freerdp-shadow-cli, freerdp-shadow-service),
 # not for the clients: our release-20261030.7, picked from the fork's
 # integration-shadow-win, FreeRDP master 2a508c725 (2026-10-31) plus our pull
@@ -160,7 +160,7 @@ freerdp_host 20261128.4 git+https://github.com/congzhangzh/FreeRDP.git          
 # lookup), rdpsnd's server no longer pads Opus waves (#13952), and -sec-nla also
 # turns EXT off (#13953); 20261031.11: integration-all, the one FreeRDP the clients and
 # the Windows host build too
-freerdp_mac_host 20261128.4 git+https://github.com/congzhangzh/FreeRDP.git                                 e18902ea9b3169c50a925453e240e68ac6086030
+freerdp_mac_host 20261128.4-b3b1 git+https://github.com/congzhangzh/FreeRDP.git                                 8b329d93552e3a7f71c329b15729e3512a5c3c2f
 # FreeRDP for the Linux host (freerdp-shadow-cli, build.sh HOST=1): the same
 # release-20261103.2 of integration-all, whose shadow server builds the Mutter
 # subsystem (GNOME, X11 or Wayland: Mutter's ScreenCast and RemoteDesktop APIs,
