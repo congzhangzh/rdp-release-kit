@@ -30,7 +30,7 @@ env:
   FREERDP_SHA: 94385ded8db983988cf9c534da04a4c72a6c0d6c
   WEB_REPO: https://github.com/congzhangzh/freerdp-web.git
   WEB_BRANCH: camera-r3
-  WEB_SHA: de8877147c036aeab2bf7e70a2d8371a805c53aa
+  WEB_SHA: 0cf4f7c30629baf5e49567b1c7dc4bb73e386ff9
   # the released host the browser's camera goes to
   HOST_RELEASE: "20261128.1"
 
@@ -179,7 +179,7 @@ jobs:
   # probe-camera-win f38db99: runneradmin with a password of this run, masked, takes the console
   # session over; the app reads the redirected camera in that session)
   win11-rdp:
-    needs: [wasm-build, linux-shadow]
+    needs: wasm-build
     runs-on: windows-11-arm
     timeout-minutes: 30
     steps:
@@ -202,7 +202,7 @@ jobs:
           $vcvars = Join-Path $vs 'VC\Auxiliary\Build\vcvarsall.bat'
           $src = (Resolve-Path test/probe-camera-web/mf-camera-reader.c).Path
           foreach ($h in 'arm64', 'x64_arm64') {
-              cmd /c "`"$vcvars`" $h >nul && cd /d tools && cl /nologo /W3 /O2 /DUNICODE /D_UNICODE $src /Fe:mf-camera-reader.exe /link mfplat.lib mf.lib mfreadwrite.lib mfuuid.lib ole32.lib uuid.lib" 2>&1 |
+              cmd /c "`"$vcvars`" $h >nul && cd /d tools && cl /nologo /W3 /O2 /DUNICODE /D_UNICODE $src /Fe:mf-camera-reader.exe /link mfplat.lib mf.lib mfreadwrite.lib mfuuid.lib ole32.lib uuid.lib advapi32.lib" 2>&1 |
                   Tee-Object -FilePath out/reader-build.txt -Append
               if (Test-Path tools/mf-camera-reader.exe) { "built with vcvarsall $h" | Tee-Object -FilePath out/reader-build.txt -Append; break }
           }

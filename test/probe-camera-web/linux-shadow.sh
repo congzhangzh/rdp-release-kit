@@ -118,6 +118,8 @@ mark "browser done (rc $?)"
 # what the browser and the client said; the client's lines from the page's own log (page.log
 # carries the browser console's copy of each line after it)
 sed '/^--- console ---$/q' "$OUT/page.log" > "$OUT/client.log"
+check "the page's log ends where the console's copy begins (the counts below read it once)" \
+    "grep -q -x -- '--- console ---' '$OUT/page.log'"
 cat "$OUT/browser.txt"
 check "the page offers Camera (the browser encodes H.264)" "grep -q '\"checkboxDisabled\":false' '$OUT/browser.txt'"
 check "the browser allowed the camera after Camera was ticked" "grep -q '\"permission\":\"allowed\"' '$OUT/browser.txt'"
