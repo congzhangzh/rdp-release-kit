@@ -5,7 +5,8 @@ no OpenSSL to build from source, run 46139068111). CI only, never shipped.
 
 A WebSocket server (the "binary" subprotocol, as the client is linked with
 -sWEBSOCKET_SUBPROTOCOL=binary) on <listen>, one TCP connection to <rdp> per WebSocket, bytes
-passed both ways as they come, as websockify does. Needs the pure-Python websockets package."""
+passed both ways as they come, as websockify does. Needs the pure-Python websockets package
+(pinned in win11-rdp.ps1)."""
 import asyncio
 import sys
 
@@ -22,7 +23,12 @@ TARGET = split(sys.argv[2])
 
 
 async def bridge(ws):
-    reader, writer = await asyncio.open_connection(*TARGET)
+    try:
+        reader, writer = await asyncio.open_connection(*TARGET)
+    except OSError as e:
+        print(f"cannot connect to {TARGET[0]}:{TARGET[1]}: {e}", file=sys.stderr, flush=True)
+        await ws.close(1011, "the RDP server refused the connection")
+        return
     print(f"connection: {ws.remote_address} -> {TARGET[0]}:{TARGET[1]}", flush=True)
 
     async def up():

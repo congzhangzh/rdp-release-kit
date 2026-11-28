@@ -68,7 +68,7 @@ $chrome = @("$env:ProgramFiles\Google\Chrome\Application\chrome.exe",
 $browser = if ($chrome) { $chrome } else { $edge }
 Fact "browser: $browser $((Get-Item $browser).VersionInfo.ProductVersion) (Chrome there: $([bool]$chrome), Edge there: $([bool]$edge))"
 $py = (Get-Command python -ErrorAction Stop).Source
-& $py -m pip install --quiet --only-binary=:all: websockets 2>&1 | Out-File "$Out\pip.log"
+& $py -m pip install --quiet --only-binary=:all: websockets==17.4 2>&1 | Out-File "$Out\pip.log"
 Fact "gateway: ws-gateway.py with websockets $(& $py -c 'import websockets; print(websockets.__version__)' 2>&1)"
 $http = Start-Process -FilePath $py -PassThru -WindowStyle Hidden -RedirectStandardOutput "$Out\http.log" -RedirectStandardError "$Out\http.err" `
     -ArgumentList "-m", "http.server", "8080", "--bind", "127.0.0.1", "-d", "`"$Page`""

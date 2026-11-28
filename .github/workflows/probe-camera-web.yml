@@ -27,7 +27,7 @@ env:
   FREERDP_REPO: https://github.com/congzhangzh/FreeRDP.git
   FREERDP_BRANCH: feature-camera-web
   # the probed commits, fixed: the branches may move on
-  FREERDP_SHA: 94385ded8db983988cf9c534da04a4c72a6c0d6c
+  FREERDP_SHA: b4f178a8689e782364db74b3ddd51838c1de886b
   WEB_REPO: https://github.com/congzhangzh/freerdp-web.git
   WEB_BRANCH: camera-r3
   WEB_SHA: 0cf4f7c30629baf5e49567b1c7dc4bb73e386ff9
