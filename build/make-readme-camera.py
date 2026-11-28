@@ -1,17 +1,20 @@
 #!/usr/bin/env python3
-# Makes the Windows camera cell of the four kit READMEs' host table from the PO's draft, byte for
-# byte (never retyped), as build/macos/make-strings.py does for the Mac's strings:
+# Makes the Windows and macOS camera cells of the four kit READMEs' host table from the PO's
+# drafts, byte for byte (never retyped), as build/macos/make-strings.py does for the Mac's strings:
 #
-#   make-readme-camera.py [--check] [--on-demand] <PO README draft> <kit dir>
+#   make-readme-camera.py [--check] [--on-demand] <PO Windows draft> <PO macOS draft> <kit dir>
 #
-#   <PO README draft>  rdp-product-plan/drafts/readme-windows-camera.v3.md (v2: the camera is
+#   <PO Windows draft> rdp-product-plan/drafts/readme-windows-camera.v3.md (v2: the camera is
 #                      "FreeRDP Camera"; Windows lists it with its own " (Windows Virtual
 #                      Camera)"; v3: the camera privacy sentence at the end): the cell, en/zh/ja/fr
 #                      ("- <lang>: <text>" lines)
+#   <PO macOS draft>   rdp-product-plan/drafts/readme-mac-server-camera-unsigned.v1.md: the macOS
+#                      server's cell while the release is signed ad hoc (no server camera: a
+#                      CoreMediaIO system extension needs the Developer ID), en/zh/ja/fr
 #
-# The cell goes in the Windows column of a "Camera" row of the "Shadow server" table (README.md,
-# README.zh.md, README.ja.md, README.fr.md): the row is added before the table's last row ("Tested
-# in CI"), the Linux and macOS cells "—"; a row that is there already keeps its other cells.
+# The cells go in the Windows and macOS columns of a "Camera" row of the "Shadow server" table
+# (README.md, README.zh.md, README.ja.md, README.fr.md): the row is added before the table's last
+# row ("Tested in CI"), the Linux cell "—"; a row that is there already keeps its Linux cell.
 #
 # The README style rule (the RM, 2026-11-27): a README cell takes its target README's style.
 # README.fr.md writes ASCII apostrophes and NBSP before ":" and ";": U+2019 becomes "'" and a plain
@@ -96,7 +99,7 @@ def host_table(lines):
     return None
 
 
-def update(text, lang, value):
+def update(text, lang, value, mac):
     lines = text.split("\n")
     span = host_table(lines)
     if not span:
@@ -107,9 +110,10 @@ def update(text, lang, value):
         cells = lines[i].split("|")
         if cells[1].strip() == label:
             cells[2] = f" {value} "
+            cells[4] = f" {mac} "
             lines[i] = "|".join(cells)
             return "\n".join(lines)
-    lines.insert(last, f"| {label} | {value} | — | — |")
+    lines.insert(last, f"| {label} | {value} | — | {mac} |")
     return "\n".join(lines)
 
 
@@ -118,15 +122,19 @@ def main():
     check = "--check" in args
     on_demand = ON_DEMAND_PROVEN or ("--on-demand" in args)
     args = [a for a in args if a not in ("--check", "--on-demand")]
-    if len(args) != 2:
-        sys.exit(__doc__ if __doc__ else "usage: make-readme-camera.py [--check] [--on-demand] <draft> <kit>")
+    if len(args) != 3:
+        sys.exit("usage: make-readme-camera.py [--check] [--on-demand] <Windows draft> <macOS draft> <kit>")
     cells = po_cells(args[0])
-    kit = Path(args[1])
+    mac = po_cells(args[1])
+    kit = Path(args[2])
     differs = []
     for lang in LANGS:
         path = kit / README[lang]
         old = path.read_bytes().decode("utf-8")
-        new = update(old, lang, cell(lang, cells[lang], on_demand))
+        mac_cell = readme_style(lang, mac[lang])
+        if "|" in mac_cell:
+            sys.exit(f"{lang}: a '|' in the macOS cell would break the table")
+        new = update(old, lang, cell(lang, cells[lang], on_demand), mac_cell)
         if new.encode("utf-8") == old.encode("utf-8"):
             continue
         if check:
