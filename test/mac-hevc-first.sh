@@ -1,12 +1,15 @@
 #!/bin/bash
-# HEVC first on the macOS host (FreeRDP feature-shadow-mac-hevc-first: the shadow's default codec
-# order on macOS is HEVC, AV2, AV1, ...; VideoToolbox encodes HEVC in hardware), with the kit's own
-# macOS client. One run, every answer:
-#  A. CHECKS, a server with AV1, AV2 and HEVC 4:2:0 on (/gfx-hevc:i420):
-#     - hevc-first-av1: AV2 off in the client, so it offers FRDP_1 + 11.x;
-#     - hevc-first-all: the client's default and HEVC, so it offers FRDP_2, FRDP_1 + 11.x;
+# The client's order on the macOS host (FreeRDP feature-shadow-gfx-client-order-v2: the shadow
+# confirms the GFX caps set the client prefers, its last one, of those it can serve; a set whose
+# codec the server does not send this client comes after the others), with the kit's own macOS
+# client. One run, every answer:
+#  A. CHECKS, a server with AV1, AV2 and HEVC 4:2:0 on (/gfx-hevc:i420), clients with no order of
+#     their own (they list their sets ascending, so the last is the newest):
+#     - client-order-av1: AV2 off in the client, so it offers 11.x + FRDP_1, FRDP_1 last;
+#     - client-order-all: the client's default and HEVC, so it offers 11.x, FRDP_1, FRDP_2;
 #     each: the session holds 20 s, the client offered what the case is about (its "Sending <caps>"
-#     lines), 11.x confirmed with HEVC_ENABLE, at least 30 HEVC 4:2:0 frames.
+#     lines), its last set confirmed (FRDP_1, FRDP_2: not 11.x, though HEVC is on), at least 30
+#     frames of RDPGFX_CODECID_AV1 (AV1 and AV2 share it).
 #  B. freerdp-tk's entries, what a user picks: "H.265 (HEVC) 4:2:0" sends
 #     /gfx-codec-order:HEVC,AV1,AVC420 (no :i420: naming HEVC there turns HEVC 4:4:4 on in the client
 #     too), "AV1" sends /gfx-codec-order:AV1,AVC420; each against three servers:
@@ -14,8 +17,11 @@
 #       host does today);
 #     - hevc: the same plus /gfx-hevc (no value: 4:2:0 and 4:4:4 allowed);
 #     - hevc-i420: the same plus /gfx-hevc:i420.
-#     CHECKED where the server has HEVC on: tk's HEVC session holds 20 s, 11.x confirmed with
-#     HEVC_ENABLE, at least 30 HEVC frames (4:2:0 or 4:4:4). RECORDED for every session (RECORD lines,
+#     CHECKED (the product owner's gate 2 for tk's HEVC entry): where the server has HEVC on, tk's
+#     HEVC session holds 20 s, 11.x confirmed with HEVC_ENABLE, at least 30 HEVC frames (4:2:0 or
+#     4:4:4). On the plist's server (HEVC off) tk's HEVC session must get AV1 (FRDP_1 confirmed, at
+#     least 30 AV1 frames), not 11.x without HEVC and AVC420 (kit probe run 46141609896 found that
+#     with FreeRDP d9839ae7b). RECORDED for every session (RECORD lines,
 #     the product owner's call): the caps confirmed, frames per codec, failed decodes, the server's
 #     sent frames per second (its 5-second lines) and its CPU over the session.
 #   test/mac-hevc-first.sh <host dir (holds FreeRDP-Shadow.app)> <client dir (holds bin/sdl-freerdp)> <out dir>
@@ -47,7 +53,7 @@ ok=1
 for b in "$SERVER" "$CLIENT"; do
     "$b" /buildconfig 2> /dev/null | tr " " "\n" | grep -qx "WITH_GFX_AZURE=ON" || ok=0
 done
-check "HEVC first: the host and the client are built with WITH_GFX_AZURE" $ok
+check "client order: the host and the client are built with WITH_GFX_AZURE" $ok
 [ $ok = 1 ] || { echo "$fails failed"; exit 1; }
 export WLOG_LEVEL=DEBUG WLOG_APPENDER=FILE WLOG_FILEAPPENDER_OUTPUT_FILE_PATH="$OUT"
 
@@ -92,10 +98,10 @@ session() {  # session <name> <client option>: 20 s; sets HELD; the client's log
 confirmed_hevc() { grep -qE "RecvCapsConfirmPdu: version: RDPGFX_CAPVERSION_11[0-9]+ .*[{|]HEVC_ENABLE[|}]" "$1" 2> /dev/null; }
 frames() { n=$(grep -c "Got GFX RDPGFX_CODECID_$2\b" "$1" 2> /dev/null || true); echo "${n:-0}"; }
 
-# A. the checks of HEVC first
+# A. the checks of the client's order
 # shellcheck disable=SC2086 # the plist's arguments are words
 server_start checks 4492 $PLIST_ARGS /gfx-hevc:i420
-for s in "hevc-first-av1 FRDP_1 /gfx:AV2:off,HEVC:i420" "hevc-first-all FRDP_2 /gfx:HEVC:i420"; do
+for s in "client-order-av1 FRDP_1 /gfx:AV2:off,HEVC:i420" "client-order-all FRDP_2 /gfx:HEVC:i420"; do
     name=${s%% *}; rest=${s#* }; other=${rest%% *}; opt=${rest#* }
     session "$name" "$opt"
     log="$OUT/$name.wlog"
@@ -105,11 +111,12 @@ for s in "hevc-first-av1 FRDP_1 /gfx:AV2:off,HEVC:i420" "hevc-first-all FRDP_2 /
     [ $a = 1 ] && [ $b = 1 ] && ok=1 || ok=0
     check "$name: the client offered $other and 11.x" $ok \
         "$(grep -oE 'Sending RDPGFX_CAPVERSION_[A-Z0-9_]+' "$log" 2> /dev/null | sed 's/Sending RDPGFX_CAPVERSION_//' | tr '\n' ' ')"
-    confirmed_hevc "$log" && ok=1 || ok=0
-    check "$name: the Mac server confirms 11.x (HEVC) before $other" $ok
-    n=$(frames "$log" HEVC420)
+    grep -q "RecvCapsConfirmPdu: version: RDPGFX_CAPVERSION_$other " "$log" 2> /dev/null && ok=1 || ok=0
+    check "$name: the Mac server confirms the client's last set, $other (not 11.x)" $ok \
+        "$(grep -m1 -oE 'RecvCapsConfirmPdu: version: RDPGFX_CAPVERSION_[A-Z0-9_]+' "$log" 2> /dev/null)"
+    n=$(frames "$log" AV1)
     [ "$n" -ge 30 ] && ok=1 || ok=0
-    check "$name: at least 30 frames in HEVC420" $ok "$n"
+    check "$name: at least 30 frames in RDPGFX_CODECID_AV1" $ok "$n"
 done
 server_stop
 
@@ -127,11 +134,18 @@ for v in "plist 4493" "hevc 4494 /gfx-hevc" "hevc-i420 4495 /gfx-hevc:i420"; do
         n=$(( $(frames "$log" HEVC420) + $(frames "$log" HEVC444) ))
         [ "$n" -ge 30 ] && ok=1 || ok=0
         check "tk-hevc-$sname: at least 30 HEVC frames (4:2:0 or 4:4:4)" $ok "$n"
+    else
+        grep -q "RecvCapsConfirmPdu: version: RDPGFX_CAPVERSION_FRDP_1 " "$log" 2> /dev/null && ok=1 || ok=0
+        check "tk-hevc-$sname: HEVC off in the server, so FRDP_1 (AV1) is confirmed" $ok \
+            "$(grep -m1 -oE 'RecvCapsConfirmPdu: version: RDPGFX_CAPVERSION_[A-Z0-9_]+' "$log" 2> /dev/null)"
+        n=$(frames "$log" AV1)
+        [ "$n" -ge 30 ] && ok=1 || ok=0
+        check "tk-hevc-$sname: at least 30 AV1 frames" $ok "$n"
     fi
     session "tk-av1-$sname" "/gfx-codec-order:AV1,AVC420"
     server_stop
 done
-# a run that made no check proves nothing: 1 + (1 + 2 x 4) for A + (3 + 2 x 3) for B
-[ $checks -ge 19 ] || { echo "FAIL  HEVC first: only $checks checks ran"; fails=$((fails + 1)); }
+# a run that made no check proves nothing: 1 + (1 + 2 x 4) for A + (3 + 2 + 2 x 3) for B
+[ $checks -ge 21 ] || { echo "FAIL  client order: only $checks checks ran"; fails=$((fails + 1)); }
 echo "$fails failed"
 [ $fails = 0 ]

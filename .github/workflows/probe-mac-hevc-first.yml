@@ -1,12 +1,14 @@
 # Probe (branch probe-mac-hevc-first only; publishes nothing, no secrets, uploads logs): the macOS
-# host takes HEVC first. FreeRDP-Shadow.app built as the release builds it (HOST=1 ./build-macos.sh
-# arm64) from the freerdp_mac_host pin of this branch's sources.lock (fork
-# feature-shadow-mac-hevc-first d9839ae7b: the default codec order on macOS is HEVC, AV2, AV1, ...),
+# host follows the client's order of its GFX caps sets. FreeRDP-Shadow.app built as the release
+# builds it (HOST=1 ./build-macos.sh arm64) from the freerdp_mac_host pin of this branch's
+# sources.lock (fork feature-shadow-gfx-client-order-v2 00fd31b8a: the client's last set the server
+# can serve is confirmed; a set whose codec the server does not send comes after the others),
 # the kit's macOS client as the release builds it (./build-macos.sh arm64, the freerdp pin), then
-# test/mac-hevc-first.sh: a server with AV1, AV2 and HEVC on; a client offering FRDP_1 + 11.x and
-# one offering FRDP_2, FRDP_1 + 11.x must both be confirmed 11.x and get HEVC 4:2:0 frames; then
-# freerdp-tk's HEVC and AV1 entries against the plist's server, with /gfx-hevc and with
-# /gfx-hevc:i420 (RECORD lines: caps, frames per codec, failed decodes, server fps and CPU). The job
+# test/mac-hevc-first.sh: a server with AV1, AV2 and HEVC on; a client offering 11.x + FRDP_1 and
+# one offering 11.x, FRDP_1, FRDP_2 (no order of their own) must get their last set, FRDP_1 and
+# FRDP_2, with AV1-id frames; then freerdp-tk's HEVC and AV1 entries against the plist's server
+# (tk's HEVC must get FRDP_1 + AV1 there), with /gfx-hevc and with /gfx-hevc:i420 (11.x + HEVC)
+# (RECORD lines: caps, frames per codec, failed decodes, server fps and CPU). The job
 # fails on any FAIL line (unlike kit.yml's mac-host-test, it is not continue-on-error).
 name: probe-mac-hevc-first
 
@@ -19,7 +21,7 @@ permissions:
 
 env:
   FREERDP_REPO: https://github.com/congzhangzh/FreeRDP.git
-  FREERDP_BRANCH: feature-shadow-mac-hevc-first
+  FREERDP_BRANCH: feature-shadow-gfx-client-order-v2
 
 jobs:
   mac-client:
@@ -118,7 +120,7 @@ jobs:
           cd dl/host && ditto -x -k freerdp-host-*.zip . && cd ../client && tar -xf sdl3-freerdp-*.tar.xz
           cd .. && xattr -dr com.apple.quarantine . || true
           ls -d host/*/ client/*/
-      - name: HEVC first (test/mac-hevc-first.sh)
+      - name: Client order (test/mac-hevc-first.sh)
         run: |
           # the script's own exit, not tee's
           set -o pipefail
@@ -129,7 +131,7 @@ jobs:
           grep -E '^(PASS|FAIL|RECORD) ' out/out-hevc-first.txt >> "$GITHUB_STEP_SUMMARY" || true
           # any FAIL, no PASS at all, or the script's own failure fails the job
           if grep -q '^FAIL ' out/out-hevc-first.txt || ! grep -q '^PASS ' out/out-hevc-first.txt || [ $rc != 0 ]; then
-              echo "::error::HEVC first failed (rc $rc)"; exit 1
+              echo "::error::client order failed (rc $rc)"; exit 1
           fi
       - uses: actions/upload-artifact@v7
         if: always()
