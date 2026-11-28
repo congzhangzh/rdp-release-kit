@@ -318,8 +318,9 @@ $codecs = Codecs "av2-session"
 Check "av2: the frames came in AV2" (GotAv2 "av2-session") ($codecs -join ", ")
 Stop $s
 
-# the web client on the same AV2 server: the page decodes with libavm (no browser
-# decodes AV2); the server's log says which GFX version it confirmed (FRDP_2 = AV2)
+# the web client on the same AV2 server, asking for AV2 by name (Extra options /gfx:AV2: since FreeRDP
+# 20261128.5 a client that names no codec prefers HEVC, then AV1): the page decodes with libavm (no
+# browser decodes AV2); the server's log says which GFX version it confirmed (FRDP_2 = AV2)
 $webAv2 = "$Out\web-av2"
 New-Item -ItemType Directory -Force -Path $webAv2 | Out-Null
 $http = Start-Process -FilePath python -PassThru -NoNewWindow -RedirectStandardOutput "$webAv2\http.log" -RedirectStandardError "$webAv2\http.err" `
@@ -334,7 +335,7 @@ $gw = Start-Process -FilePath python -PassThru -NoNewWindow -RedirectStandardOut
 for ($i = 0; $i -lt 20 -and -not ((Listening 8081) -and (Listening 3391)); $i++) { Start-Sleep -Seconds 1 }
 $env:CHROME = (Get-Command chrome.exe -ErrorAction SilentlyContinue).Source
 if (-not $env:CHROME) { $env:CHROME = "${env:ProgramFiles}\Google\Chrome\Application\chrome.exe" }
-& node "$KitTest\wasm-session.mjs" "http://127.0.0.1:8081/index.html" "127.0.0.1:3391" $user $pass $webAv2 2>&1 |
+& node "$KitTest\wasm-session.mjs" "http://127.0.0.1:8081/index.html?extra=%2Fgfx%3AAV2" "127.0.0.1:3391" $user $pass $webAv2 2>&1 |
     Tee-Object "$webAv2\driver.log"
 $about = Get-Content "$WebDir\MANIFEST" -Raw -ErrorAction SilentlyContinue
 $serverLog = Get-Content "$Out\server-av2.wlog" -Raw -ErrorAction SilentlyContinue
