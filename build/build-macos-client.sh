@@ -35,10 +35,12 @@ OUT=$3
 ARCH=$4
 WORK=${WORK:-$HOME/.cache/rdp-release-kit/macos-$ARCH}
 STAGE=$WORK/stage
-# the bundle ids: the host's stays org.freerdp.shadow (its agent .agent); the client's
-# FreeRDP.app is new. The move to one prefix of our own waits for the Developer ID signing.
+# the bundle ids: the client's FreeRDP.app is new, so it takes our own id at once (the product
+# owner, 2026-11-28: org.freerdp.* is the FreeRDP project's); the host's stays
+# org.freerdp.shadow (its agent .agent) until its move, with a migration, comes with the
+# Developer ID signing
 HOST_ID=org.freerdp.shadow
-CLIENT_ID=org.freerdp.client
+CLIENT_ID=io.github.congzhangzh.freerdp
 # FreeRDP.app's usage words and the client README's camera paragraph, byte for byte
 # (build/macos/make-strings.py writes this file from the product owner's words)
 EXPECTED_STRINGS=$KIT/build/macos/expected-strings.txt
