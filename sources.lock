@@ -160,7 +160,7 @@ freerdp_host 20261128.5 git+https://github.com/congzhangzh/FreeRDP.git          
 # lookup), rdpsnd's server no longer pads Opus waves (#13952), and -sec-nla also
 # turns EXT off (#13953); 20261031.11: integration-all, the one FreeRDP the clients and
 # the Windows host build too
-freerdp_mac_host 20261128.5 git+https://github.com/congzhangzh/FreeRDP.git                                 8b329d93552e3a7f71c329b15729e3512a5c3c2f
+freerdp_mac_host 20261128.5-react1 git+https://github.com/congzhangzh/FreeRDP.git                                 3344feb3a72ec5f15bff6e2842f0de1b22d5476c
 # FreeRDP for the Linux host (freerdp-shadow-cli, build.sh HOST=1): the same
 # release-20261103.2 of integration-all, whose shadow server builds the Mutter
 # subsystem (GNOME, X11 or Wayland: Mutter's ScreenCast and RemoteDesktop APIs,

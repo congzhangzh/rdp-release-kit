@@ -1,0 +1,138 @@
+# Probe (branch probe-reactivation only; publishes nothing, no secrets, uploads logs): the resize
+# reactivation on the macOS host. FreeRDP-Shadow.app (HOST=1 ./build-macos.sh arm64) from the
+# freerdp_mac_host pin = fork fix-shadow-reactivation-svc (the shadow holds the channel data from
+# the Deactivate All to the next activation; on release-20261128.5), the kit's macOS client from the
+# freerdp pin as on main; then test/mac-reactivation.sh: 40 connects at 1280x720 against the
+# runner's 1024x768 desktop, each resized, none may see "unexpected MCS channel id" (kit round
+# 46157207304 lost a session to it). The job fails on any FAIL line.
+name: probe-reactivation
+
+on:
+  push:
+    branches: [probe-reactivation]
+
+permissions:
+  contents: read
+
+env:
+  FREERDP_REPO: https://github.com/congzhangzh/FreeRDP.git
+  FREERDP_BRANCH: fix-shadow-reactivation-svc
+
+jobs:
+  mac-client:
+    runs-on: macos-15
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v7
+      - name: Cache sources
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/rdp-release-kit/sources
+          key: sources-${{ hashFiles('sources.lock') }}
+      - name: Cache compiled objects
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/rdp-release-kit/ccache/macos
+          key: ccache-macos-arm64-reactivation-${{ github.sha }}
+          restore-keys: ccache-macos-arm64-
+      - name: Build tools
+        run: brew install bash meson nasm ccache
+      - name: Build (as the release)
+        env:
+          CCACHE_MAXSIZE: 1G
+        run: ./build-macos.sh arm64
+      - uses: actions/upload-artifact@v7
+        with:
+          name: probe-client-macos-arm64
+          path: dist/*.tar.xz
+          if-no-files-found: error
+          retention-days: 3
+
+  mac-host:
+    runs-on: macos-15
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v7
+      - name: FreeRDP for the host, the probed commit
+        run: |
+          mkdir -p logs
+          grep -E '^(freerdp|freerdp_mac_host) ' sources.lock | tee logs/freerdp-host.txt
+          git ls-remote "$FREERDP_REPO" "refs/heads/$FREERDP_BRANCH" | tee logs/branch-head.txt
+          # the host's pin is the branch's head: the probe tests what the branch holds
+          for p in freerdp_mac_host; do
+              pin=$(awk -v p="$p" '$1 == p { print $NF }' sources.lock)
+              grep -q "^$pin" logs/branch-head.txt || { echo "::error::$p $pin is not $FREERDP_BRANCH's head"; exit 1; }
+          done
+      - name: Cache sources
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/rdp-release-kit/sources
+          key: sources-${{ hashFiles('sources.lock') }}
+      - name: Cache compiled objects
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/rdp-release-kit/ccache/macos
+          key: ccache-macos-host-arm64-reactivation-${{ github.sha }}
+          restore-keys: |
+            ccache-macos-host-arm64-
+            ccache-macos-arm64-
+      - name: Build tools
+        run: brew install bash meson nasm ccache
+      - name: Build (as the release)
+        env:
+          CCACHE_MAXSIZE: 1G
+          HOST: "1"
+        run: ./build-macos.sh arm64 2>&1 | tee logs/build.txt
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: probe-host-log-macos-arm64
+          path: |
+            logs
+            ~/.cache/rdp-release-kit/macos-arm64/log
+          retention-days: 7
+      - uses: actions/upload-artifact@v7
+        with:
+          name: probe-host-macos-arm64
+          path: dist/freerdp-host-*.zip
+          if-no-files-found: error
+          retention-days: 3
+
+  reactivation:
+    needs: [mac-client, mac-host]
+    runs-on: macos-15
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        with:
+          name: probe-host-macos-arm64
+          path: dl/host
+      - uses: actions/download-artifact@v8
+        with:
+          name: probe-client-macos-arm64
+          path: dl/client
+      - name: Unpack
+        run: |
+          cd dl/host && ditto -x -k freerdp-host-*.zip . && cd ../client && tar -xf sdl3-freerdp-*.tar.xz
+          cd .. && xattr -dr com.apple.quarantine . || true
+          ls -d host/*/ client/*/
+      - name: Reactivation (test/mac-reactivation.sh)
+        run: |
+          # the script's own exit, not tee's
+          set -o pipefail
+          rc=0
+          test/mac-reactivation.sh "$(ls -d dl/host/freerdp-host-*-macos-arm64)" \
+              "$(ls -d dl/client/sdl3-freerdp-*-macos-arm64)" out | tee out-reactivation.txt || rc=$?
+          mkdir -p out && mv out-reactivation.txt out/
+          grep -E '^(PASS|FAIL|RECORD) ' out/out-reactivation.txt >> "$GITHUB_STEP_SUMMARY" || true
+          # any FAIL, no PASS at all, or the script's own failure fails the job
+          if grep -q '^FAIL ' out/out-reactivation.txt || ! grep -q '^PASS ' out/out-reactivation.txt || [ $rc != 0 ]; then
+              echo "::error::reactivation failed (rc $rc)"; exit 1
+          fi
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: probe-reactivation
+          path: out
+          retention-days: 7
