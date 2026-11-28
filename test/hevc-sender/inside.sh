@@ -8,10 +8,10 @@
 # an xterm with a clock on Xvfb :1, shared by the sender as the user tester; each client runs
 # as root on Xvfb :99.
 #
-#  1. The default is unchanged: a client given no codec offers the same capability sets with
-#     the same flags as before (H.264 not offered: the 8.1 set without AVC420_ENABLED, every
-#     10.x one with AVC_DISABLED but 10.1, which has no flags; no HEVC_ENABLE) and is confirmed
-#     the same version.
+#  1. The default (FreeRDP 20261128.5, Boss Cong's order HEVC, AV1, AV2): a client given no codec
+#     offers HEVC (an 11.x set with HEVC_ENABLE) and still no H.264 (the 8.1 set without
+#     AVC420_ENABLED, every 10.x one with AVC_DISABLED but 10.1, which has no flags), and this
+#     HEVC sender gives it HEVC 4:2:0. Its sets differ from the client before by design (INFO).
 #  2. HEVC on request (/gfx:AV2:off,AV1:off,HEVC:i420; H.264 left off): the sender confirms an
 #     11.x set with HEVC_ENABLE, the frames come in HEVC 4:2:0, none in AVC, no decode fails,
 #     and the client names its decoder: "HEVC decoder: libavcodec (software)".
@@ -86,18 +86,20 @@ for c in before after; do
     negotiation "default-$c" > "$OUT/default-$c.caps"
     echo "INFO  default-$c: $(codecs "default-$c")"
 done
-check "default-after: offers no H.264 (no AVC420_ENABLED, AVC_DISABLED in every 10.x set) and no HEVC" \
-    '[ -s "$OUT/default-after.caps" ] && ! grep -qE "AVC420_ENABLED|HEVC_ENABLE" "$OUT/default-after.caps" &&
+check "default-after: offers HEVC (11.x with HEVC_ENABLE) and no H.264 (no AVC420_ENABLED, AVC_DISABLED in every 10.x set)" \
+    '[ -s "$OUT/default-after.caps" ] && grep -q "HEVC_ENABLE" "$OUT/default-after.caps" &&
+     ! grep -q "AVC420_ENABLED" "$OUT/default-after.caps" &&
      ! grep -E "^Sending RDPGFX_CAPVERSION_10" "$OUT/default-after.caps" | grep -v "^Sending RDPGFX_CAPVERSION_101 " |
          grep -v -q AVC_DISABLED' \
     "$(grep -c '^Sending' "$OUT/default-after.caps" 2> /dev/null) sets offered"
-check "default-after: frames, none in AVC or HEVC" \
-    '[ "$(frames default-after AVC420)$(frames default-after AVC444)$(frames default-after AVC444v2)$(frames default-after HEVC420)" = 0000 ] &&
-     grep -q "Got GFX RDPGFX_CODECID_" "$OUT/default-after.wlog"' "$(codecs default-after)"
+check "default-after: frames in HEVC 4:2:0 (HEVC first), none in AVC" \
+    '[ "$(frames default-after AVC420)$(frames default-after AVC444)$(frames default-after AVC444v2)" = 000 ] &&
+     [ "$(frames default-after HEVC420)" -gt 0 ]' "$(codecs default-after)"
 if [ -d /opt/before ]; then
-    check "default: the same capability sets and confirm as the client before (default-{before,after}.caps)" \
-        'diff "$OUT/default-before.caps" "$OUT/default-after.caps" > "$OUT/default.diff"' \
-        "$(wc -l < "$OUT/default.diff" 2> /dev/null) lines differ"
+    # FreeRDP 20261128.5 changed the default on purpose (HEVC first): the difference is shown, not
+    # failed; the rules above are the check
+    diff "$OUT/default-before.caps" "$OUT/default-after.caps" > "$OUT/default.diff"
+    echo "INFO  default: $(wc -l < "$OUT/default.diff" 2> /dev/null) lines differ from the client before (default.diff)"
 else
     echo "INFO  no /before.tar.xz: the default is checked against the rules above only"
 fi
