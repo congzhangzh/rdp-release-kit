@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
-# Makes the Windows and macOS camera cells of the four kit READMEs' host table from the PO's
-# drafts, byte for byte (never retyped), as build/macos/make-strings.py does for the Mac's strings:
+# Makes the Windows, Linux and macOS camera cells of the four kit READMEs' host table, and the
+# macOS client's camera line in pins.notes, from the PO's drafts, byte for byte (never retyped),
+# as build/macos/make-strings.py does for the Mac's strings:
 #
-#   make-readme-camera.py [--check] [--on-demand] <PO Windows draft> <PO macOS draft> <kit dir>
+#   make-readme-camera.py [--check] [--on-demand] <PO Windows draft> <PO macOS draft>
+#                         <PO R2 texts> <kit dir>
 #
 #   <PO Windows draft> rdp-product-plan/drafts/readme-windows-camera.v3.md (v2: the camera is
 #                      "FreeRDP Camera"; Windows lists it with its own " (Windows Virtual
@@ -11,10 +13,13 @@
 #   <PO macOS draft>   rdp-product-plan/drafts/readme-mac-server-camera-unsigned.v1.md: the macOS
 #                      server's cell while the release is signed ad hoc (no server camera: a
 #                      CoreMediaIO system extension needs the Developer ID), en/zh/ja/fr
+#   <PO R2 texts>      rdp-product-plan/drafts/r2-camera-texts.v1.md: "## 1." the macOS client's
+#                      release line (en), which ends pins.notes' "product macos" row after "; ";
+#                      "## 2." the Linux server's cell, en/zh/ja/fr
 #
-# The cells go in the Windows and macOS columns of a "Camera" row of the "Shadow server" table
-# (README.md, README.zh.md, README.ja.md, README.fr.md): the row is added before the table's last
-# row ("Tested in CI"), the Linux cell "—"; a row that is there already keeps its Linux cell.
+# The cells go in the Windows, Linux and macOS columns of a "Camera" row of the "Shadow server"
+# table (README.md, README.zh.md, README.ja.md, README.fr.md): the row is added before the table's
+# last row ("Tested in CI"), or its three cells are replaced.
 #
 # The README style rule (the RM, 2026-11-27): a README cell takes its target README's style.
 # README.fr.md writes ASCII apostrophes and NBSP before ":" and ";": U+2019 becomes "'" and a plain
@@ -71,6 +76,43 @@ def po_cells(path):
     return out
 
 
+def po_sections(path):
+    """{"1": {lang: text}, "2": {...}} from the "## <n>." sections"""
+    out, sec = {}, None
+    for line in Path(path).read_text(encoding="utf-8").splitlines():
+        m = re.match(r"^## (\d+)\.", line)
+        if m:
+            sec = m.group(1)
+            continue
+        m = re.match(r"^- (en|zh|ja|fr): (.+)$", line)
+        if m and sec:
+            out.setdefault(sec, {})[m.group(1)] = m.group(2)
+    if sorted(out.get("1", {})) != ["en"] or sorted(out.get("2", {})) != sorted(LANGS):
+        sys.exit(f"{path}: want section 1 in en, section 2 in en, zh, ja, fr")
+    return out
+
+
+# pins.notes: the macOS client's row ends with "; " and the PO's release line
+def pins_notes(text, line):
+    lines = text.split("\n")
+    rows = [i for i, l in enumerate(lines) if l.startswith("product macos ")]
+    if len(rows) != 1:
+        sys.exit(f"pins.notes: {len(rows)} 'product macos' rows, want 1")
+    row = lines[rows[0]]
+    if row.endswith("; " + line):
+        return text
+    at = row.rfind("; macOS client: camera")
+    lines[rows[0]] = (row[:at] if at >= 0 else row) + "; " + line
+    return "\n".join(lines)
+
+
+def plain_cell(lang, text, what):
+    text = readme_style(lang, text)
+    if "|" in text:
+        sys.exit(f"{lang}: a '|' in the {what} cell would break the table")
+    return text
+
+
 def cell(lang, text, on_demand):
     text = readme_style(lang, text)
     sentence = readme_style(lang, ON_DEMAND[lang])
@@ -99,7 +141,7 @@ def host_table(lines):
     return None
 
 
-def update(text, lang, value, mac):
+def update(text, lang, value, linux, mac):
     lines = text.split("\n")
     span = host_table(lines)
     if not span:
@@ -110,10 +152,11 @@ def update(text, lang, value, mac):
         cells = lines[i].split("|")
         if cells[1].strip() == label:
             cells[2] = f" {value} "
+            cells[3] = f" {linux} "
             cells[4] = f" {mac} "
             lines[i] = "|".join(cells)
             return "\n".join(lines)
-    lines.insert(last, f"| {label} | {value} | — | {mac} |")
+    lines.insert(last, f"| {label} | {value} | {linux} | {mac} |")
     return "\n".join(lines)
 
 
@@ -122,23 +165,26 @@ def main():
     check = "--check" in args
     on_demand = ON_DEMAND_PROVEN or ("--on-demand" in args)
     args = [a for a in args if a not in ("--check", "--on-demand")]
-    if len(args) != 3:
-        sys.exit("usage: make-readme-camera.py [--check] [--on-demand] <Windows draft> <macOS draft> <kit>")
+    if len(args) != 4:
+        sys.exit("usage: make-readme-camera.py [--check] [--on-demand] <Windows draft> <macOS draft> "
+                 "<R2 texts> <kit>")
     cells = po_cells(args[0])
     mac = po_cells(args[1])
-    kit = Path(args[2])
+    r2 = po_sections(args[2])
+    kit = Path(args[3])
     differs = []
-    for lang in LANGS:
-        path = kit / README[lang]
+    targets = [(kit / README[lang], lang) for lang in LANGS] + [(kit / "pins.notes", None)]
+    for path, lang in targets:
         old = path.read_bytes().decode("utf-8")
-        mac_cell = readme_style(lang, mac[lang])
-        if "|" in mac_cell:
-            sys.exit(f"{lang}: a '|' in the macOS cell would break the table")
-        new = update(old, lang, cell(lang, cells[lang], on_demand), mac_cell)
+        if lang is None:
+            new = pins_notes(old, r2["1"]["en"])
+        else:
+            new = update(old, lang, cell(lang, cells[lang], on_demand),
+                         plain_cell(lang, r2["2"][lang], "Linux"), plain_cell(lang, mac[lang], "macOS"))
         if new.encode("utf-8") == old.encode("utf-8"):
             continue
         if check:
-            differs.append(README[lang])
+            differs.append(path.name)
         else:
             path.write_bytes(new.encode("utf-8"))
             print(f"wrote {path}")
