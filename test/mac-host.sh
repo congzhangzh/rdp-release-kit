@@ -168,7 +168,7 @@ if [ $hevc_ok = 1 ]; then
     # it, whatever else it offers (test/mac-hevc-first.sh, which the probe-mac-hevc-first workflow
     # runs alone); one that does not still gets AV2 or AV1 (the av1 / av2 sessions above)
     "$KIT_TEST/mac-hevc-first.sh" "$HOSTDIR" "$CLIENTDIR" "$OUT/hevc-first" > "$OUT/hevc-first.txt" 2>&1
-    grep -E '^(PASS|FAIL) ' "$OUT/hevc-first.txt"
+    grep -E '^(PASS|FAIL|RECORD) ' "$OUT/hevc-first.txt"
     n=$(grep -c '^FAIL ' "$OUT/hevc-first.txt" || true)
     fails=$((fails + ${n:-0}))
     grep -q '^PASS ' "$OUT/hevc-first.txt" || check "HEVC first: test/mac-hevc-first.sh made its checks" 0
