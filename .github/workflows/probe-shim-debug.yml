@@ -1,0 +1,72 @@
+# Probe (branch probe-shim-debug only; publishes nothing, no secrets, uploads logs): why a SIGTERM
+# sometimes does not end FreeRDP.app's client on macOS (test/mac-client-shim.sh, round 46169268440:
+# the signal was caught and the connect cancelled, then CONNECT_CANCELLED was cleared and the
+# client showed an error dialog). The macOS client as the kit builds it (./build-macos.sh arm64,
+# sources.lock as on main: FreeRDP 20261128.6 = 42cc49a52), then:
+#  - test/mac-client-shim.sh as the kit runs it (its result, not a gate here);
+#  - test/probe-shim-debug/sweep.sh: the shim's exec check, the SIGTERM delay swept from 1 to 3.5 s,
+#    com.freerdp.core at DEBUG, so the log names what clears CONNECT_CANCELLED ("resetting error
+#    state" with its function, file and line).
+name: probe-shim-debug
+
+on:
+  push:
+    branches: [probe-shim-debug]
+
+permissions:
+  contents: read
+
+jobs:
+  macos:
+    runs-on: macos-15
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Cache sources
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/rdp-release-kit/sources
+          key: sources-${{ hashFiles('sources.lock') }}
+
+      - name: Cache compiled objects
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/rdp-release-kit/ccache/macos
+          key: ccache-macos-arm64-probe-shim-${{ github.sha }}
+          restore-keys: ccache-macos-arm64-
+
+      - name: Build tools
+        run: brew install bash meson nasm ccache
+
+      - name: Build (as the kit)
+        env:
+          CCACHE_MAXSIZE: 1G
+        run: |
+          mkdir -p out
+          grep -E '^freerdp ' sources.lock | tee out/freerdp.txt
+          ./build-macos.sh arm64
+
+      - name: The shim test, as the kit runs it
+        continue-on-error: true
+        run: |
+          mkdir -p shim-check
+          tar -C shim-check -xf dist/sdl3-freerdp-*-macos-arm64.tar.xz
+          test/mac-client-shim.sh "$(ls -d shim-check/sdl3-freerdp-*/)" out/shim
+
+      - name: "The SIGTERM sweep, com.freerdp.core at DEBUG"
+        run: |
+          test/probe-shim-debug/sweep.sh "$(ls -d shim-check/sdl3-freerdp-*/)" out/sweep
+          {
+            echo '```'
+            tail -1 out/sweep/sweep.txt
+            cat out/sweep/resets.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: probe-shim-debug
+          path: out
+          retention-days: 7
