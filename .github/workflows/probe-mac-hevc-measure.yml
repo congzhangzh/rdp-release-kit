@@ -1,0 +1,69 @@
+# probe-mac-hevc-measure: a record, not a kit test. Should the Mac host prefer HEVC when a
+# client offers it? On the macOS runner the kit's mac-host-test uses, the Mac host of a kit
+# release (not rebuilt: the release's own assets, read only) encodes the same screen content
+# for the release's macOS client as AV1 and as HEVC 4:2:0, A B A B (and AV1 4:2:0 beside them),
+# and test/probe-mac-hevc-measure.sh measures each session: the server's frames per second, its
+# CPU, the bytes on the wire, the client's decoded and failed frames, the codec negotiated.
+# The rule (the product owner's): HEVC >= AV1's frame rate at lower server CPU, bytes/s at most
+# 2x AV1's, 0 failed frames. Publishes nothing; the artifact carries the logs and the CSV.
+name: probe-mac-hevc-measure
+
+on:
+  push:
+    branches: [probe-mac-hevc-measure]
+  workflow_dispatch:
+    inputs:
+      release:
+        description: 'kit release whose macOS host and client are measured ("latest": the newest non-prerelease)'
+        default: "20261127.3"
+      duration:
+        description: seconds measured per session, from the client's first frame
+        default: "40"
+      rounds:
+        description: rounds (each runs every kind once)
+        default: "2"
+
+permissions:
+  contents: read
+
+jobs:
+  measure:
+    runs-on: macos-15
+    timeout-minutes: 50
+    env:
+      RELEASE: ${{ inputs.release || '20261127.3' }}
+      DURATION: ${{ inputs.duration || '40' }}
+      ROUNDS: ${{ inputs.rounds || '2' }}
+      GH_TOKEN: ${{ github.token }}
+      OUT: ${{ github.workspace }}/probe-out
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: The release's macOS host and client
+        run: |
+          mkdir -p "$OUT" dl/host dl/client
+          tag=$RELEASE
+          [ "$tag" = latest ] && tag=$(gh release view -R "$GITHUB_REPOSITORY" --json tagName -q .tagName)
+          gh release download "$tag" -R "$GITHUB_REPOSITORY" -D dl/host -p 'freerdp-host-*-macos-arm64.zip'
+          gh release download "$tag" -R "$GITHUB_REPOSITORY" -D dl/client -p 'sdl3-freerdp-*-macos-arm64.tar.xz'
+          { echo "release $tag"; echo "kit $GITHUB_SHA"; shasum -a 256 dl/host/*.zip dl/client/*.tar.xz; } | tee "$OUT/SOURCE"
+          (cd dl/host && ditto -x -k freerdp-host-*.zip .) && (cd dl/client && tar -xf sdl3-freerdp-*.tar.xz)
+          xattr -dr com.apple.quarantine dl || true
+          ls -d dl/host/*/ dl/client/*/
+
+      - name: AV1 against HEVC, the same content
+        run: >
+          test/probe-mac-hevc-measure.sh "$(ls -d dl/host/freerdp-host-*-macos-arm64)"
+          "$(ls -d dl/client/sdl3-freerdp-*-macos-arm64)" "$OUT"
+
+      - name: Summary
+        if: ${{ !cancelled() }}
+        run: |
+          { echo '### probe-mac-hevc-measure'; echo '```'; cat "$OUT/SOURCE" "$OUT/summary.txt" 2> /dev/null; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: probe-mac-hevc-measure
+          path: probe-out
+          retention-days: 7
