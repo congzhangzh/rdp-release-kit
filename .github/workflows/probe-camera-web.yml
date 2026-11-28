@@ -174,3 +174,53 @@ jobs:
           name: probe-camera-web-browser-${{ matrix.browser }}
           path: out
           retention-days: 7
+
+  # Windows 11's own Remote Desktop as the server, the browser on the same runner (option A of
+  # probe-camera-win f38db99: runneradmin with a password of this run, masked, takes the console
+  # session over; the app reads the redirected camera in that session)
+  win11-rdp:
+    needs: [wasm-build, linux-shadow]
+    runs-on: windows-11-arm
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        with:
+          name: probe-camera-web-page
+          path: dl/web
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - name: The camera app (mf-camera-reader.c, the image's MSVC, native arm64)
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path out, tools | Out-Null
+          $vs = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -property installationPath
+          $vcvars = Join-Path $vs 'VC\Auxiliary\Build\vcvarsall.bat'
+          $src = (Resolve-Path test/probe-camera-web/mf-camera-reader.c).Path
+          foreach ($h in 'arm64', 'x64_arm64') {
+              cmd /c "`"$vcvars`" $h >nul && cd /d tools && cl /nologo /W3 /O2 /DUNICODE /D_UNICODE $src /Fe:mf-camera-reader.exe /link mfplat.lib mf.lib mfreadwrite.lib mfuuid.lib ole32.lib uuid.lib" 2>&1 |
+                  Tee-Object -FilePath out/reader-build.txt -Append
+              if (Test-Path tools/mf-camera-reader.exe) { "built with vcvarsall $h" | Tee-Object -FilePath out/reader-build.txt -Append; break }
+          }
+          if (-not (Test-Path tools/mf-camera-reader.exe)) { throw "the reader did not build" }
+      - name: "win11-rdp: the browser's camera, as H.264, into Windows 11's own Remote Desktop"
+        timeout-minutes: 20
+        shell: pwsh
+        run: ./test/probe-camera-web/win11-rdp.ps1 -Page dl/web -Reader tools/mf-camera-reader.exe -Out out/win11-rdp
+      - name: Results
+        if: always()
+        shell: pwsh
+        run: |
+          foreach ($f in 'out/win11-rdp/result.txt', 'out/win11-rdp/checks.txt', 'out/win11-rdp/host.txt') {
+              if (Test-Path $f) { Get-Content $f | Add-Content $env:GITHUB_STEP_SUMMARY }
+          }
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: probe-camera-web-win11-rdp
+          path: out
+          retention-days: 7
