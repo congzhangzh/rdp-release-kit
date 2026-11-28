@@ -164,34 +164,14 @@ if [ $hevc_ok = 1 ]; then
     grep -ohE "VideoToolbox HEVC encoder: [0-9]+x[0-9]+.*" "$OUT/server-hevc.wlog" 2> /dev/null | grep -v ": 256x256 " | tail -2
     kill $HSRV 2> /dev/null; sleep 2
 
-    # HEVC first on the Mac (FreeRDP feature-shadow-mac-hevc-first): with AV1, AV2 and HEVC all on
-    # in the server, a client that offers HEVC gets HEVC, whatever else it offers; one that does
-    # not still gets AV2 or AV1 (the av1 / av2 sessions above, on a server without HEVC). Each case
-    # first proves the client offered what it is about (its "Sending <caps>" lines), then that
-    # the server confirmed 11.x and sent HEVC:
-    #  - hevc-first-av1: AV2 off in the client, so it offers FRDP_1 + 11.x;
-    #  - hevc-first-all: the client's default and HEVC, so it offers FRDP_2, FRDP_1 + 11.x.
-    WLOG_FILEAPPENDER_OUTPUT_FILE_NAME=server-hevc-first.wlog "$SERVER" /bind-address:127.0.0.1 /port:4492 \
-        /sec:tls /gfx-av1 /gfx-av2 -gfx-avc444 /gfx-hevc:i420 -auth > "$OUT/server-hevc-first.out" 2>&1 &
-    FSRV=$!
-    for i in $(seq 1 30); do listening 4492 && break; sleep 1; done
-    listening 4492 && ok=1 || ok=0
-    check "HEVC first: the server with AV1, AV2 and HEVC listens" $ok
-    for s in "hevc-first-av1 FRDP_1 /gfx:AV2:off,HEVC:i420" "hevc-first-all FRDP_2 /gfx:HEVC:i420"; do
-        name=${s%% *}; rest=${s#* }; other=${rest%% *}; opts=${rest#* }
-        PORT=4492 session "$name" HEVC420 "$opts"
-        log="$OUT/$name.wlog"
-        grep -q "Sending RDPGFX_CAPVERSION_$other " "$log" 2> /dev/null && a=1 || a=0
-        grep -qE "Sending RDPGFX_CAPVERSION_11[0-9]+ " "$log" 2> /dev/null && b=1 || b=0
-        [ $a = 1 ] && [ $b = 1 ] && ok=1 || ok=0
-        check "$name: the client offered $other and 11.x" $ok \
-            "$(grep -oE 'Sending RDPGFX_CAPVERSION_[A-Z0-9_]+' "$log" 2> /dev/null | sed 's/Sending RDPGFX_CAPVERSION_//' | tr '\n' ' ')"
-        grep -E "RecvCapsConfirmPdu: version: RDPGFX_CAPVERSION_11[0-9]+ .*[{|]HEVC_ENABLE[|}]" "$log" \
-            2> /dev/null > /dev/null && ok=1 || ok=0
-        check "$name: the Mac server confirms 11.x (HEVC) before $other" $ok \
-            "$(grep -m1 -oE 'RecvCapsConfirmPdu: version: .*' "$log" 2> /dev/null)"
-    done
-    kill $FSRV 2> /dev/null; sleep 2
+    # HEVC first on the Mac (FreeRDP feature-shadow-mac-hevc-first): a client that offers HEVC gets
+    # it, whatever else it offers (test/mac-hevc-first.sh, which the probe-mac-hevc-first workflow
+    # runs alone); one that does not still gets AV2 or AV1 (the av1 / av2 sessions above)
+    "$KIT_TEST/mac-hevc-first.sh" "$HOSTDIR" "$CLIENTDIR" "$OUT/hevc-first" > "$OUT/hevc-first.txt" 2>&1
+    grep -E '^(PASS|FAIL) ' "$OUT/hevc-first.txt"
+    n=$(grep -c '^FAIL ' "$OUT/hevc-first.txt" || true)
+    fails=$((fails + ${n:-0}))
+    grep -q '^PASS ' "$OUT/hevc-first.txt" || check "HEVC first: test/mac-hevc-first.sh made its checks" 0
 fi
 # the demo video, the Windows host's way (test/windows-host.ps1): FreeRDP Web in headless
 # Chrome, which no screen shows, to a server of its own with AV1 only (the page takes AV2
