@@ -163,6 +163,16 @@ if [ $hevc_ok = 1 ]; then
     done
     grep -ohE "VideoToolbox HEVC encoder: [0-9]+x[0-9]+.*" "$OUT/server-hevc.wlog" 2> /dev/null | grep -v ": 256x256 " | tail -2
     kill $HSRV 2> /dev/null; sleep 2
+
+    # The client's order on the Mac (FreeRDP feature-shadow-gfx-client-order-v2): a client gets the
+    # set it lists last of those the server serves; tk's HEVC entry gets HEVC from a server with HEVC
+    # on and AV1 from one with it off (test/mac-hevc-first.sh, which the probe-mac-hevc-first
+    # workflow runs alone)
+    "$KIT_TEST/mac-hevc-first.sh" "$HOSTDIR" "$CLIENTDIR" "$OUT/hevc-first" > "$OUT/hevc-first.txt" 2>&1
+    grep -E '^(PASS|FAIL|RECORD) ' "$OUT/hevc-first.txt"
+    n=$(grep -c '^FAIL ' "$OUT/hevc-first.txt" || true)
+    fails=$((fails + ${n:-0}))
+    grep -q '^PASS ' "$OUT/hevc-first.txt" || check "client order: test/mac-hevc-first.sh made its checks" 0
 fi
 # the demo video, the Windows host's way (test/windows-host.ps1): FreeRDP Web in headless
 # Chrome, which no screen shows, to a server of its own with AV1 only (the page takes AV2

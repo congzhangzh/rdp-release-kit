@@ -183,7 +183,8 @@ cmake_dep sdl3_ttf "${MAC[@]}" -DSDLTTF_VENDORED=OFF -DSDLTTF_HARFBUZZ=OFF \
 # still decodes), as the Windows host is built
 FREERDP=freerdp
 # HEVC: VideoToolbox decodes it (H.265 4:2:0; asked for with /gfx-codec-order:HEVC,AVC420, which
-# offers no AV1; /gfx:HEVC:i420 alone still offers AV1, which the Mac server prefers), no FFmpeg
+# offers no AV1; /gfx:HEVC:i420 alone still offers AV1 too, and the server follows the client's
+# order since FreeRDP 20261128.4), no FFmpeg
 # The camera (MS-RDPECAM, /dvc:rdpecam): AVFoundation's frames, H.264 from VideoToolbox, no
 # FFmpeg; the movie and GStreamer backends off by name, so a Homebrew FFmpeg or GStreamer on
 # the machine is never linked
