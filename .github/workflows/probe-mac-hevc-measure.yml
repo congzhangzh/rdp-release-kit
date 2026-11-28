@@ -1,11 +1,12 @@
 # probe-mac-hevc-measure: a record, not a kit test. Should the Mac host prefer HEVC when a
 # client offers it? On the macOS runner the kit's mac-host-test uses, the Mac host of a kit
 # release (not rebuilt: the release's own assets, read only) encodes the same screen content
-# for the release's macOS client as AV1 and as HEVC 4:2:0, A B A B (and AV1 4:2:0 beside them),
-# and test/probe-mac-hevc-measure.sh measures each session: the server's frames per second, its
-# CPU, the bytes on the wire, the client's decoded and failed frames, the codec negotiated.
-# The rule (the product owner's): HEVC >= AV1's frame rate at lower server CPU, bytes/s at most
-# 2x AV1's, 0 failed frames. Publishes nothing; the artifact carries the logs and the CSV.
+# for the release's macOS client as AV1 and as HEVC 4:2:0 at the bits AV1 just used
+# (/codec:hevc:bitrate), A B A B (with AV1 4:2:0 and HEVC at its default 500 kbit/s beside them,
+# INFO), and test/probe-mac-hevc-measure.sh measures each session: the server's frames per
+# second, its CPU, the bytes on the wire, the client's decoded and failed frames, the codec.
+# The rule (the product owner's), at equal bits: HEVC >= AV1's frame rate at lower server CPU,
+# 0 failed frames. Publishes nothing; the artifact carries the logs and the CSV.
 name: probe-mac-hevc-measure
 
 on:

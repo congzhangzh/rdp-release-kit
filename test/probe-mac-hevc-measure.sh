@@ -9,22 +9,31 @@
 #   ROUNDS=2               rounds; each round runs every kind once, interleaved (A B C A B C)
 #   KINDS="av1 hevc av1-i420"
 #                          av1      = A: what a default client gets (AV1, 4:4:4), client /gfx:AV2:off
-#                          hevc     = B: HEVC 4:2:0, client /gfx:AV2:off,AV1:off,HEVC:i420 (mac-host.sh's form)
+#                          hevc     = B: HEVC 4:2:0 at A's bits: client /gfx:AV2:off,AV1:off,HEVC:i420
+#                                     (mac-host.sh's form), server /codec:hevc:bitrate:<the kbit/s the
+#                                     same round's A put on the wire>; needs av1 before it in KINDS
 #                          av1-i420 = C: AV1 4:2:0 (/gfx:AV2:off,AV1:i420), the same chroma as B;
 #                                     a record next to the rule (INFO), not part of it
+#   HEVC_DEFAULT=1         and once per content after the rounds, B0 = hevc-default: HEVC at the
+#                          server's default 500 kbit/s, what users get today (INFO)
 #   CONTENTS="apps anim"   apps = mac-host.sh's motion (Calculator and System Settings opening and
 #                          closing), looped over the whole window; anim = a canvas animation in
 #                          Firefox, changing every frame (a sustained load the app motion is not)
 #   SERVER_WLOG_LEVEL=DEBUG  the server's log level (DEBUG as mac-host.sh: the codec lines need it)
-# The decision rule (the product owner's): HEVC must give >= AV1's encoder frame rate at LOWER
-# server CPU, with bytes/s no more than 2x AV1's, and 0 failed frames.
+# The decision rule (the product owner's), at equal bits: HEVC at AV1's measured rate must give
+# >= AV1's encoder frame rate at LOWER server CPU, with 0 failed frames and the codec it was asked
+# for. The defaults are not equal bits (FreeRDP 74d0beb8 shadow_server.c: AV1 constrained quality
+# cq-level 16 with a 12000 kbit/s cap, HEVC VBR 500 kbit/s), hence B at A's rate; VBR may miss its
+# target, so B's bytes/s is printed next to it and flagged outside 80-120 %.
 # Every session gets a fresh server with the same arguments (the LaunchAgent's, plus
-# /gfx-hevc:i420 and a 1 s stats period), so only the client's offer differs between kinds.
+# /gfx-hevc:i420 and a 1 s stats period; B adds /codec:hevc:bitrate:N, a command-line switch in
+# 74d0beb8: server/shadow/cli/shadow.c:151, shadow_server.c:898), so only the client's offer and
+# HEVC's target differ between kinds.
 # Bash 3.2 (macOS's own) is enough here.
 set -u
 HOSTDIR=$1; CLIENTDIR=$2; OUT=$3
 DURATION=${DURATION:-40}; ROUNDS=${ROUNDS:-2}
-KINDS=${KINDS:-av1 hevc av1-i420}; CONTENTS=${CONTENTS:-apps anim}
+KINDS=${KINDS:-av1 hevc av1-i420}; CONTENTS=${CONTENTS:-apps anim}; HEVC_DEFAULT=${HEVC_DEFAULT:-1}
 SERVER_WLOG_LEVEL=${SERVER_WLOG_LEVEL:-DEBUG}
 KIT_TEST=$(cd "$(dirname "$0")" && pwd)
 mkdir -p "$OUT/sessions" "$OUT/content"
@@ -43,7 +52,7 @@ kind_opts() {
     case $1 in
         av1) echo "/gfx:AV2:off" ;;
         av1-i420) echo "/gfx:AV2:off,AV1:i420" ;;
-        hevc) echo "/gfx:AV2:off,AV1:off,HEVC:i420" ;;
+        hevc | hevc-default) echo "/gfx:AV2:off,AV1:off,HEVC:i420" ;;
         *) echo "unknown kind $1" >&2; return 1 ;;
     esac
 }
@@ -126,12 +135,13 @@ VT = re.compile(r"VideoToolbox HEVC encoder: (\d+x\d+) at \d+ fps, ([^,]+), hard
 AV1 = re.compile(r"AV1 (\d+x\d+) (I4[24][04]): (\d+) frames in ([\d.]+) s \([\d.]+ fps\), "
                  r"encode avg [\d.]+ ms max [\d.]+ ms, (\d+) kbit/s")
 WIRE = re.compile(r"^(\d+\.\d+) .* tcp (\d+)$")
-EXPECT = {"av1": "RDPGFX_CODECID_AV1", "av1-i420": "RDPGFX_CODECID_AV1", "hevc": "RDPGFX_CODECID_HEVC420"}
+EXPECT = {"av1": "RDPGFX_CODECID_AV1", "av1-i420": "RDPGFX_CODECID_AV1", "hevc": "RDPGFX_CODECID_HEVC420",
+          "hevc-default": "RDPGFX_CODECID_HEVC420"}
 COLUMNS = ["content", "kind", "round", "valid", "invalid_reason", "codec_seen", "caps", "chroma",
            "window_s", "server_fps", "captured_fps", "sent_frames", "held", "encode_avg_ms",
            "cpu_mean", "cpu_p95", "ps_pcpu_mean", "client_cpu_mean", "bytes_per_s", "bytes_method",
            "lo0_bytes_per_s", "client_frames", "client_failed", "server_log_lines_per_s",
-           "encoder", "av1_kbit_s"]
+           "encoder", "av1_kbit_s", "target_kbit", "achieved_kbit", "rate_note"]
 
 def f1(v):
     return "" if v is None else "%.1f" % v
@@ -235,6 +245,13 @@ def session(d, results):
             row["encoder"] = "libaom AV1 %s %s" % (a[-1].group(1), a[-1].group(2))
     if meta.get("client_held") != "1":
         why.append("the client did not hold the session")
+    row["target_kbit"] = meta.get("target_kbit", "")
+    if row["bytes_per_s"]:
+        row["achieved_kbit"] = "%.0f" % (float(row["bytes_per_s"]) * 8 / 1000)
+        if row["target_kbit"]:
+            ratio = float(row["achieved_kbit"]) / float(row["target_kbit"])
+            row["rate_note"] = "%.0f %% of the target%s" % (
+                100 * ratio, "" if 0.8 <= ratio <= 1.2 else ", rate not reached")
     row["valid"] = "no" if why else "yes"
     row["invalid_reason"] = "; ".join(why)
     new = not os.path.exists(results)
@@ -243,10 +260,24 @@ def session(d, results):
         if new:
             w.writeheader()
         w.writerow(row)
-    print("%-6s %-9s r%s  %s  fps %s  cpu %s/%s  %s B/s (%s)  frames %s  failed %s  %s%s" % (
+    print("%-6s %-12s r%s  %s  fps %s  cpu %s/%s  %s B/s (%s)%s  frames %s  failed %s  %s%s" % (
         row["content"], kind, row["round"], "VALID  " if not why else "INVALID", row["server_fps"],
-        row["cpu_mean"], row["cpu_p95"], row["bytes_per_s"], row["bytes_method"], row["client_frames"],
-        row["client_failed"], row["codec_seen"], (": " + row["invalid_reason"]) if why else ""))
+        row["cpu_mean"], row["cpu_p95"], row["bytes_per_s"], row["bytes_method"],
+        ("  target %s kbit/s: %s" % (row["target_kbit"], row["rate_note"])) if row["target_kbit"] else "",
+        row["client_frames"], row["client_failed"], row["codec_seen"],
+        (": " + row["invalid_reason"]) if why else ""))
+
+def kbit(results, content, kind, rnd):
+    """the kbit/s a valid session put on the wire (B's target), or nothing"""
+    try:
+        with open(results, encoding="utf-8", newline="") as f:
+            rows = list(csv.DictReader(f))
+    except OSError:
+        return
+    for r in rows:
+        if (r["content"], r["kind"], r["round"]) == (content, kind, rnd) and r["valid"] == "yes" \
+                and r["achieved_kbit"]:
+            print(min(1000000, max(1, int(float(r["achieved_kbit"])))))
 
 def num(r, k):
     try:
@@ -258,8 +289,9 @@ def mean(v):
     v = [x for x in v if x is not None]
     return sum(v) / len(v) if v else None
 
-def decide(out, rows, a, b, label, rule):
-    """the rule, kind b (HEVC) against kind a; every round of both must be valid"""
+def decide(out, rows, a, b, label, rule, matched):
+    """kind b (HEVC) against kind a; every round of both must be valid. matched: b ran at a's bits,
+    the rule (fps, CPU, failed); else bytes/s <= 2x a's as one more line"""
     ra = [r for r in rows if r["kind"] == a]
     rb = [r for r in rows if r["kind"] == b]
     tag = "" if rule else "INFO "
@@ -283,24 +315,33 @@ def decide(out, rows, a, b, label, rule):
     checks = [
         (fb >= fa, "frame rate: %s %.1f fps >= %s %.1f fps%s" % (b, fb, a, fa, note(fb - fa, noise))),
         (cb < ca, "server CPU: %s %.1f %% < %s %.1f %%%s" % (b, cb, a, ca, note(cb - ca, cnoise))),
-        (bb <= 2 * ba, "bytes/s: %s %.0f <= 2 x %s %.0f = %.0f (ratio %.2f)" % (b, bb, a, ba, 2 * ba,
-                                                                              bb / ba if ba else 0)),
         (failed == 0, "failed frames: %s %d == 0" % (b, failed)),
+        (True, "codec: every session negotiated the codec asked for"),
     ]
+    if not matched:
+        checks.insert(2, (bb <= 2 * ba, "bytes/s: %s %.0f <= 2 x %s %.0f = %.0f (ratio %.2f)" % (
+            b, bb, a, ba, 2 * ba, bb / ba if ba else 0)))
     for ok, text in checks:
         out.append("%s%s  %s: %s" % (tag, "PASS" if ok else "FAIL", label, text))
+    if matched:
+        for r in sorted(rb, key=lambda r: r["round"]):
+            flag = "FLAG " if "not reached" in r["rate_note"] else "     "
+            out.append("%s%s %s: round %s: %s achieved %s kbit/s for a target of %s (%s); %s %s kbit/s" % (
+                tag, flag, label, r["round"], b, r["achieved_kbit"], r["target_kbit"], r["rate_note"], a,
+                next((x["achieved_kbit"] for x in ra if x["round"] == r["round"]), "?")))
     ok = all(c[0] for c in checks)
     out.append("%s%s  %s: %s" % (tag, "PASS" if ok else "FAIL", label,
-                                 "all four criteria" if ok else "not all criteria hold"))
+                                 "every criterion" if ok else "not every criterion holds"))
     return ok
 
 def summary(results, out_txt):
     with open(results, encoding="utf-8", newline="") as f:
         rows = list(csv.DictReader(f))
     out = []
-    cols = [("content", 7), ("kind", 9), ("round", 5), ("valid", 5), ("codec_seen", 22),
+    cols = [("content", 7), ("kind", 12), ("round", 5), ("valid", 5), ("codec_seen", 22),
             ("server_fps", 10), ("captured_fps", 12), ("encode_avg_ms", 13), ("held", 5), ("cpu_mean", 8),
             ("cpu_p95", 7), ("client_cpu_mean", 15), ("bytes_per_s", 11), ("bytes_method", 12),
+            ("target_kbit", 11), ("achieved_kbit", 13), ("rate_note", 30),
             ("sent_frames", 11), ("client_frames", 13), ("client_failed", 13), ("encoder", 44)]
     out.append(" ".join(c.ljust(w) for c, w in cols))
     for r in rows:
@@ -308,21 +349,26 @@ def summary(results, out_txt):
     out.append("")
     out.append("cpu = the server process, 100 = one core (from its CPU time, ps TIME, over the window); "
                "fps = the server's frames sent (its gfx stats lines); bytes/s = server to client")
-    out.append("rate control (FreeRDP 74d0beb8 defaults, the kit's 20261127.3): AV1 constrained quality "
-               "cq-level 16 (cap 12000 kbit/s), HEVC VBR 500 kbit/s: bytes/s compares these settings, "
-               "not the same picture quality")
+    out.append("rate control: AV1 its default (constrained quality cq-level 16, cap 12000 kbit/s, FreeRDP "
+               "74d0beb8); hevc = HEVC VBR at the kbit/s the round's AV1 put on the wire "
+               "(/codec:hevc:bitrate); hevc-default = HEVC's default VBR 500 kbit/s. Equal bits, not "
+               "measured equal picture quality")
     verdict, decided = True, 0
     for content in sorted(set(r["content"] for r in rows)):
         rs = [r for r in rows if r["content"] == content]
         out.append("")
         out.append("== %s ==" % content)
-        v = decide(out, rs, "av1", "hevc", "%s HEVC vs AV1" % content, True)
+        v = decide(out, rs, "av1", "hevc", "%s HEVC vs AV1, equal bits" % content, True, True)
         if v is not None:
             verdict, decided = verdict and v, decided + 1
-        decide(out, rs, "av1-i420", "hevc", "%s HEVC vs AV1 4:2:0" % content, False)
+        decide(out, rs, "av1", "hevc-default", "%s HEVC 500 kbit/s (today) vs AV1" % content, False, False)
+        decide(out, rs, "av1-i420", "hevc", "%s HEVC at AV1's bits vs AV1 4:2:0" % content, False, False)
     out.append("")
-    out.append("VERDICT  %s" % ("PASS: HEVC meets the rule in every content" if verdict and decided
-                                else "FAIL or NO RESULT: see the lines above"))
+    flagged = [r for r in rows if "not reached" in r["rate_note"] and r["kind"] == "hevc"]
+    out.append("VERDICT  %s%s" % ("PASS: at equal bits HEVC meets the rule in every content" if verdict and decided
+                                  else "FAIL or NO RESULT: see the lines above",
+                                  "  (FLAG: %d HEVC session(s) missed the target rate by more than 20 %%)" %
+                                  len(flagged) if flagged else ""))
     text = "\n".join(out) + "\n"
     with open(out_txt, "w", encoding="utf-8") as f:
         f.write(text)
@@ -336,6 +382,8 @@ if __name__ == "__main__":
         sample(sys.argv[2], sys.argv[3], sys.argv[4:])
     elif cmd == "session":
         session(sys.argv[2], sys.argv[3])
+    elif cmd == "kbit":
+        kbit(sys.argv[2], sys.argv[3], sys.argv[4], sys.argv[5])
     elif cmd == "summary":
         sys.exit(summary(sys.argv[2], sys.argv[3]))
 PY
@@ -405,19 +453,29 @@ start_anim() {
 }
 stop_anim() { pkill -x firefox 2> /dev/null; sleep 2; [ -n "$FFPROF" ] && rm -rf "$FFPROF"; FFPROF=""; }
 
-session() {  # session <content> <kind> <round> <port>
-    local content=$1 kind=$2 round=$3 port=$4 d meta opts srv tcpd cli kick first mot smp _
+session() {  # session <content> <kind> <round> <port> [<HEVC target kbit/s>]
+    local content=$1 kind=$2 round=$3 port=$4 target=${5:-} d meta opts srv tcpd cli kick first mot smp _
+    local args=$SERVER_ARGS
     d="$OUT/sessions/$content-$kind-r$round"; mkdir -p "$d"
     meta="$d/meta.txt"
     opts=$(kind_opts "$kind") || return 1
     { echo "content=$content"; echo "kind=$kind"; echo "round=$round"; echo "port=$port"
-      echo "client_opts=$opts"; echo "server_args=$SERVER_ARGS"; echo "tcpdump=$TCPDUMP"; } > "$meta"
+      echo "client_opts=$opts"; echo "tcpdump=$TCPDUMP"; } > "$meta"
+    if [ "$kind" = hevc ]; then
+        if [ -z "$target" ]; then
+            { echo "server_args=$args"; echo "invalid=no AV1 rate from this round to match (av1 invalid or not run)"; } >> "$meta"
+            python3 "$TOOL" session "$d" "$OUT/results.csv"; return
+        fi
+        args="$args /codec:hevc:bitrate:$target"
+        echo "target_kbit=$target" >> "$meta"
+    fi
+    echo "server_args=$args" >> "$meta"
     [ "$content" = apps ] && quit_apps
     sleep 2
-    # shellcheck disable=SC2086  # SERVER_ARGS: one word per argument
+    # shellcheck disable=SC2086  # args: one word per argument
     WLOG_LEVEL=$SERVER_WLOG_LEVEL WLOG_APPENDER=FILE WLOG_FILEAPPENDER_OUTPUT_FILE_PATH="$d" \
     WLOG_FILEAPPENDER_OUTPUT_FILE_NAME=server.wlog "$SERVER" /bind-address:127.0.0.1 /port:"$port" \
-        $SERVER_ARGS > "$d/server.out" 2>&1 &
+        $args > "$d/server.out" 2>&1 &
     srv=$!
     echo "server_pid=$srv" >> "$meta"
     for _ in $(seq 1 30); do listening "$port" && break; sleep 1; done
@@ -490,9 +548,16 @@ for content in $CONTENTS; do
     for round in $(seq 1 "$ROUNDS"); do
         for kind in $KINDS; do
             port=$((port + 1))
-            session "$content" "$kind" "$round" "$port"
+            # B at the bits the round's A put on the wire (server to client, kbit/s)
+            target=""
+            [ "$kind" = hevc ] && target=$(python3 "$TOOL" kbit "$OUT/results.csv" "$content" av1 "$round")
+            session "$content" "$kind" "$round" "$port" "$target"
         done
     done
+    if [ "$HEVC_DEFAULT" = 1 ]; then
+        port=$((port + 1))
+        session "$content" hevc-default 1 "$port"
+    fi
     [ "$content" = anim ] && stop_anim
 done
 mkdir -p "$OUT/crash"
