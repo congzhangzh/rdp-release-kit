@@ -151,6 +151,93 @@ jobs:
           path: ${{ runner.temp }}/hevc-streams
           if-no-files-found: error
           retention-days: 3
+      # the camera tests' inputs, never released either (windows-camera below, windows-host.yml's
+      # camera job): the app that reads a camera in the RDP session, built with the same
+      # llvm-mingw for x86_64 and aarch64, and the camera's test video and JPEG, made with the
+      # CI's GPL FFmpeg, outside dist/
+      - name: The camera test app and media (test data, CI only)
+        if: matrix.arch == 'x86_64'
+        run: |
+          mkdir -p "$RUNNER_TEMP/camera-test"
+          for arch in x86_64 aarch64; do
+              ~/.cache/rdp-release-kit/win-x86_64/src/llvm_mingw/bin/$arch-w64-mingw32-clang -O2 -Wall -Wextra -municode \
+                  -o "$RUNNER_TEMP/camera-test/mf-camera-reader-$arch.exe" test/windows-camera/mf-camera-reader.c \
+                  -lmfplat -lmf -lmfreadwrite -lmfuuid -lole32 -luuid
+              test -s "$RUNNER_TEMP/camera-test/mf-camera-reader-$arch.exe"
+          done
+          test/windows-camera/make-test-media.sh "$RUNNER_TEMP/ci-ffmpeg/bin/ffmpeg" "$RUNNER_TEMP/camera-test"
+      - if: matrix.arch == 'x86_64'
+        uses: actions/upload-artifact@v7
+        with:
+          name: camera-test-windows
+          path: ${{ runner.temp }}/camera-test
+          if-no-files-found: error
+          retention-days: 3
+
+  # The Windows client's camera redirection (MS-RDPECAM, the Media Foundation backend playing the
+  # test video as its camera) to Windows' own Remote Desktop on the runner, read by an app inside
+  # the RDP session (test/windows-camera/windows-camera.ps1, from the probe probe-camera-win, run
+  # 46064767938). Windows 11 on ARM redirects the camera: the checks there (the same x64 client,
+  # emulated). It has one active session, so the client signs in as runneradmin with a password of
+  # this run (masked, never logged) and takes the console session over (the probe's option A).
+  # Windows Server's Remote Desktop never opened the camera channel on the hosted runners: its
+  # camera checks are INFO lines there, the harness (sign-in, the client's mf backend, Windows'
+  # MJPEG decoder) still checked
+  windows-camera:
+    needs: [windows]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: windows-2025
+            takeover: ''
+          - runner: windows-2022
+            takeover: ''
+          - runner: windows-11-arm
+            takeover: -TakeOverConsole
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        with:
+          name: sdl3-freerdp-windows-x86_64
+          path: dl/zip
+      - uses: actions/download-artifact@v8
+        with:
+          name: camera-test-windows
+          path: dl/test
+      - name: Unpack the client
+        shell: pwsh
+        run: |
+          Expand-Archive (Get-ChildItem dl/zip/*.zip | Select-Object -First 1).FullName -DestinationPath dl/unzipped
+          New-Item -ItemType Directory -Force -Path dl/client | Out-Null
+          Copy-Item (Get-ChildItem dl/unzipped -Recurse -Filter sdl-freerdp.exe | Select-Object -First 1).FullName dl/client/
+      - name: Camera redirection to Windows' own Remote Desktop (and the MJPEG decoder MFT)
+        timeout-minutes: 15
+        shell: pwsh
+        run: ./test/windows-camera/windows-camera.ps1 -ClientDir dl/client -Assets dl/test -Out out ${{ matrix.takeover }}
+      # what the test added, removed again whatever happened (the script does it too; the runner
+      # is thrown away anyway)
+      - name: Clean up the Run entry and the task
+        if: always()
+        shell: pwsh
+        run: |
+          Remove-ItemProperty -Path HKLM:\Software\Microsoft\Windows\CurrentVersion\Run -Name KitCameraReader -ErrorAction SilentlyContinue
+          Unregister-ScheduledTask -TaskName kit-camera-reader -Confirm:$false -ErrorAction SilentlyContinue
+      - name: The result, in the job summary
+        if: always()
+        shell: pwsh
+        run: |
+          if (Test-Path out/result.txt) { Get-Content out/result.txt | Add-Content $env:GITHUB_STEP_SUMMARY }
+          else { "${{ matrix.runner }}: the script ended before writing its result" | Add-Content $env:GITHUB_STEP_SUMMARY }
+          if (Test-Path out/checks.txt) { Get-Content out/checks.txt | ForEach-Object { "    $_" } | Add-Content $env:GITHUB_STEP_SUMMARY }
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: windows-camera-${{ matrix.runner }}
+          path: out
+          retention-days: 7
 
   # The Windows client's HEVC on Windows without the HEVC Video Extensions (every runner): the
   # decode test, linked in the client's own build tree, decodes HEVC 4:2:0 and 4:4:4 with FFmpeg
@@ -501,6 +588,165 @@ jobs:
         if: always()
         with:
           name: hevc-session${{ runner.arch == 'ARM64' && '-aarch64' || '' }}
+          path: out
+          retention-days: 7
+
+  # The camera on Linux (test/linux-camera/), the client's and the host's: a CI-only client for
+  # the H.264 case, never shipped: xfreerdp with the rdpecam GStreamer backend, built natively
+  # from the Linux host's FreeRDP commit (sources.lock) against Ubuntu's packages, whose FFmpeg
+  # (GPL, libx264) encodes H.264; only the test's result leaves the runner
+  linux-camera-gst-client:
+    needs: [releases]
+    if: needs.releases.outputs.scope == 'all'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+      - name: FreeRDP, the Linux host's commit
+        run: |
+          mkdir -p logs
+          read -r _ _ url sha < <(awk '$1 == "freerdp_linux_host"' sources.lock)
+          git init -q freerdp
+          git -C freerdp fetch -q --depth 1 "${url#git+}" "$sha"
+          git -C freerdp checkout -q FETCH_HEAD
+          git -C freerdp rev-parse HEAD | tee logs/freerdp-commit.txt
+          [ "$(git -C freerdp rev-parse HEAD)" = "$sha" ]
+      - name: Ubuntu's packages
+        run: |
+          sudo apt-get update -q
+          # shellcheck disable=SC2046,SC2024  # one package per word; the log is ours
+          sudo apt-get install -y -q --no-install-recommends $(grep -v '^#' test/linux-camera/gst-client-deps.txt) \
+              > logs/apt.log 2>&1
+      - name: The CI-only client (xfreerdp, GStreamer backend)
+        run: test/linux-camera/build-gst-client.sh freerdp gst-client 2>&1 | tee logs/build.txt
+      - name: Logs
+        if: always()
+        run: cp gst-client/*.log logs/ 2> /dev/null || true
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: linux-camera-gst-client-logs
+          path: logs
+          retention-days: 7
+      - uses: actions/upload-artifact@v7
+        with:
+          name: linux-camera-gst-client
+          path: gst-client/xfreerdp
+          if-no-files-found: error
+          retention-days: 1
+
+  # The Linux host's virtual camera with this round's Linux client, on the runner's own
+  # v4l2loopback (x86_64; the cases of probe-camera-linux, runs 46071318124 and 46072530374):
+  # nodevice (no module: exactly the line the host logs, and it runs on), the README's modprobe
+  # line typed as in bash (the device named exactly "FreeRDP Camera"), then the kernel's module
+  # (0.15.3 in Ubuntu's 7.0 kernels): on demand for 0.13 or newer (no Start Streams before an app
+  # reads, Start when it opens the camera, Stop ~500 ms after it closes it, twice), mjpg (the
+  # host decodes the client's MJPG), h264 (the CI-only client above), owncamera (a client camera
+  # named "FreeRDP Camera" is refused: no loop). The client's camera is /dev/video40, written by
+  # v4l2-writer.c; the host writes /dev/video41, read as an app would
+  linux-camera:
+    needs: [build, linux-host, linux-camera-gst-client]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        with:
+          name: freerdp-host-linux-x86_64
+          path: dl/host
+      - uses: actions/download-artifact@v8
+        with:
+          name: sdl3-freerdp-ubuntu-24.04
+          path: dl/client
+      - uses: actions/download-artifact@v8
+        with:
+          name: linux-camera-gst-client
+          path: dl/gst-client
+      - name: Tools and the packages
+        run: |
+          test/linux-camera/runner-setup.sh out
+          # the CI-only client runs with the packages it was built with
+          # shellcheck disable=SC2046,SC2024  # one package per word; the log is ours
+          sudo apt-get install -y -q --no-install-recommends $(grep -v '^#' test/linux-camera/gst-client-deps.txt) \
+              > out/apt-gst-client.log 2>&1
+          chmod +x dl/gst-client/xfreerdp
+      - name: "nodevice: no v4l2loopback"
+        run: test/linux-camera/camera-e2e.sh nodevice dl/host/pkg dl/client/pkg/bin/sdl-freerdp out/nodevice
+      - name: "The README's modprobe line, as typed in bash: the device named exactly FreeRDP Camera"
+        if: ${{ !cancelled() }}
+        run: test/linux-camera/module.sh readme out/readme
+      - name: The runner kernel's v4l2loopback
+        if: ${{ !cancelled() }}
+        run: test/linux-camera/module.sh kernel out/module
+      - name: "ubuntu-module: on demand (0.13+) or the fallback, by the version the kernel ships"
+        if: ${{ !cancelled() }}
+        run: test/linux-camera/camera-e2e.sh ubuntu-module dl/host/pkg dl/client/pkg/bin/sdl-freerdp out/ubuntu-module
+      # each case on a freshly loaded module: a device keeps the format its last writer set
+      - name: "mjpg: the host decodes the client's MJPG"
+        if: ${{ !cancelled() }}
+        run: |
+          test/linux-camera/module.sh kernel out/module-mjpg
+          test/linux-camera/camera-e2e.sh mjpg dl/host/pkg dl/client/pkg/bin/sdl-freerdp out/mjpg
+      - name: "h264: the host decodes H.264 (CI-only client)"
+        if: ${{ !cancelled() }}
+        run: |
+          test/linux-camera/module.sh kernel out/module-h264
+          test/linux-camera/camera-e2e.sh h264 dl/host/pkg dl/gst-client/xfreerdp out/h264
+      - name: "owncamera: the host refuses a client camera named FreeRDP Camera (no loop)"
+        if: ${{ !cancelled() }}
+        run: |
+          test/linux-camera/module.sh kernel out/module-owncamera
+          test/linux-camera/camera-e2e.sh owncamera dl/host/pkg dl/gst-client/xfreerdp out/owncamera
+      - name: Results
+        if: always()
+        run: cat out/*/result.txt | tee -a "$GITHUB_STEP_SUMMARY" || true
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: linux-camera
+          path: out
+          retention-days: 7
+
+  # The stock case, the most common LTS as a user has it: Ubuntu 24.04's own v4l2loopback-dkms
+  # (0.12.7) from the archive, built by DKMS, no patch (the kernel, Secure Boot, the DKMS build
+  # log and dkms status first; a build or load failure is recorded and stops the job). Then the
+  # fallback (the exact line, the camera on while connected, frames to a reader) and the README's
+  # modprobe line with that module (probe-camera-linux, run 46071318124)
+  linux-camera-dkms:
+    needs: [build, linux-host]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        with:
+          name: freerdp-host-linux-x86_64
+          path: dl/host
+      - uses: actions/download-artifact@v8
+        with:
+          name: sdl3-freerdp-ubuntu-24.04
+          path: dl/client
+      - name: Tools and the packages
+        run: test/linux-camera/runner-setup.sh out
+      - name: "Ubuntu's v4l2loopback-dkms from the archive (kernel, Secure Boot, DKMS build, dkms status)"
+        id: dkms
+        run: test/linux-camera/module.sh dkms out/module
+      - name: "fallback: the stock module that can't tell its readers"
+        env:
+          DIAG: "1"
+        run: test/linux-camera/camera-e2e.sh fallback dl/host/pkg dl/client/pkg/bin/sdl-freerdp out/fallback
+      - name: "The README's modprobe line, as typed in bash, with the DKMS module"
+        if: always() && steps.dkms.outcome == 'success'
+        run: test/linux-camera/module.sh readme out/readme
+      - name: Results and the kernel's log
+        if: always()
+        run: |
+          sudo dmesg 2>&1 | tee out/dmesg.txt > /dev/null || true
+          cat out/module/dkms.txt out/*/result.txt 2> /dev/null | tee -a "$GITHUB_STEP_SUMMARY" || true
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: linux-camera-dkms
           path: out
           retention-days: 7
 
@@ -1033,7 +1279,7 @@ jobs:
   # download (docs/RELEASE.md, "Products and channels")
   release:
     if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
-    needs: [build, windows, windows-hevc, macos, mac-host, mac-host-test, linux-host, linux-host-test, hevc-session, xrdp, mutter, wasm, demo, windows-host]
+    needs: [build, windows, windows-hevc, windows-camera, macos, mac-host, mac-host-test, linux-host, linux-host-test, linux-camera, linux-camera-dkms, hevc-session, xrdp, mutter, wasm, demo, windows-host]
     runs-on: ubuntu-24.04
     # one at a time across commits: each counts N from the releases before it,
     # so two pushes close together get .1 and .2, not both .1 (the second

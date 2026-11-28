@@ -385,3 +385,68 @@ jobs:
             out/windows-native.json
           if-no-files-found: ignore
           retention-days: 3
+
+  # The shadow server's virtual camera as shipped (test/windows-host-camera/windows-host-camera.ps1,
+  # from the probe probe-camera-winshadow, 7ff8628): the service registers "FreeRDP Camera" as
+  # SYSTEM, an app reads it through Frame Server (the still, not black), and on demand with this
+  # run's Windows client, whose camera plays the test video: no Start Streams before an app reads,
+  # Start Streams and moving frames while it reads, Stop Streams after. Windows Server 2022 (build
+  # 20348) has no virtual cameras: there the check is the server's exact line, and it runs on. Only
+  # when kit.yml calls this workflow (its windows job makes the client and the camera's test media)
+  camera:
+    needs: build
+    if: inputs.from_run
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: windows-2025
+            arch: x86_64
+          - runner: windows-11-arm
+            arch: aarch64
+          - runner: windows-2022
+            arch: x86_64
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+    env:
+      OUT: ${{ github.workspace }}\camera-out
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        with:
+          name: freerdp-host-windows-${{ matrix.arch }}
+          path: dl/host
+      # the x64 client everywhere (emulated on Windows 11 on ARM), as the probe ran it
+      - uses: actions/download-artifact@v8
+        with:
+          name: sdl3-freerdp-windows-x86_64
+          path: dl/zip
+      - uses: actions/download-artifact@v8
+        with:
+          name: camera-test-windows
+          path: dl/test
+      - name: The camera as the SYSTEM service registers it, read by an app, on demand
+        timeout-minutes: 20
+        shell: pwsh
+        run: |
+          Expand-Archive (Get-ChildItem dl/zip/*.zip | Select-Object -First 1).FullName -DestinationPath dl/client
+          $zip = (Get-ChildItem dl/host/*.zip | Select-Object -First 1).FullName
+          $client = (Get-ChildItem dl/client -Recurse -Filter sdl-freerdp.exe | Select-Object -First 1).FullName
+          $media = (Resolve-Path dl/test/test.mp4).Path
+          ./test/windows-host-camera/windows-host-camera.ps1 -HostZip $zip -Out $env:OUT `
+              -Client $client -ClientCamera "/dvc:rdpecam,sys:mf,file:$media,name:Kit Test Camera"
+      - name: Remove the service if a step stopped early
+        if: always()
+        shell: pwsh
+        run: |
+          $svc = Get-ChildItem camera-out/host -Recurse -Filter freerdp-shadow-service.exe -ErrorAction SilentlyContinue | Select-Object -First 1
+          if ($svc -and (Get-Service FreeRDPShadow -ErrorAction SilentlyContinue)) { & $svc.FullName uninstall }
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: windows-host-camera-${{ matrix.runner }}
+          path: |
+            camera-out
+            !camera-out/host
+          retention-days: 7
+          if-no-files-found: warn
