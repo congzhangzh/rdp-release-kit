@@ -1,0 +1,176 @@
+# Probe (branch probe-camera-web only; publishes nothing, no secrets, uploads logs): R3, the
+# camera in FreeRDP Web (freerdp-comp-camera-g2). The browser's camera goes to the server as
+# H.264, encoded by WebCodecs (FreeRDP's rdpecam "emscripten" backend, fork feature-camera-web),
+# turned on by the page's Camera checkbox (freerdp-web branch camera-r3).
+#  - wasm-build: the web client as the kit builds it (build-wasm.sh), with -DCHANNEL_RDPECAM=ON
+#    -DCHANNEL_RDPECAM_CLIENT=ON (build/build-wasm-client.sh, this branch only), from the probed
+#    FreeRDP and page commits (test/probe-camera-web/pin.sh).
+#  - linux-shadow: the released Linux host (kit release 20261128.1, its SHA256SUMS checked) with
+#    the runner kernel's v4l2loopback; the page from http://localhost, websockify, headless Chrome
+#    with its fake camera (test/probe-camera-web/linux-shadow.sh): the host chooses H264, an app
+#    reads >= 60 changing frames the host decoded, the client's counters (bit rate, first sample,
+#    key frames, encode time), no camera error on either side.
+#  - browsers: which browsers encode H.264 the way the camera asks (VideoEncoder.isConfigSupported
+#    with the client's 640x480 configuration), through their own WebDriver: Firefox
+#    (geckodriver) on Ubuntu, Safari (safaridriver) on macOS (test/probe-camera-web/browser-h264.mjs).
+# Artifacts: logs (7 days); the page (1 day).
+name: probe-camera-web
+
+on:
+  push:
+    branches: [probe-camera-web]
+
+permissions:
+  contents: read
+
+env:
+  FREERDP_REPO: https://github.com/congzhangzh/FreeRDP.git
+  FREERDP_BRANCH: feature-camera-web
+  # the probed commits, fixed: the branches may move on
+  FREERDP_SHA: b97ae37d787450952824f073f2eff73a66092e41
+  WEB_REPO: https://github.com/congzhangzh/freerdp-web.git
+  WEB_BRANCH: camera-r3
+  WEB_SHA: de8877147c036aeab2bf7e70a2d8371a805c53aa
+  # the released host the browser's camera goes to
+  HOST_RELEASE: "20261128.1"
+
+jobs:
+  wasm-build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v7
+      - name: FreeRDP and the page, the probed commits
+        run: test/probe-camera-web/pin.sh logs
+
+      - name: Cache sources
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/rdp-release-kit/sources
+          key: sources-${{ hashFiles('sources.lock') }}
+      - name: Cache compiled objects
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/rdp-release-kit/ccache
+          key: ccache-wasm-camera-${{ github.sha }}
+          restore-keys: |
+            ccache-wasm-camera-
+            ccache-wasm-
+
+      - name: Build
+        env:
+          CCACHE_MAXSIZE: 1G
+        run: |
+          ./build-wasm.sh 2>&1 | tee logs/build.txt
+          cp ~/.cache/rdp-release-kit/wasm/log/freerdp.log logs/ || true
+          # the camera is in: the rdpecam channel, its emscripten subsystem and its JavaScript
+          grep -E 'CHANNEL_RDPECAM(_CLIENT)?:BOOL=ON' ~/.cache/rdp-release-kit/wasm/build/freerdp/CMakeCache.txt | tee logs/camera-options.txt
+          [ "$(wc -l < logs/camera-options.txt)" = 2 ]
+          for f in dist/wasm/web/sdl-freerdp.js dist/wasm/web/jspi/sdl-freerdp.js; do
+              n=$(grep -c -E '_cam_web_start|_camera_emscripten_release' "$f")
+              echo "$f: camera functions present: $n" | tee -a logs/camera-options.txt
+              [ "$n" -ge 1 ]
+          done
+          grep -E 'camera_(emscripten|web_h264)\.c:[0-9]+:[0-9]+: (warning|error)' logs/freerdp.log | tee logs/camera-warnings.txt || true
+          [ ! -s logs/camera-warnings.txt ]
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: probe-camera-web-page
+          path: dist/wasm/web/
+          if-no-files-found: error
+          retention-days: 1
+          include-hidden-files: true
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: probe-camera-web-build-logs
+          path: logs
+          retention-days: 7
+
+  linux-shadow:
+    needs: wasm-build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        with:
+          name: probe-camera-web-page
+          path: dl/web
+      - name: The released Linux host
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p dl/host out
+          gh release download "$HOST_RELEASE" -R "$GITHUB_REPOSITORY" -p 'freerdp-host-*-linux-x86_64.tar.xz' -p SHA256SUMS -D dl/host
+          (cd dl/host && sha256sum -c --ignore-missing SHA256SUMS) | tee out/host-sha256.txt
+          mkdir -p dl/host/pkg
+          tar -C dl/host/pkg --strip-components=1 -xJf dl/host/freerdp-host-*-linux-x86_64.tar.xz
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - name: Tools
+        run: |
+          # shellcheck disable=SC2024  # the logs are the runner user's: only apt runs as root
+          sudo apt-get update -q > out/apt-update.log 2>&1
+          # shellcheck disable=SC2024
+          sudo apt-get install -y -q --no-install-recommends xvfb x11-utils v4l-utils websockify python3 iproute2 \
+              libpam0g libsystemd0 libpipewire-0.3-0t64 libx11-6 libxext6 libxdamage1 libxfixes3 libxinerama1 \
+              libxtst6 libxkbcommon0 > out/apt-tools.log 2>&1
+          google-chrome --version | tee out/browser.txt
+      - name: The runner kernel's v4l2loopback
+        run: test/probe-camera-web/module.sh kernel out/module
+      - name: "linux-shadow: Chrome's camera, as H.264, into the Linux host's camera"
+        run: test/probe-camera-web/linux-shadow.sh dl/host/pkg dl/web out/linux-shadow
+      - name: Results
+        if: always()
+        run: cat out/*/result.txt | tee -a "$GITHUB_STEP_SUMMARY" || true
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: probe-camera-web-linux-shadow
+          path: out
+          retention-days: 7
+
+  browsers:
+    needs: wasm-build
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { runner: ubuntu-24.04, browser: firefox }
+          - { runner: macos-15, browser: safari }
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        with:
+          name: probe-camera-web-page
+          path: dl/web
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - name: "${{ matrix.browser }}: does it encode H.264 as the camera asks?"
+        run: |
+          mkdir -p out
+          python3 -m http.server 8080 --bind 127.0.0.1 -d dl/web > out/http.log 2>&1 &
+          if [ "${{ matrix.browser }}" = safari ]; then
+              sudo safaridriver --enable
+              safaridriver -p 4444 > out/driver.log 2>&1 &
+              sw_vers | tee out/os.txt
+          else
+              "${GECKOWEBDRIVER:+$GECKOWEBDRIVER/}geckodriver" --port 4444 > out/driver.log 2>&1 &
+              firefox --version | tee out/os.txt
+          fi
+          sleep 3
+          node test/probe-camera-web/browser-h264.mjs http://127.0.0.1:4444 ${{ matrix.browser }} \
+              http://localhost:8080/release-notes.html out/${{ matrix.browser }}.json
+          echo "${{ matrix.browser }}: $(cat out/${{ matrix.browser }}.json)" >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: probe-camera-web-browser-${{ matrix.browser }}
+          path: out
+          retention-days: 7
