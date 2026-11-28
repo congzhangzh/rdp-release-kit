@@ -1,7 +1,7 @@
 # win11-rdp.ps1 (a probe: publishes nothing; every change it makes stays on the runner, which is
 # thrown away): FreeRDP Web's camera into Windows 11's own Remote Desktop, on windows-11-arm.
 # The page (served from http://localhost, a secure context) runs in headless Edge with Chromium's
-# fake camera, ticks Camera and signs in as runneradmin through websockify to this PC's own RDP
+# fake camera, ticks Camera and signs in as runneradmin through ws-gateway.py to this PC's own RDP
 # (127.0.0.2:3389). As probe-camera-win's option A (f38db99), the sign-in takes the console
 # session over, so this script's session becomes the RDP session, and mf-camera-reader.exe,
 # started in it, opens the redirected camera (the browser's), reads its frames and names the type.
@@ -57,8 +57,10 @@ net user $user $pass | Out-Null
 if ($LASTEXITCODE -ne 0) { Result "$runner`: A failed: net user exit $LASTEXITCODE"; throw "A failed: net user" }
 Check "rdp: Windows' own Remote Desktop listens on 3389" (Until 30 { Listening 3389 })
 
-# --- the browser: Edge (Chromium), the page from localhost, websockify to 127.0.0.2:3389 (this
-#     PC's own server refuses 127.0.0.1)
+# --- the browser: Chrome (else Edge), the page from localhost, the gateway to 127.0.0.2:3389
+#     (this PC's own server refuses 127.0.0.1): ws-gateway.py, as websockify does not install on
+#     Windows on Arm (its cryptography dependency: no wheel, no OpenSSL to build it; run
+#     46139068111)
 $edge = @("${env:ProgramFiles(x86)}\Microsoft\Edge\Application\msedge.exe",
           "$env:ProgramFiles\Microsoft\Edge\Application\msedge.exe") | Where-Object { Test-Path $_ } | Select-Object -First 1
 $chrome = @("$env:ProgramFiles\Google\Chrome\Application\chrome.exe",
@@ -66,11 +68,12 @@ $chrome = @("$env:ProgramFiles\Google\Chrome\Application\chrome.exe",
 $browser = if ($chrome) { $chrome } else { $edge }
 Fact "browser: $browser $((Get-Item $browser).VersionInfo.ProductVersion) (Chrome there: $([bool]$chrome), Edge there: $([bool]$edge))"
 $py = (Get-Command python -ErrorAction Stop).Source
-& $py -m pip install --quiet websockify 2>&1 | Out-File "$Out\pip.log"
+& $py -m pip install --quiet --only-binary=:all: websockets 2>&1 | Out-File "$Out\pip.log"
+Fact "gateway: ws-gateway.py with websockets $(& $py -c 'import websockets; print(websockets.__version__)' 2>&1)"
 $http = Start-Process -FilePath $py -PassThru -WindowStyle Hidden -RedirectStandardOutput "$Out\http.log" -RedirectStandardError "$Out\http.err" `
     -ArgumentList "-m", "http.server", "8080", "--bind", "127.0.0.1", "-d", "`"$Page`""
-$wsk = Start-Process -FilePath $py -PassThru -WindowStyle Hidden -RedirectStandardOutput "$Out\websockify.log" -RedirectStandardError "$Out\websockify.err" `
-    -ArgumentList "-m", "websockify", "127.0.0.1:13390", "127.0.0.2:3389"
+$wsk = Start-Process -FilePath $py -PassThru -WindowStyle Hidden -RedirectStandardOutput "$Out\gateway.log" -RedirectStandardError "$Out\gateway.err" `
+    -ArgumentList "`"$Here\ws-gateway.py`"", "127.0.0.1:13390", "127.0.0.2:3389"
 Check "the page server and the gateway listen" (Until 30 { (Listening 8080) -and (Listening 13390) })
 
 # --- the reader, the browser, the session

@@ -175,7 +175,8 @@ jobs:
           path: out
           retention-days: 7
 
-  # Windows 11's own Remote Desktop as the server, the browser on the same runner (option A of
+  # Windows 11's own Remote Desktop as the server, the browser on the same runner, its gateway
+# test/probe-camera-web/ws-gateway.py (websockify does not install there) (option A of
   # probe-camera-win f38db99: runneradmin with a password of this run, masked, takes the console
   # session over; the app reads the redirected camera in that session)
   win11-rdp:
