@@ -42,6 +42,8 @@ macOS：`freerdp-tk.command`，需先清除下载文件的隔离属性，见下�
 | 摄像头 | 摄像头（Windows）：已连接客户端的摄像头会以“FreeRDP Camera”出现在 Windows 应用中。需要 Windows 11 或 Windows Server 2025（版本号 22000 或更高）；Windows Server 2022 不支持虚拟摄像头。同一时间只用一个客户端的摄像头，即最先共享的那个；只读客户端不能共享。只有应用在读取虚拟摄像头时，客户端的摄像头才会开启。如果服务器上的应用看不到摄像头，请在“设置 > 隐私和安全性 > 摄像头”中打开“摄像头访问”和“允许桌面应用访问你的摄像头”。 | 摄像头（Linux 服务器）：已连接客户端的摄像头会以“FreeRDP Camera”出现在这台电脑的应用中。需要你的发行版提供的 v4l2loopback 模块，并以这个名字加载；命令见压缩包里的 README.txt。只有应用在读取时，客户端的摄像头才会开启（需要 v4l2loopback 0.13 或更高；使用 Ubuntu 24.04 的 0.12.7 时，客户端连接期间摄像头一直开启）。同一时间只用一个客户端的摄像头；只读客户端不能共享。 | 摄像头（macOS 服务器）：需要签名版本，目前尚未发布；此版本的服务器没有摄像头。macOS 客户端的摄像头可以使用。 |
 | 每次发布都在 CI 中测试 | Windows Server 2025（x86_64）和 Windows 11 on ARM：AV1、Windows 登录、Ctrl+Alt+Del、锁屏界面、双显示器（x86_64）、FreeRDP Web | x86_64 和 ARM64 上的 GNOME 无显示器会话和 Xfce：会话管理器（已登录的和无显示器的 GNOME）、用户单元、AV1、AV2、按键、声音、拒绝其他账户 | GitHub 的 macOS runner：针对 LaunchAgent 的一次 AV1 会话和一次 AV2 会话，以及按下文安装的守护进程（runner 无法显示登录窗口） |
 
+`<version>` 是这个发布自己的编号（例如 20261128.3）：同一发布里的每个下载都带这个编号，FreeRDP 自己的版本写在包内的 MANIFEST 里。
+
 ### 安装
 
 **Windows**，在管理员的 PowerShell 中，在解压后的文件夹里：

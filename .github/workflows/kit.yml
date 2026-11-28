@@ -1475,6 +1475,19 @@ jobs:
           xrdp=$(awk '$1 == "xrdp" { print $2 }' sources.lock)
           key="FreeRDP $freerdp clients, xrdp $xrdp packages (kit ${GITHUB_SHA:0:12})"
           tag=$(build/prerelease-tag.sh release "$key")
+          # every download carries this release's own number (Boss Cong, 2026-11-28: the files named
+          # after FreeRDP's version did not match the release they came in); FreeRDP's version stays
+          # inside (MANIFEST, About, /buildconfig), and SHA256SUMS is made again for the new names
+          for f in upload/sdl3-freerdp-* upload/freerdp-host-* upload/freerdp-web-*; do
+            b=$(basename "$f")
+            n=$(sed -E "s/^(sdl3-freerdp|freerdp-host|freerdp-web)-[0-9]{8}\.[0-9]+/\1-$tag/" <<< "$b")
+            [ "$n" = "$b" ] || mv -- "$f" "upload/$n"
+          done
+          (cd upload && rm -f SHA256SUMS && sha256sum -- * > ../SHA256SUMS) && mv SHA256SUMS upload/
+          host=$(cd upload && ls freerdp-host-*-windows-x86_64.zip)
+          host_arm=$(cd upload && ls freerdp-host-*-windows-aarch64.zip)
+          linux_host=$(cd upload && ls freerdp-host-*-linux-x86_64.tar.xz)
+          linux_host_arm=$(cd upload && ls freerdp-host-*-linux-aarch64.tar.xz)
           title="RDP All in One (browser, clients, server) $tag"
           # a row per distribution: sessions, direct links, the command
           install=$(build/xrdp-install-notes.sh upload "https://github.com/$GITHUB_REPOSITORY/releases/download/$tag")
@@ -1534,11 +1547,11 @@ jobs:
 
           | Platform | File | Start |
           |---|---|---|
-          | Linux x86_64 | \`sdl3-freerdp-$freerdp-linux-x86_64.tar.xz\` | \`tar -xJf sdl3-freerdp-*.tar.xz\`, then \`sdl3-freerdp-*/freerdp-tk\` (or \`bin/sdl-freerdp /v:server /u:user\`) |
-          | Linux ARM64 | \`sdl3-freerdp-$freerdp-linux-aarch64.tar.xz\` | the same |
-          | Windows x86_64 | \`sdl3-freerdp-$freerdp-windows-x86_64.zip\` | unzip, then double-click \`freerdp-tk.cmd\` (or \`sdl-freerdp.exe /v:server /u:user\`) |
-          | Windows ARM64 | \`sdl3-freerdp-$freerdp-windows-aarch64.zip\` | the same |
-          | macOS Apple Silicon | \`sdl3-freerdp-$freerdp-macos-arm64.tar.xz\` | unpack, then double-click \`freerdp-tk.command\` (or \`bin/sdl-freerdp /v:server /u:user\`); downloaded with a browser, clear macOS's quarantine first: \`xattr -dr com.apple.quarantine sdl3-freerdp-*\` (not notarized) |
+          | Linux x86_64 | \`sdl3-freerdp-$tag-linux-x86_64.tar.xz\` | \`tar -xJf sdl3-freerdp-*.tar.xz\`, then \`sdl3-freerdp-*/freerdp-tk\` (or \`bin/sdl-freerdp /v:server /u:user\`) |
+          | Linux ARM64 | \`sdl3-freerdp-$tag-linux-aarch64.tar.xz\` | the same |
+          | Windows x86_64 | \`sdl3-freerdp-$tag-windows-x86_64.zip\` | unzip, then double-click \`freerdp-tk.cmd\` (or \`sdl-freerdp.exe /v:server /u:user\`) |
+          | Windows ARM64 | \`sdl3-freerdp-$tag-windows-aarch64.zip\` | the same |
+          | macOS Apple Silicon | \`sdl3-freerdp-$tag-macos-arm64.tar.xz\` | unpack, then double-click \`freerdp-tk.command\` (or \`bin/sdl-freerdp /v:server /u:user\`); downloaded with a browser, clear macOS's quarantine first: \`xattr -dr com.apple.quarantine sdl3-freerdp-*\` (not notarized) |
           | xrdp server | see Install xrdp below | |
           | macOS host Apple Silicon | \`$(cd upload && ls freerdp-host-*-macos-arm64.zip)\` | share a Mac's own screen, the login window included (AV2, AV1 and H.264, its sound): unzip, then \`sudo bash ./install-daemon.sh\` (a root LaunchDaemon on 127.0.0.1:3388, its agent at the login window and in each session), then allow Screen & System Audio Recording and Accessibility for \`freerdp-shadow-agent\`; HEVC from VideoToolbox in hardware with \`/gfx-hevc:i420\` (client: FreeRDP Web, Extra options \`/gfx:HEVC:i420,AVC420\`); without root, the LaunchAgent app (\`org.freerdp.shadow.plist\`) as before (README.txt; signed ad hoc, so each update asks again; CI installs the daemon mode, the grants and the login window are not testable there) |
           | Windows host x86_64 | \`$host\` | share a Windows PC's own screen (logon and lock screens included, AV2 and AV1, its sound): unzip, then in an administrator's PowerShell \`.\\freerdp-shadow-service.exe install --allow-sas -- /bind-address:127.0.0.1 /port:3388 /gfx-av1 /gfx-av2 -gfx-avc444\` (AV1 only: leave out \`/gfx-av2\`; README.txt) |
